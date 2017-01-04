@@ -1,7 +1,6 @@
 extern crate ini;
 use self::ini::Ini;
 use std::fs;
-use std::error::Error;
 
 #[derive(Debug)]
 pub struct TestEntry {
@@ -23,14 +22,14 @@ pub struct TestSet {
 pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
     let paths = match  fs::read_dir(dir) {
         Ok(dir) => dir,
-        Err(msg) => return Err("Unable to read directory for some reason")
+        Err(_) => return Err("Unable to read directory for some reason")
     };
     let mut tests: Vec<TestEntry> = Vec::new();
 
     for path in paths {
         let pathu = match path {
             Ok(p) => p,
-            Err(e) => return Err("Unable to grab path for some reason")
+            Err(_) => return Err("Unable to grab path for some reason")
         };
         
         match pathu.file_type() {
@@ -47,8 +46,6 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
         }
 
         let name = String::from(pathu.file_name().to_string_lossy().replace(".test", ""));
-        println!("Path: {}", pathu.path().display());
-        println!("Name: {}", name);
 
         // Load the .ini file
         let ini_file = Ini::load_from_file(pathu.path()).unwrap();
