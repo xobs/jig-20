@@ -15,12 +15,17 @@ pub struct TestEntry {
 //    arguments: Vec<&'a Vec<&'a str>>,
 }
 
-pub fn read_dir(dir: &str) -> Result<Vec<TestEntry>, &'static str> {
+#[derive(Debug)]
+pub struct TestSet {
+    tests: Vec<TestEntry>,
+}
+
+pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
     let paths = match  fs::read_dir(dir) {
         Ok(dir) => dir,
         Err(msg) => return Err("Unable to read directory for some reason")
     };
-    let mut ret: Vec<TestEntry> = Vec::new();
+    let mut tests: Vec<TestEntry> = Vec::new();
 
     for path in paths {
         let pathu = match path {
@@ -96,8 +101,12 @@ pub fn read_dir(dir: &str) -> Result<Vec<TestEntry>, &'static str> {
 
             requires: requires,
         };
-        ret.push(new_test);
+        tests.push(new_test);
     }
 
-    Ok(ret)
+    let test_set = TestSet {
+        tests: tests,
+    };
+
+    Ok(test_set)
 }
