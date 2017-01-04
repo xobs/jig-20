@@ -1,0 +1,8 @@
+[Test]
+ExecStart=start-openocd
+ExecStop=stop-openocd
+Name=Start OpenOCD
+Name[zh]=运行 OpenOCD
+Description=Run the OpenOCD debugger in the background.
+Description[zh]=在后台运行OpenOCD调试器。
+Timeout=2000

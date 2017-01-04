@@ -1,0 +1,11 @@
+[Test]
+ExecStart=program-app
+Name=Program App
+Name[zh]=程序应用程序
+Description=Program the final LtC example application.
+Description[zh]=编程最终的LtC示例应用程序。
+Requires=program-test
+Timeout=2000
+
+[Exec]
+arg0=app.bin

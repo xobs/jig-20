@@ -1,0 +1,8 @@
+[package]
+name = "jig2-0"
+version = "0.1.0"
+authors = ["Sean Cross <sean@xobs.io>"]
+
+[dependencies]
+rust-ini = "0.10.0"
+conrod = "*"

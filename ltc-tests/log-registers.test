@@ -1,0 +1,12 @@
+[Test]
+ExecStart=swdlog
+Name=Log Registers
+Name[zh]=登录寄存器
+Description=Log registers from the chip, to e.g. remember serial numbers
+Description[zh]=记录寄存器从芯片到例如。 记住序列号。
+Requires=start-swd
+Timeout=2000
+
+[Args]
+sim_uidmh=0x40048058
+sim_uidml=0x4004805c
