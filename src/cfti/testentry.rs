@@ -1,6 +1,7 @@
 extern crate ini;
 use self::ini::Ini;
 use std::fs;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct TestEntry {
@@ -11,12 +12,20 @@ pub struct TestEntry {
     description: String,
     timeout: u32,
     requires: Vec<String>,
-//    arguments: Vec<&'a Vec<&'a str>>,
+    arguments: Vec<String>,
 }
 
 #[derive(Debug)]
 pub struct TestSet {
-    tests: Vec<TestEntry>,
+    tests: HashMap<String, TestEntry>,
+}
+
+#[derive(Debug)]
+pub struct TestPlan<'a> {
+    tests: Vec<&'a TestEntry>,
+}
+pub trait FindTests {
+    fn ordered_tests(&self, ending_test: &str) -> Result<TestPlan, &'static str>;
 }
 
 pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
@@ -24,7 +33,7 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
         Ok(dir) => dir,
         Err(_) => return Err("Unable to read directory for some reason")
     };
-    let mut tests: Vec<TestEntry> = Vec::new();
+    let mut tests: HashMap<String, TestEntry> = HashMap::new();
 
     for path in paths {
         let pathu = match path {
@@ -48,10 +57,20 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
         let name = String::from(pathu.file_name().to_string_lossy().replace(".test", ""));
 
         // Load the .ini file
-        let ini_file = Ini::load_from_file(pathu.path()).unwrap();
-        let test_section = ini_file.section(Some("Test")).unwrap();
+        let ini_file = match Ini::load_from_file(pathu.path()) {
+            Err(_) => return Err("Unable to load test file"),
+            Ok(s) => s,
+        };
 
-        let exec_start = test_section.get("ExecStart").unwrap().to_string();
+        let test_section = match ini_file.section(Some("Test")) {
+            None => return Err("Test is missing '[Test]' section"),
+            Some(s) => s,
+        };
+
+        let exec_start = match test_section.get("ExecStart") {
+            None => return Err("Test is missing 'ExecStart'"),
+            Some(s) => s.to_string(),
+        };
 
         let exec_stop = match test_section.get("ExecStop") {
             None => "".to_string(),
@@ -86,6 +105,17 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
             }
         };
 
+        let args: Vec<String> = match ini_file.section(Some("Exec")) {
+            None => Vec::new(),
+            Some(s) => {
+                let mut args = Vec::new();
+                for arg in s.keys()/*.sort()*/ {
+                    //println!("Key: {}", s.get(arg).unwrap());
+                    args.push(s.get(arg).unwrap().to_string());
+                }
+                args
+            },
+        };
 
         let new_test = TestEntry {
             name: name,
@@ -97,8 +127,9 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
             description: description,
 
             requires: requires,
+            arguments: args,
         };
-        tests.push(new_test);
+        tests.insert(new_test.name.clone(), new_test);
     }
 
     let test_set = TestSet {
@@ -106,4 +137,20 @@ pub fn read_dir(dir: &str) -> Result<TestSet, &'static str> {
     };
 
     Ok(test_set)
+}
+
+impl FindTests for TestSet {
+    fn ordered_tests(&self, ending_test_name: &str) -> Result<TestPlan, &'static str> {
+        let ending_test = match self.tests.get(ending_test_name) {
+            None => return Err("Couldn't find final test"),
+            Some(t) => t,
+        };
+
+        let mut test_list = Vec::new();
+        test_list.push(ending_test);
+        let test_set = TestPlan {
+            tests: test_list,
+        };
+        Ok(test_set)
+    }
 }
