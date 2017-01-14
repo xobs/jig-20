@@ -18,12 +18,11 @@ pub struct TestSet {
 }
 
 impl TestSet {
-
     /// Create a new `TestSet` from the given `dir`
     pub fn new(dir: &str) -> Result<TestSet, &'static str> {
-        let paths = match  fs::read_dir(dir) {
+        let paths = match fs::read_dir(dir) {
             Ok(dir) => dir,
-            Err(_) => return Err("Unable to read directory for some reason")
+            Err(_) => return Err("Unable to read directory for some reason"),
         };
         let mut tests: HashMap<String, TestEntry> = HashMap::new();
         let mut devs: HashMap<String, TestDev> = HashMap::new();
@@ -31,13 +30,13 @@ impl TestSet {
         for path in paths {
             let pathu = match path {
                 Ok(p) => p,
-                Err(_) => return Err("Unable to grab path for some reason")
+                Err(_) => return Err("Unable to grab path for some reason"),
             };
-            
+
             match pathu.file_type() {
                 Err(_) => continue,
                 Ok(t) => {
-                    if !t.is_file(){
+                    if !t.is_file() {
                         continue;
                     }
                 }
@@ -46,9 +45,8 @@ impl TestSet {
             if pathu.file_name().to_string_lossy().ends_with(".test") {
                 let name = String::from(pathu.file_name().to_string_lossy().replace(".test", ""));
                 let new_test = TestEntry::new(pathu.path().to_str().unwrap().to_string()).unwrap();
-                tests.insert(new_test.name.clone(), new_test);
-            }
-            else if pathu.file_name().to_string_lossy().ends_with(".dev") {
+                tests.insert(new_test.name().clone(), new_test);
+            } else if pathu.file_name().to_string_lossy().ends_with(".dev") {
                 let name = String::from(pathu.file_name().to_string_lossy().replace(".plan", ""));
 
                 let new_plan = TestDev::new(pathu.path().to_str().unwrap().to_string()).unwrap();
@@ -66,5 +64,16 @@ impl TestSet {
 
     pub fn get_dev(&self, dev_name: &String) -> Option<&TestDev> {
         return self.devs.get(dev_name);
+    }
+
+    pub fn all_tests(&self) -> Vec<&TestEntry> {
+        let mut sorted_keys: Vec<&String> = self.tests.keys().collect();
+        sorted_keys.sort();
+
+        let mut result: Vec<&TestEntry> = Vec::new();
+        for key in sorted_keys {
+            result.push(self.tests.get(key).unwrap());
+        }
+        result
     }
 }

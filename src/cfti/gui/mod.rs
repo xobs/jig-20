@@ -3,8 +3,8 @@
 //!
 //! The module contains:
 //!
-//! - `pub struct DemoApp` as a demonstration of some state we want to change.
-//! - `pub fn gui` as a demonstration of all widgets, some of which mutate our `DemoApp`.
+//! - `pub struct CFTIApp` as a demonstration of some state we want to change.
+//! - `pub fn gui` as a demonstration of all widgets, some of which mutate our `CFTIApp`.
 //! - `pub struct Ids` - a set of all `widget::Id`s used in the `gui` fn.
 //!
 //! By sharing these items between these examples, we can test and ensure that the different events
@@ -12,28 +12,24 @@
 
 use conrod;
 use std;
-
+use cfti::testset::TestSet;
 
 pub const WIN_W: u32 = 600;
 pub const WIN_H: u32 = 420;
 
 
 /// A demonstration of some application state we want to control with a conrod GUI.
-pub struct DemoApp {
-    ball_xy: conrod::Point,
-    ball_color: conrod::Color,
-    sine_frequency: f32,
+pub struct CFTIApp<'a> {
+    test_set: &'a TestSet,
 }
 
 
-impl DemoApp {
+impl<'a> CFTIApp<'a> {
 
-    /// Simple constructor for the `DemoApp`.
-    pub fn new() -> Self {
-        DemoApp {
-            ball_xy: [0.0, 0.0],
-            ball_color: conrod::color::WHITE,
-            sine_frequency: 1.0,
+    /// Simple constructor for the `CFTIApp`.
+    pub fn new(test_set: &'a TestSet) -> Self {
+        CFTIApp {
+            test_set: test_set,
         }
     }
 
@@ -78,11 +74,20 @@ widget_ids! {
 
         // The scrollable canvas.
         canvas,
+        canvas_flow,
 
         // The title and introduction widgets.
-        title,
-        introduction,
+        tests_title,
+        device_title,
 
+        // Test list
+        tests_canvas,
+        tests_list,
+
+        // Device list
+        device_canvas,
+        device_list,
+/*
         // Shapes.
         shapes_canvas,
         rounded_rectangle,
@@ -113,16 +118,15 @@ widget_ids! {
         dialer_title,
         number_dialer,
         plot_path,
-
+*/
         // Scrollbar
         canvas_scrollbar,
-
     }
 }
 
 
 /// Instantiate a GUI demonstrating every widget available in conrod.
-pub fn gui(ui: &mut conrod::UiCell, ids: &Ids, app: &mut DemoApp) {
+pub fn gui(ui: &mut conrod::UiCell, ids: &Ids, app: &mut CFTIApp) {
     use conrod::{widget, Colorable, Labelable, Positionable, Sizeable, Widget};
     use std::iter::once;
 
@@ -134,9 +138,66 @@ pub fn gui(ui: &mut conrod::UiCell, ids: &Ids, app: &mut DemoApp) {
     // `Canvas` is a widget that provides some basic functionality for laying out children widgets.
     // By default, its size is the size of the window. We'll use this as a background for the
     // following widgets, as well as a scrollable container for the children widgets.
-    const TITLE: &'static str = "All Widgets";
-    widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(ids.canvas, ui);
+    const TITLE: &'static str = "Common Factory Test Interface - GUI";
+    //widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(ids.canvas, ui);
+    widget::Canvas::new().pad(MARGIN).set(ids.canvas, ui);
+    //widget::Canvas::new().color(conrod::color::DARK_CHARCOAL).set(ids.canvas, ui);
 
+    /// A canvas to hold the left widget, where tests go
+    widget::Canvas::new()
+        .w(200.0)
+        .h_of(ids.canvas)
+        .align_left()
+        .color(conrod::color::PURPLE)
+        .set(ids.tests_canvas, ui);
+
+    /// A canvas to hold the main widget
+    widget::Canvas::new()
+        .w(ui.w_of(ids.canvas).unwrap() - ui.w_of(ids.tests_canvas).unwrap())
+        .h_of(ids.canvas)
+        .right_from(ids.tests_canvas, 1.0)
+        .color(conrod::color::ORANGE)
+        .set(ids.device_canvas, ui);
+
+    /// Title label that tells what the left field consists of
+    widget::Text::new("Test List")
+        .middle_of(ids.tests_canvas)
+        .w_of(ids.tests_canvas)
+        .align_top_of(ids.tests_canvas)
+        .align_text_middle()
+        .line_spacing(5.0)
+        .set(ids.tests_title, ui);
+        /*
+    widget::Text::new("Other List")
+        .padded_w_of(ids.canvas, MARGIN)
+        .down_from(ids.tests_title, 10.0)
+        .align_text_middle()
+        .line_spacing(5.0)
+        .set(ids.device_list, ui);
+        */
+        
+    const ITEM_HEIGHT: conrod::Scalar = 50.0;
+
+    let tests = app.test_set.all_tests();
+    let (mut test_list_widget, test_list_scrollbar) = widget::List::new(tests.len(), ITEM_HEIGHT)
+        .scrollbar_on_top()
+        .middle_of(ids.tests_canvas)
+        .down_from(ids.tests_title, 10.0)
+        .w_of(ids.tests_canvas)
+        .h(500.0)
+        .set(ids.tests_list, ui);
+    while let Some(item) = test_list_widget.next(ui) {
+        let i = item.i;
+        let label = tests[i].name();
+        let toggle = widget::Button::new()
+            .label(&label)
+            .label_color(conrod::color::WHITE)
+            .color(conrod::color::LIGHT_BLUE);
+        item.set(toggle, ui); // Instantiate the thing to the parent list.
+    }
+    if let Some(s) = test_list_scrollbar { s.set(ui) }
+
+    /*
 
     ////////////////
     ///// TEXT /////
@@ -346,7 +407,7 @@ pub fn gui(ui: &mut conrod::UiCell, ids: &Ids, app: &mut DemoApp) {
         .down(60.0)
         .align_middle_x_of(ids.canvas)
         .set(ids.plot_path, ui);
-
+*/
 
     /////////////////////
     ///// Scrollbar /////

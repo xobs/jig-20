@@ -10,7 +10,7 @@ enum TestType {
 #[derive(Debug)]
 pub struct TestEntry {
     /// Name: Defines the short name for this test.
-    pub name: String,
+    name: String,
 
     /// Description: Defines a detailed description of this test.  May be up to one paragraph.
     description: String,
@@ -133,5 +133,9 @@ impl TestEntry {
             exec_stop_fail: exec_stop_fail,
 
         })
+    }
+
+    pub fn name(&self) -> &String {
+        return &self.name;
     }
 }

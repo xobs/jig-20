@@ -18,7 +18,7 @@ fn main() {
     let plan = test_set.get_dev(&"Program App".to_string()).unwrap();
     println!("Tests: {:?}", plan);
 
-     const WIDTH: u32 = cfti::gui::WIN_W;
+    const WIDTH: u32 = cfti::gui::WIN_W;
     const HEIGHT: u32 = cfti::gui::WIN_H;
 
     // Construct the window.
@@ -35,7 +35,7 @@ fn main() {
     let mut events = WindowEvents::new();
 
     // A demonstration of some state that we'd like to control with the App.
-    let mut app = cfti::gui::DemoApp::new();
+    let mut app = cfti::gui::CFTIApp::new(&test_set);
 
     // construct our `Ui`.
     let mut ui = conrod::UiBuilder::new([WIDTH as f64, HEIGHT as f64])
