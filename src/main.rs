@@ -1,10 +1,10 @@
-
 mod cfti;
-use cfti::testentry::FindTests;
+use cfti::testset;
+use cfti::testset::NewTestSet;
 
 fn main() {
     println!("Hello, world!");
-    let tests = cfti::testentry::read_dir("ltc-tests").unwrap();
-    let plan = tests.ordered_tests("program-app").unwrap();
+    let testset = cfti::testset::TestSet::new("ltc-tests").unwrap();
+    let plan = testset.get_dev(&"program-app".to_string()).unwrap();
     println!("Tests: {:?}", plan);
 }
