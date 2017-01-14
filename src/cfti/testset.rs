@@ -1,7 +1,5 @@
 use cfti::testentry::TestEntry;
-use cfti::testentry::NewTestEntry;
 use cfti::testdev::TestDev;
-use cfti::testdev::NewTestDev;
 use std::collections::HashMap;
 use std::fs;
 
@@ -13,20 +11,16 @@ enum TestSetEntry {
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestDev`.
+#[derive(Debug)]
 pub struct TestSet {
     tests: HashMap<String, TestEntry>,
     devs: HashMap<String, TestDev>,
 }
 
-pub trait NewTestSet {
-    fn new(dir: &str) -> Result<TestSet, &'static str>;
-    fn get_dev(&self, target_name: &String) -> Option<&TestDev>;
-}
-
-impl NewTestSet for TestSet {
+impl TestSet {
 
     /// Create a new `TestSet` from the given `dir`
-    fn new(dir: &str) -> Result<TestSet, &'static str> {
+    pub fn new(dir: &str) -> Result<TestSet, &'static str> {
         let paths = match  fs::read_dir(dir) {
             Ok(dir) => dir,
             Err(_) => return Err("Unable to read directory for some reason")
@@ -70,7 +64,7 @@ impl NewTestSet for TestSet {
         Ok(test_set)
     }
 
-    fn get_dev(&self, dev_name: &String) -> Option<&TestDev> {
+    pub fn get_dev(&self, dev_name: &String) -> Option<&TestDev> {
         return self.devs.get(dev_name);
     }
 }

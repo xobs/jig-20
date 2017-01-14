@@ -35,12 +35,8 @@ pub struct TestEntry {
     exec_stop_success: String,
 }
 
-pub trait NewTestEntry {
-    fn new(path: String) -> Result<TestEntry, &'static str>;
-}
-
-impl NewTestEntry for TestEntry {
-    fn new(path: String) -> Result<TestEntry, &'static str> {
+impl TestEntry {
+    pub fn new(path: String) -> Result<TestEntry, &'static str> {
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
             Err(_) => return Err("Unable to load test file"),

@@ -1,10 +1,11 @@
 mod cfti;
 use cfti::testset;
-use cfti::testset::NewTestSet;
+use cfti::testplan;
 
 fn main() {
     println!("Hello, world!");
-    let testset = cfti::testset::TestSet::new("ltc-tests").unwrap();
-    let plan = testset.get_dev(&"program-app".to_string()).unwrap();
+    let test_set = cfti::testset::TestSet::new("ltc-tests").unwrap();
+    println!("Test set: {:?}", test_set);
+    let plan = test_set.get_dev(&"Program App".to_string()).unwrap();
     println!("Tests: {:?}", plan);
 }

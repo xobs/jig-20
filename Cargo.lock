@@ -3,6 +3,7 @@ name = "jig2-0"
 version = "0.1.0"
 dependencies = [
  "conrod 0.47.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "daggy 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-ini 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

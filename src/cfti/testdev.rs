@@ -23,27 +23,9 @@ pub struct TestDev {
     failure: String,
 }
 
-pub trait NewTestDev {
-    fn new(path: String) -> Result<TestDev, &'static str>;
-}
+impl TestDev {
 
-impl NewTestDev for TestDev {
-    /*
-    fn ordered_tests(&self, ending_test_name: &str) -> Result<TestDev, &'static str> {
-        let ending_test = match self.tests.get(ending_test_name) {
-            None => return Err("Couldn't find final test"),
-            Some(t) => t,
-        };
-
-        let mut test_list = Vec::new();
-        test_list.push(ending_test);
-        let test_set = TestDev {
-            tests: test_list,
-        };
-        Ok(test_set)
-    }
-    */
-    fn new(path: String) -> Result<TestDev, &'static str> {
+    pub fn new(path: String) -> Result<TestDev, &'static str> {
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
             Err(_) => return Err("Unable to load test file"),

@@ -34,14 +34,6 @@ Daemons
 
 Some tests can run as daemons.  This is particularly useful for services such as OpenOCD, which must be set up in order to program some devices.
 
-TestSet
--------
-
-A TestSet is an unordered set of tests that the system knows about.
-
-In a future version, the tester may actually monitor the directory for files, but as of now, the tester must be restarted for it to pick up new tests.
-
-
 TestPlan
 --------
 
@@ -53,3 +45,15 @@ The following fields are allowed in the [Plan] section:
 * Tests: A space- or comma-separated list of tests to be run.  Note that you only need to specify the final test to run, as the dependency graph will fill in the rest.  If you specify multiple tests, then they will be run in the order you specify, possibly with dependency tests added in between.
 * Success: A command to run if a test plan completes successfully.
 * Failure: A command to be run if a test plan fails.
+
+TestSet
+-------
+
+A TestSet is an unordered set of tests and plans that the system knows about.
+
+In a future version, the tester may actually monitor the directory for files, but as of now, the tester must be restarted for it to pick up new tests.
+
+TestSequence
+------------
+
+An ordered series of TestEntry objects that may be executed.

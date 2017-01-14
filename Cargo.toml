@@ -6,3 +6,4 @@ authors = ["Sean Cross <sean@xobs.io>"]
 [dependencies]
 rust-ini = "0.10.0"
 conrod = "*"
+daggy = "*"
