@@ -1,11 +1,7 @@
 mod cfti;
-use cfti::testset;
-use cfti::testplan;
-use cfti::gui;
 
 #[macro_use]
 extern crate conrod;
-use conrod::backend::piston::gfx::{GfxContext, G2dTexture, Texture, TextureSettings, Flip};
 use conrod::backend::piston::{self, Window, WindowEvents, OpenGL};
 use conrod::backend::piston::event::UpdateEvent;
 

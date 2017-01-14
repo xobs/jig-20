@@ -34,12 +34,12 @@ Daemons
 
 Some tests can run as daemons.  This is particularly useful for services such as OpenOCD, which must be set up in order to program some devices.
 
-TestPlan
+TestTarget
 --------
 
-TestPlans are defined in a .plan file.  They are similar to systemd unit files.
+TestPlans are defined in a .target file.  They are similar to systemd unit files.
 
-The following fields are allowed in the [Plan] section:
+The following fields are allowed in the [Target] section:
 * Name: The name of the product or device being tested.
 * Description: A longer description of the product or device being tested, up to one paragraph.
 * Tests: A space- or comma-separated list of tests to be run.  Note that you only need to specify the final test to run, as the dependency graph will fill in the rest.  If you specify multiple tests, then they will be run in the order you specify, possibly with dependency tests added in between.

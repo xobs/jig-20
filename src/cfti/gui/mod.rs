@@ -128,17 +128,9 @@ widget_ids! {
 /// Instantiate a GUI demonstrating every widget available in conrod.
 pub fn gui(ui: &mut conrod::UiCell, ids: &Ids, app: &mut CFTIApp) {
     use conrod::{widget, Colorable, Labelable, Positionable, Sizeable, Widget};
-    use std::iter::once;
 
     const MARGIN: conrod::Scalar = 30.0;
-    const SHAPE_GAP: conrod::Scalar = 50.0;
-    const TITLE_SIZE: conrod::FontSize = 42;
-    const SUBTITLE_SIZE: conrod::FontSize = 32;
 
-    // `Canvas` is a widget that provides some basic functionality for laying out children widgets.
-    // By default, its size is the size of the window. We'll use this as a background for the
-    // following widgets, as well as a scrollable container for the children widgets.
-    const TITLE: &'static str = "Common Factory Test Interface - GUI";
     //widget::Canvas::new().pad(MARGIN).scroll_kids_vertically().set(ids.canvas, ui);
     widget::Canvas::new().pad(MARGIN).set(ids.canvas, ui);
     //widget::Canvas::new().color(conrod::color::DARK_CHARCOAL).set(ids.canvas, ui);

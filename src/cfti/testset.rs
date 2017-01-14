@@ -1,20 +1,14 @@
 use cfti::testentry::TestEntry;
-use cfti::testdev::TestDev;
+use cfti::testtarget::TestTarget;
 use std::collections::HashMap;
 use std::fs;
 
-#[derive(Debug)]
-enum TestSetEntry {
-    TestEntry,
-    TestDev,
-}
-
 /// A `TestSet` object holds every known test in an unordered fashion.
-/// To run, a `TestSet` must be converted into a `TestDev`.
+/// To run, a `TestSet` must be converted into a `TestTarget`.
 #[derive(Debug)]
 pub struct TestSet {
     tests: HashMap<String, TestEntry>,
-    devs: HashMap<String, TestDev>,
+    devs: HashMap<String, TestTarget>,
 }
 
 impl TestSet {
@@ -25,7 +19,7 @@ impl TestSet {
             Err(_) => return Err("Unable to read directory for some reason"),
         };
         let mut tests: HashMap<String, TestEntry> = HashMap::new();
-        let mut devs: HashMap<String, TestDev> = HashMap::new();
+        let mut devs: HashMap<String, TestTarget> = HashMap::new();
 
         for path in paths {
             let pathu = match path {
@@ -43,13 +37,10 @@ impl TestSet {
             };
 
             if pathu.file_name().to_string_lossy().ends_with(".test") {
-                let name = String::from(pathu.file_name().to_string_lossy().replace(".test", ""));
                 let new_test = TestEntry::new(pathu.path().to_str().unwrap().to_string()).unwrap();
                 tests.insert(new_test.name().clone(), new_test);
-            } else if pathu.file_name().to_string_lossy().ends_with(".dev") {
-                let name = String::from(pathu.file_name().to_string_lossy().replace(".plan", ""));
-
-                let new_plan = TestDev::new(pathu.path().to_str().unwrap().to_string()).unwrap();
+            } else if pathu.file_name().to_string_lossy().ends_with(".target") {
+                let new_plan = TestTarget::new(pathu.path().to_str().unwrap().to_string()).unwrap();
                 devs.insert(new_plan.name.clone(), new_plan);
             }
         }
@@ -62,7 +53,7 @@ impl TestSet {
         Ok(test_set)
     }
 
-    pub fn get_dev(&self, dev_name: &String) -> Option<&TestDev> {
+    pub fn get_dev(&self, dev_name: &String) -> Option<&TestTarget> {
         return self.devs.get(dev_name);
     }
 

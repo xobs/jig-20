@@ -1,12 +1,8 @@
 extern crate ini;
 use self::ini::Ini;
 
-use cfti;
-use cfti::testentry::TestEntry;
-use cfti::testset::TestSet;
-
 #[derive(Debug)]
-pub struct TestDev {
+pub struct TestTarget {
     /// The name of the product or device being tested.
     pub name: String,
 
@@ -23,17 +19,17 @@ pub struct TestDev {
     failure: String,
 }
 
-impl TestDev {
+impl TestTarget {
 
-    pub fn new(path: String) -> Result<TestDev, &'static str> {
+    pub fn new(path: String) -> Result<TestTarget, &'static str> {
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
             Err(_) => return Err("Unable to load test file"),
             Ok(s) => s,
         };
 
-        let plan_section = match ini_file.section(Some("Plan")) {
-            None => return Err("Test is missing '[Plan]' section"),
+        let plan_section = match ini_file.section(Some("Target")) {
+            None => return Err("Test is missing '[Target]' section"),
             Some(s) => s,
         };
 
@@ -70,7 +66,7 @@ impl TestDev {
             }
         };
 
-        Ok(TestDev {
+        Ok(TestTarget {
             name: name,
             description: description,
 

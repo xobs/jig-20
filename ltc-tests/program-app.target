@@ -1,4 +1,4 @@
-[Plan]
+[Target]
 ExecStart=program-app
 Name=Program App
 Name[zh]=程序应用程序
