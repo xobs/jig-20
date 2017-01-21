@@ -5,6 +5,4 @@ authors = ["Sean Cross <sean@xobs.io>"]
 
 [dependencies]
 rust-ini = "0.10.0"
-conrod = "*"
-daggy = "*"
-find_folder = "0.3.0"
+daggy = "0.4.1"
