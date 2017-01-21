@@ -8,7 +8,7 @@ enum TestType {
 }
 
 #[derive(Debug)]
-pub struct TestEntry {
+pub struct Test {
     /// Name: Defines the short name for this test.
     name: String,
 
@@ -35,8 +35,8 @@ pub struct TestEntry {
     exec_stop_success: String,
 }
 
-impl TestEntry {
-    pub fn new(path: String) -> Result<TestEntry, &'static str> {
+impl Test {
+    pub fn new(path: String) -> Result<Test, &'static str> {
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
             Err(_) => return Err("Unable to load test file"),
@@ -118,7 +118,7 @@ impl TestEntry {
             }
         };
 
-        Ok(TestEntry {
+        Ok(Test {
             name: name,
             description: description,
 

@@ -1,5 +1,4 @@
-pub mod testentry;
-pub mod testplan;
+pub mod types;
 pub mod testset;
-pub mod testtarget;
-pub mod gui;
+
+pub use self::testset::TestSet;

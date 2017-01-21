@@ -11,6 +11,7 @@ Jig-20 supports the following objects:
 * **Logger** - Takes test, UI, update, and trigger data and saves it somehow.
 * **Interface** - Shows testing progress.
 * **Updater** - Allows for updating either the test infrastructure or the tests to run.
+* **Service** - A background service that must always run.
 
 Configuration
 -------------

@@ -1,67 +1,77 @@
-use cfti::testentry::TestEntry;
-use cfti::testtarget::TestTarget;
+use cfti::types::Test;
+/*
+use cfti::types::Jig;
+use cfti::types::Scenario;
+use cfti::types::Coupon;
+use cfti::types::Trigger;
+use cfti::types::Logger;
+use cfti::types::Interface;
+use cfti::types::Updater;
+use cfti::types::Service;
+*/
+
 use std::collections::HashMap;
 use std::fs;
+use std::io::Error;
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
 #[derive(Debug)]
 pub struct TestSet {
-    tests: HashMap<String, TestEntry>,
-    devs: HashMap<String, TestTarget>,
+    tests: HashMap<String, Test>,
+    /*
+    jigs: HashMap<String, Jig>,
+    scenarios: HashMap<String, Scenario>,
+    coupons: HashMap<String, Coupon>,
+    triggers: HashMap<String, Trigger>,
+    loggers: HashMap<String, Logger>,
+    updaters: HashMap<String, Updater>,
+    services: HashMap<String, Service>,
+    */
 }
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str) -> Result<TestSet, &'static str> {
-        let paths = match fs::read_dir(dir) {
-            Ok(dir) => dir,
-            Err(_) => return Err("Unable to read directory for some reason"),
-        };
-        let mut tests: HashMap<String, TestEntry> = HashMap::new();
-        let mut devs: HashMap<String, TestTarget> = HashMap::new();
+    pub fn new(dir: &str) -> Result<TestSet, Error> {
 
-        for path in paths {
-            let pathu = match path {
-                Ok(p) => p,
-                Err(_) => return Err("Unable to grab path for some reason"),
-            };
+        let mut tests: HashMap<String, Test> = HashMap::new();
+//        let mut devs: HashMap<String, TestTarget> = HashMap::new();
 
-            match pathu.file_type() {
-                Err(_) => continue,
-                Ok(t) => {
-                    if !t.is_file() {
-                        continue;
-                    }
+        for entry in try!(fs::read_dir(dir)) {
+            let file = try!(entry);
+            let path = file.path();
+
+            if !try!(file.file_type()).is_file() {
+                continue;
+            }
+
+            let new_test_name: String = path.file_stem().unwrap().to_str().unwrap().to_string();
+
+            match path.extension() {
+                None => continue,
+                Some(entry) => if entry == "test" {
+                    let new_test = Test::new(path.to_str().unwrap().to_string()).unwrap();
+                    tests.insert(new_test_name.clone(), new_test);
                 }
-            };
-
-            if pathu.file_name().to_string_lossy().ends_with(".test") {
-                let new_test = TestEntry::new(pathu.path().to_str().unwrap().to_string()).unwrap();
-                tests.insert(new_test.name().clone(), new_test);
-            } else if pathu.file_name().to_string_lossy().ends_with(".target") {
-                let new_plan = TestTarget::new(pathu.path().to_str().unwrap().to_string()).unwrap();
-                devs.insert(new_plan.name.clone(), new_plan);
+                else {
+                    println!("Unrecognized file type: {:?}", file);
+                    continue
+                }
             }
         }
 
         let test_set = TestSet {
             tests: tests,
-            devs: devs,
         };
 
         Ok(test_set)
     }
 
-    pub fn get_dev(&self, dev_name: &String) -> Option<&TestTarget> {
-        return self.devs.get(dev_name);
-    }
-
-    pub fn all_tests(&self) -> Vec<&TestEntry> {
+    pub fn all_tests(&self) -> Vec<&Test> {
         let mut sorted_keys: Vec<&String> = self.tests.keys().collect();
         sorted_keys.sort();
 
-        let mut result: Vec<&TestEntry> = Vec::new();
+        let mut result: Vec<&Test> = Vec::new();
         for key in sorted_keys {
             result.push(self.tests.get(key).unwrap());
         }

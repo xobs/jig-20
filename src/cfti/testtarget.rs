@@ -19,6 +19,13 @@ pub struct TestTarget {
     failure: String,
 }
 
+fn str_or_empty(section: &<cfti::testentry::ini::Ini as Trait>::Properties, key: &str) -> String {
+    match section.get(key) {
+        None => "".to_string(),
+        Some(s) => s.clone()
+    }
+}
+
 impl TestTarget {
 
     pub fn new(path: String) -> Result<TestTarget, &'static str> {
@@ -43,10 +50,7 @@ impl TestTarget {
             Some(s) => s.to_string(),
         };
 
-        let success = match plan_section.get("Success") {
-            None => "".to_string(),
-            Some(s) => s.to_string(),
-        };
+        let success = str_or_empty(plan_section, "Success");
 
         let failure = match plan_section.get("Failure") {
             None => "".to_string(),
