@@ -1,6 +1,5 @@
 extern crate ini;
 use self::ini::Ini;
-use super::test::Test;
 
 #[derive(Debug)]
 enum LoggerFormat {
@@ -13,10 +12,10 @@ pub struct Logger {
     /// id: The string that other units refer to this file as.
     id: String,
 
-    /// name: Display name of this scenario.
+    /// name: Display name of this logger.
     name: String,
 
-    /// description: Paragraph describing this scenario.
+    /// description: Paragraph describing this logger.
     description: Option<String>,
 
     /// jig_names: A list of jigs that this logger is compatibie with.
