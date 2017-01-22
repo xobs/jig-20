@@ -9,6 +9,10 @@ enum TestType {
 
 #[derive(Debug)]
 pub struct Test {
+
+    /// Id: File name on disk, what other units refer to this one as.
+    id: String,
+
     /// Name: Defines the short name for this test.
     name: String,
 
@@ -29,14 +33,17 @@ pub struct Test {
 
     /// ExecStart: The command to run as part of this test.
     exec_start: String,
+
     /// ExecStopFail: When stopping tests, if the test failed, then this stop command will be run.
-    exec_stop_fail: String,
+    exec_stop_failure: Option<String>,
+
     /// ExecStopSuccess: When stopping tests, if the test succeeded, then this stop command will be run.
-    exec_stop_success: String,
+    exec_stop_success: Option<String>,
 }
 
 impl Test {
-    pub fn new(path: String) -> Result<Test, &'static str> {
+    pub fn new(id: &str, path: &str) -> Result<Test, &'static str> {
+
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
             Err(_) => return Err("Unable to load test file"),
@@ -64,18 +71,18 @@ impl Test {
 
         let exec_stop_success = match test_section.get("ExecStopSuccess") {
             None => match test_section.get("ExecStop") {
-                    None => "".to_string(),
-                    Some(s) => s.to_string(),
+                    None => None,
+                    Some(s) => Some(s.to_string()),
                 },
-            Some(s) => s.to_string(),
+            Some(s) => Some(s.to_string()),
         };
 
-        let exec_stop_fail = match test_section.get("ExecStopFail") {
+        let exec_stop_failure = match test_section.get("ExecStopFail") {
             None => match test_section.get("ExecStop") {
-                    None => "".to_string(),
-                    Some(s) => s.to_string(),
+                    None => None,
+                    Some(s) => Some(s.to_string()),
                 },
-            Some(s) => s.to_string(),
+            Some(s) => Some(s.to_string()),
         };
 
         let description = match test_section.get("Description") {
@@ -84,7 +91,7 @@ impl Test {
         };
 
         let name = match test_section.get("Name") {
-            None => path.clone(),
+            None => path.to_string(),
             Some(s) => s.to_string(),
         };
 
@@ -119,6 +126,7 @@ impl Test {
         };
 
         Ok(Test {
+            id: id.to_string(),
             name: name,
             description: description,
 
@@ -130,12 +138,16 @@ impl Test {
             timeout: timeout,
             exec_start: exec_start,
             exec_stop_success: exec_stop_success,
-            exec_stop_fail: exec_stop_fail,
+            exec_stop_failure: exec_stop_failure,
 
         })
     }
 
     pub fn name(&self) -> &String {
         return &self.name;
+    }
+
+    pub fn id(&self) -> &String {
+        return &self.id;
     }
 }
