@@ -168,7 +168,7 @@ The following fields are valid in the [Trigger] section:
 * Name: A short string describing this trigger
 * Description: A longer decsription of this trigger, up to one paragraph long.
 * ExecStart: Name of the program to run to get trigger information from.
-* Jig: A comma-separated list of jigs that this trigger is compatible with.
+* Jigs: A comma-separated list of jigs that this trigger is compatible with.
 
 
 .logger
