@@ -91,7 +91,7 @@ impl Test {
         };
 
         let name = match test_section.get("Name") {
-            None => path.to_string(),
+            None => id.to_string(),
             Some(s) => s.to_string(),
         };
 

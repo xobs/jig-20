@@ -52,7 +52,7 @@ impl Scenario {
         };
 
         let name = match scenario_section.get("Name") {
-            None => path.to_string(),
+            None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
