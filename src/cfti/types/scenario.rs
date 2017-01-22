@@ -16,8 +16,11 @@ pub struct Scenario {
     /// timeout: Maximum number of seconds this scenario should take.
     timeout: u32,
 
-    /// tests: A vector containing all the tests in this scenario.
-    tests: Vec<String>,
+    /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
+    tests: Vec<Test>,
+
+    /// test_names: A vector containing the names of all the tests.
+    test_names: Vec<String>,
 
     /// exec_start: A command to run when starting tests.
     exec_start: Option<String>,
@@ -79,14 +82,15 @@ impl Scenario {
             Some(s) => Some(s.to_string()),
         };
 
-        let tests = match scenario_section.get("Tests") {
+        let test_names = match scenario_section.get("Tests") {
             None => return Err("Unable to find test list"),
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
         Ok(Scenario {
             id: id.to_string(),
-            tests: tests,
+            test_names: test_names,
+            tests: Vec::new(),
             timeout: timeout,
             name: name,
             description: description,
