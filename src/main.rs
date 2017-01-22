@@ -1,5 +1,6 @@
 mod cfti;
 use cfti::types::Test;
+use cfti::types::Scenario;
 use cfti::TestSet;
 
 fn main() {
