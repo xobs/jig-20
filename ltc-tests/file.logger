@@ -1,0 +1,5 @@
+[Logger]
+Name=File Logger
+Description=Write log messages out to a file
+ExecStart=jig-20-file-logger jig20-log.txt
+Format=tsv
