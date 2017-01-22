@@ -1,10 +1,10 @@
 use cfti::types::Test;
 use cfti::types::Scenario;
+use cfti::types::Logger;
+use cfti::types::Trigger;
 /*
 use cfti::types::Jig;
 use cfti::types::Coupon;
-use cfti::types::Trigger;
-use cfti::types::Logger;
 use cfti::types::Interface;
 use cfti::types::Updater;
 use cfti::types::Service;
@@ -21,11 +21,11 @@ use std::path::PathBuf;
 pub struct TestSet {
     tests: HashMap<String, Test>,
     scenarios: HashMap<String, Scenario>,
+    triggers: HashMap<String, Trigger>,
+    loggers: HashMap<String, Logger>,
     /*
     jigs: HashMap<String, Jig>,
     coupons: HashMap<String, Coupon>,
-    triggers: HashMap<String, Trigger>,
-    loggers: HashMap<String, Logger>,
     updaters: HashMap<String, Updater>,
     services: HashMap<String, Service>,
     */
@@ -38,6 +38,8 @@ impl TestSet {
         let mut test_set = TestSet {
             tests: HashMap::new(),
             scenarios: HashMap::new(),
+            loggers: HashMap::new(),
+            triggers: HashMap::new(),
         };
 
         for entry in try!(fs::read_dir(dir)) {
@@ -67,6 +69,12 @@ impl TestSet {
                 } else if entry == "scenario" {
                     let new_scenario = Scenario::new(item_name, path_str).unwrap();
                     self.scenarios.insert(new_scenario.id().clone(), new_scenario);
+                } else if entry == "logger" {
+                    let new_logger = Logger::new(item_name, path_str).unwrap();
+                    self.loggers.insert(new_logger.id().clone(), new_logger);
+                } else if entry == "trigger" {
+                    let new_trigger = Trigger::new(item_name, path_str).unwrap();
+                    self.triggers.insert(new_trigger.id().clone(), new_trigger);
                 }
                 else {
                     println!("Unrecognized file type: {:?}", path);
