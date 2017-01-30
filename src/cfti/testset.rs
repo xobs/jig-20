@@ -42,6 +42,7 @@ impl TestSet {
             triggers: HashMap::new(),
         };
 
+        // Step 1: Read each unit file from the disk
         for entry in try!(fs::read_dir(dir)) {
             let file = try!(entry);
             let path = file.path();
@@ -53,9 +54,21 @@ impl TestSet {
             test_set.add_item(path);
         }
 
+        // Step 2: Resolve unit names to unit files.
+        TestSet::resolve_scenarios(&mut test_set);
         Ok(test_set)
     }
 
+    fn resolve_scenarios(test_set: &mut TestSet) {
+        let scenario_names: Vec<String> = test_set.scenarios.keys().map(|s| s.clone()).collect();
+        for scenario_name in scenario_names {
+            println!("Scenario: {}", scenario_name);
+            let ref mut scenario = test_set.scenarios.get_mut(&scenario_name).unwrap();
+            for test in scenario.test_names {
+                scenario.tests.push(test_set.tests.get(&test).unwrap());
+            }
+        }
+    }
     fn add_item(&mut self, path: PathBuf) {
         let item_name = path.file_stem().unwrap().to_str().unwrap();
         let path_str = path.to_str().unwrap();

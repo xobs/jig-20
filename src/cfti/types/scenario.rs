@@ -1,6 +1,7 @@
 extern crate ini;
 use self::ini::Ini;
 use super::test::Test;
+use super::super::testset::TestSet;
 
 #[derive(Debug)]
 pub struct Scenario {
@@ -17,10 +18,10 @@ pub struct Scenario {
     timeout: u32,
 
     /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
-    tests: Vec<Test>,
+    pub tests: Vec<&Test>,
 
     /// test_names: A vector containing the names of all the tests.
-    test_names: Vec<String>,
+    pub test_names: Vec<String>,
 
     /// exec_start: A command to run when starting tests.
     exec_start: Option<String>,
@@ -98,6 +99,14 @@ impl Scenario {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
         })
+    }
+
+    pub fn resolve(&mut self, test_set: &TestSet) {
+        /*
+        for test_name in self.test_names {
+            println!("Test name: {}", test_name);
+        }
+        */
     }
 
     pub fn id(&self) -> &String {
