@@ -13,6 +13,7 @@ enum LoggerFormat {
 pub enum LoggerError {
     FileLoadError,
     MissingLoggerSection,
+    MissingExecSection,
     InvalidType(String),
 }
 
@@ -27,14 +28,11 @@ pub struct Logger {
     /// description: Paragraph describing this logger.
     description: Option<String>,
 
-    /// jigs: A collection of jig objects that this logger is compatibie with.
-    //jigs: Vec<Jig>
-
     /// format: The format requested by this logger.
     format: LoggerFormat,
 
     /// exec_start: A command to run when starting tests.
-    exec_start: Option<String>,
+    exec_start: String,
 }
 
 impl Logger {
@@ -81,8 +79,8 @@ impl Logger {
         };
 
         let exec_start = match logger_section.get("ExecStart") {
-            None => None,
-            Some(s) => Some(s.to_string()),
+            None => return Some(Err(LoggerError::MissingExecSection)),
+            Some(s) => s.to_string(),
         };
 
         let format = match logger_section.get("Format") {
