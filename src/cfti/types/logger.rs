@@ -2,6 +2,7 @@ extern crate ini;
 use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
+use super::super::log;
 
 #[derive(Debug)]
 enum LoggerFormat {
@@ -62,7 +63,7 @@ impl Logger {
                     }
                 }
                 if found_it == false {
-                    println!("The logger '{}' is not compatible with this jig", id);
+                    log::debug(format!("The logger '{}' is not compatible with this jig", id).as_str());
                     return None;
                 }
             }
