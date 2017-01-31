@@ -19,7 +19,7 @@ pub struct Logger {
     description: Option<String>,
 
     /// jig_names: A list of jigs that this logger is compatibie with.
-    jig_names: Vec<String>,
+    jig_names: Option<Vec<String>>,
 
     /// jigs: A collection of jig objects that this logger is compatibie with.
     //jigs: Vec<Jig>
@@ -70,8 +70,8 @@ impl Logger {
         };
 
         let jig_names = match logger_section.get("Jigs") {
-            None => Vec::new(),
-            Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
+            None => None,
+            Some(s) => Some(s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect()),
         };
 
        Ok(Logger {
