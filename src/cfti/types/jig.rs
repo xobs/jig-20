@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::Command;
 use super::super::process;
 use super::super::config;
+use super::super::log;
 
 #[derive(Debug)]
 pub enum JigError {
@@ -41,35 +42,35 @@ impl Jig {
             Some(s) => s,
         };
 
-        match jig_section.get("TestProgram") {
-            None => {
-                println!("No TestProgram specified");
-                ()
-            },
-            Some(s) => {
-                if !process::try_command(s, config::default_timeout()) {
-                    println!("Test program FAILED");
-                    return None;
-                }
-                println!("Test program passed");
-                ()
-            },
-        };
-
         // Determine if this is the jig we're running on
         match jig_section.get("TestFile") {
             None => {
-                println!("Test file not specified, skipping");
+                log::debug("Test file not specified, skipping");
                 ()
             },
             Some(s) => {
                 if !Path::new(s).exists() {
-                    println!("Test file {} DOES NOT EXIST", s);
+                    log::debug(format!("Test file {} DOES NOT EXIST", s).as_str());
                     return None;
                 };
-                println!("Test file exists");
+                log::debug("Test file exists");
                 ()
             }
+        };
+
+        match jig_section.get("TestProgram") {
+            None => {
+                log::debug("No TestProgram specified");
+                ()
+            },
+            Some(s) => {
+                if !process::try_command(s, config::default_timeout()) {
+                    log::debug("Test program FAILED");
+                    return None;
+                }
+                log::debug("Test program passed");
+                ()
+            },
         };
 
         let description = match jig_section.get("Description") {
