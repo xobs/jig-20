@@ -9,17 +9,32 @@ use std::thread;
 use std::time::Duration;
 use self::wait_timeout::ChildExt;
 use std::result;
+use super::log;
 
-pub fn try_command(cmd: &str, max: Duration) -> bool {
+pub enum CommandError {
+    NoCommandSpecified,
+}
+
+pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     let mut args = shlex::split(cmd);
     if args.is_none() {
-        println!("No command specified");
-        return false;
+        return Err(CommandError::NoCommandSpecified);
     }
     let mut args = args.unwrap();
-
     let mut cmd = Command::new(args.remove(0));
     cmd.args(&args);
+    Ok(cmd)
+}
+
+pub fn try_command(cmd: &str, max: Duration) -> bool {
+    let mut cmd = match make_command(cmd) {
+        Err(_) => {
+            log::debug("Unable to make command");
+            return false;
+        },
+        Ok(val) => val,
+    };
+
     let mut child = cmd.spawn();
     if child.is_err() {
         let err = child.err().unwrap();
