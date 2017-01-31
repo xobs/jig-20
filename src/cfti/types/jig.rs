@@ -2,8 +2,8 @@ extern crate ini;
 use self::ini::Ini;
 use std::path::Path;
 use std::process::Command;
-use std::time::Duration;
 use super::super::process;
+use super::super::config;
 
 #[derive(Debug)]
 pub enum JigError {
@@ -47,7 +47,7 @@ impl Jig {
                 ()
             },
             Some(s) => {
-                if !process::try_command(Command::new("C:\\Users\\smcro\\Documents\\Code\\jig-20\\test.bat").arg("1"), Duration::new(2, 0)) {
+                if !process::try_command(s, config::default_timeout()) {
                     println!("Test program FAILED");
                     return None;
                 }
