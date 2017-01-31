@@ -11,6 +11,7 @@ use cfti::types::Service;
 */
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::fs;
 use std::io::Error;
 use std::path::PathBuf;
@@ -19,7 +20,7 @@ use std::path::PathBuf;
 /// To run, a `TestSet` must be converted into a `TestTarget`.
 #[derive(Debug)]
 pub struct TestSet {
-    tests: HashMap<String, Test>,
+    tests: HashMap<String, Arc<Test>>,
     scenarios: HashMap<String, Scenario>,
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
@@ -55,18 +56,14 @@ impl TestSet {
         }
 
         // Step 2: Resolve unit names to unit files.
-        TestSet::resolve_scenarios(&mut test_set);
+        test_set.resolve_scenarios();
         Ok(test_set)
     }
 
-    fn resolve_scenarios(test_set: &mut TestSet) {
-        let scenario_names: Vec<String> = test_set.scenarios.keys().map(|s| s.clone()).collect();
-        for scenario_name in scenario_names {
-            println!("Scenario: {}", scenario_name);
-            let ref mut scenario = test_set.scenarios.get_mut(&scenario_name).unwrap();
-            for test in scenario.test_names {
-                scenario.tests.push(test_set.tests.get(&test).unwrap());
-            }
+    fn resolve_scenarios(&mut self) {
+        let scenario_names: Vec<String> = self.scenarios.keys().map(|s| s.clone()).collect();
+        for (_, ref mut scenario) in self.scenarios.iter_mut() {
+            scenario.resolve_tests(&self.tests);
         }
     }
     fn add_item(&mut self, path: PathBuf) {
@@ -78,7 +75,7 @@ impl TestSet {
             Some(entry) => {
                 if entry == "test" {
                     let new_test = Test::new(item_name, path_str).unwrap();
-                    self.tests.insert(new_test.id().clone(), new_test);
+                    self.tests.insert(new_test.id().clone(), Arc::new(new_test));
                 } else if entry == "scenario" {
                     let new_scenario = Scenario::new(item_name, path_str).unwrap();
                     self.scenarios.insert(new_scenario.id().clone(), new_scenario);

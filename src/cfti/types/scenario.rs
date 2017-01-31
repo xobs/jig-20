@@ -1,7 +1,13 @@
 extern crate ini;
 use self::ini::Ini;
+use std::sync::Arc;
+use std::collections::HashMap;
 use super::test::Test;
 use super::super::testset::TestSet;
+
+pub enum ScenarioError {
+    TestNotFound(String),
+}
 
 #[derive(Debug)]
 pub struct Scenario {
@@ -18,7 +24,7 @@ pub struct Scenario {
     timeout: u32,
 
     /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
-    pub tests: Vec<&Test>,
+    pub tests: Vec<Arc<Test>>,
 
     /// test_names: A vector containing the names of all the tests.
     pub test_names: Vec<String>,
@@ -101,12 +107,21 @@ impl Scenario {
         })
     }
 
-    pub fn resolve(&mut self, test_set: &TestSet) {
-        /*
-        for test_name in self.test_names {
-            println!("Test name: {}", test_name);
+    pub fn resolve_tests(&mut self, test_set: &HashMap<String, Arc<Test>>) -> Result<(), ScenarioError> {
+
+        println!("Resolving tests for {}", self.name);
+        for test_name in self.test_names.iter() {
+            let test = match test_set.get(test_name) {
+                None => {
+                    println!("Test {} NOT FOUND", test_name);
+                    return Err(ScenarioError::TestNotFound(test_name.clone()));
+                },
+                Some(t) => t,
+            };
+            self.tests.push(test.clone());
+            println!("Test {} was found", test_name);
         }
-        */
+        Ok(())
     }
 
     pub fn id(&self) -> &String {
