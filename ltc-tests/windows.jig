@@ -1,0 +1,4 @@
+[Jig]
+Name=Windows Jig
+Description=Development Jig running on Windows
+TestFile=C:\\
