@@ -2,8 +2,8 @@ use cfti::types::Test;
 use cfti::types::Scenario;
 use cfti::types::Logger;
 use cfti::types::Trigger;
-/*
 use cfti::types::Jig;
+/*
 use cfti::types::Coupon;
 use cfti::types::Interface;
 use cfti::types::Updater;
@@ -24,8 +24,8 @@ pub struct TestSet {
     scenarios: HashMap<String, Scenario>,
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
-    /*
     jigs: HashMap<String, Jig>,
+    /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
     services: HashMap<String, Service>,
@@ -41,6 +41,7 @@ impl TestSet {
             scenarios: HashMap::new(),
             loggers: HashMap::new(),
             triggers: HashMap::new(),
+            jigs: HashMap::new(),
         };
 
         // Step 1: Read each unit file from the disk
@@ -85,6 +86,9 @@ impl TestSet {
                 } else if entry == "trigger" {
                     let new_trigger = Trigger::new(item_name, path_str).unwrap();
                     self.triggers.insert(new_trigger.id().clone(), new_trigger);
+                } else if entry == "jig" {
+                    let new_jig = Jig::new(item_name, path_str).unwrap();
+                    self.jigs.insert(new_jig.id().clone(), new_jig);
                 }
                 else {
                     println!("Unrecognized file type: {:?}", path);
