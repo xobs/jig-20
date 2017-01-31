@@ -3,7 +3,6 @@ use self::ini::Ini;
 use std::sync::Arc;
 use std::collections::HashMap;
 use super::test::Test;
-use super::super::testset::TestSet;
 
 pub enum ScenarioError {
     TestNotFound(String),
