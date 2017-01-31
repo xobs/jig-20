@@ -62,7 +62,6 @@ impl TestSet {
     }
 
     fn resolve_scenarios(&mut self) {
-        let scenario_names: Vec<String> = self.scenarios.keys().map(|s| s.clone()).collect();
         for (_, ref mut scenario) in self.scenarios.iter_mut() {
             scenario.resolve_tests(&self.tests);
         }
