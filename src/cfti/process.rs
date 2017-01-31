@@ -1,5 +1,6 @@
 // From http://stackoverflow.com/a/36870954
 extern crate wait_timeout;
+extern crate shlex;
 
 use std::io::Read;
 use std::process::Child;
@@ -9,7 +10,16 @@ use std::time::Duration;
 use self::wait_timeout::ChildExt;
 use std::result;
 
-pub fn try_command(cmd: &mut Command, max: Duration) -> bool {
+pub fn try_command(cmd: &str, max: Duration) -> bool {
+    let mut args = shlex::split(cmd);
+    if args.is_none() {
+        println!("No command specified");
+        return false;
+    }
+    let mut args = args.unwrap();
+
+    let mut cmd = Command::new(args.remove(0));
+    cmd.args(&args);
     let mut child = cmd.spawn();
     if child.is_err() {
         let err = child.err().unwrap();
