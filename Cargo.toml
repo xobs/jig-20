@@ -6,3 +6,4 @@ authors = ["Sean Cross <sean@xobs.io>"]
 [dependencies]
 rust-ini = "0.10.0"
 daggy = "0.4.1"
+wait-timeout = "0.1.3"
