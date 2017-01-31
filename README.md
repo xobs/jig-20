@@ -101,7 +101,7 @@ A Jig is a single-purpose piece of hardware.  As such, many tests are bound to a
 
 Jigs do not have a CFTI protocol because they are merely objects, and don't have any state.  They simply exist.
 
-The Jig unit file does have a Cartesian parameter that can be used to determine if the interface is running on a particular jig.  If this command exits 0, then that indicates that we are running on a particular jig.  For example, this may test for the existance of a file, twiddle some pins and check for a value, ping something on I2C, or monitor the network.
+The Jig unit file does have a TestFile and a TestProgram parameter that can be used to determine if the interface is running on a particular jig.  If this command exits 0, then that indicates that we are running on a particular jig.  For example, this may test for the existance of a file, twiddle some pins and check for a value, ping something on I2C, or monitor the network.
 
 
 
@@ -144,7 +144,8 @@ Jigs are physical devices that perform tests.  You will have a jig in the factor
 The following fields are allowed in the [Jig] section:
 * Name: The name of the jig and the device or product that it tests.
 * Description: A longer description of the jig and the product or device being tested, up to one paragraph long.
-* Cartesian: Optional path to a program to determine if this is the jig we're running on.
+* TestProgram: Optional path to a program to determine if this is the jig we're running on.
+* TestFile: Optional path to a file to determine if this is the jig we're running on.  If both TestFile and TestProgram are specified, then they must both pass for this to be true.
 * DefaultScenario: The name of the scenario to run by default.
 
 
