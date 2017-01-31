@@ -73,25 +73,31 @@ impl TestSet {
         match path.extension() {
             None => return,
             Some(entry) => {
-                if entry == "test" {
-                    let new_test = Test::new(item_name, path_str).unwrap();
-                    self.tests.insert(new_test.id().clone(), Arc::new(new_test));
-                } else if entry == "scenario" {
-                    let new_scenario = Scenario::new(item_name, path_str).unwrap();
-                    self.scenarios.insert(new_scenario.id().clone(), new_scenario);
-                } else if entry == "logger" {
-                    let new_logger = Logger::new(item_name, path_str).unwrap();
-                    self.loggers.insert(new_logger.id().clone(), new_logger);
-                } else if entry == "trigger" {
-                    let new_trigger = Trigger::new(item_name, path_str).unwrap();
-                    self.triggers.insert(new_trigger.id().clone(), new_trigger);
-                } else if entry == "jig" {
-                    let new_jig = Jig::new(item_name, path_str).unwrap();
-                    self.jigs.insert(new_jig.id().clone(), new_jig);
-                }
-                else {
-                    println!("Unrecognized file type: {:?}", path);
-                    return
+                match entry.to_str().unwrap() {
+                    "test" => {
+                        let new_test = Test::new(item_name, path_str).unwrap();
+                        self.tests.insert(new_test.id().clone(), Arc::new(new_test));
+                    },
+                    "scenario" => {
+                        let new_scenario = Scenario::new(item_name, path_str).unwrap();
+                        self.scenarios.insert(new_scenario.id().clone(), new_scenario);
+                    },
+                    "logger" => {
+                        let new_logger = Logger::new(item_name, path_str).unwrap();
+                        self.loggers.insert(new_logger.id().clone(), new_logger);
+                    },
+                    "trigger" => {
+                        let new_trigger = Trigger::new(item_name, path_str).unwrap();
+                        self.triggers.insert(new_trigger.id().clone(), new_trigger);
+                    },
+                    "jig" => {
+                        let new_jig = Jig::new(item_name, path_str).unwrap();
+                        self.jigs.insert(new_jig.id().clone(), new_jig);
+                    },
+                    _ => {
+                        println!("Unrecognized file type: {:?}", path);
+                        return
+                    },
                 }
             }
         }
