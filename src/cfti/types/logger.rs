@@ -135,7 +135,7 @@ impl Logger {
                                                                 msg.unit_type,
                                                                 msg.unix_time,
                                                                 msg.unix_time_nsecs,
-                                                                msg.message),
+                                                                msg.message.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
                 LoggerFormat::JSON => writeln!(stdin.lock().unwrap(), "{{\"message_type\":{},\"unit\":\"{}\",\"unit_type\":\"{}\",\"unix_time\":{},\"unix_time_nsecs\":{},\"message\":\"{}\"}}",
                                                                 msg.message_type,
                                                                 msg.unit,
