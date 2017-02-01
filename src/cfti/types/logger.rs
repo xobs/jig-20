@@ -8,7 +8,7 @@ use std::process::{Command, Stdio};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum LoggerFormat {
     TabSeparatedValue,
     JSON,
@@ -126,7 +126,25 @@ impl Logger {
             Ok(s) => s,
         };
         let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
-        ts.start_logger(move |msg| {writeln!(stdin.lock().unwrap(), "{:?}", msg);});
+        let format = self.format.clone();
+        ts.start_logger(move |msg| {
+            match format {
+                LoggerFormat::TabSeparatedValue => writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                                msg.message_type,
+                                                                msg.unit,
+                                                                msg.unit_type,
+                                                                msg.unix_time,
+                                                                msg.unix_time_nsecs,
+                                                                msg.message),
+                LoggerFormat::JSON => writeln!(stdin.lock().unwrap(), "{{\"message_type\":{},\"unit\":\"{}\",\"unit_type\":\"{}\",\"unix_time\":{},\"unix_time_nsecs\":{},\"message\":\"{}\"}}",
+                                                                msg.message_type,
+                                                                msg.unit,
+                                                                msg.unit_type,
+                                                                msg.unix_time,
+                                                                msg.unix_time_nsecs,
+                                                                msg.message),
+            };
+        });
 
         Ok(())
     }
