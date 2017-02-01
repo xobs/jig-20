@@ -7,11 +7,14 @@ use std::time::Duration;
 use self::wait_timeout::ChildExt;
 use super::testset::TestSet;
 
+#[derive(Debug)]
 pub enum CommandError {
     NoCommandSpecified,
 }
 
 pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
+    let cmd = cmd.to_string().replace("\\", "\\\\");
+    let cmd = cmd.as_str();
     let args = shlex::split(cmd);
     if args.is_none() {
         return Err(CommandError::NoCommandSpecified);

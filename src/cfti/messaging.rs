@@ -8,7 +8,7 @@ pub enum MessagingError {
 
 #[derive(Debug)]
 pub struct Messaging {
-    log: log::Log,
+    pub log: log::Log,
 }
 
 impl Messaging {
@@ -23,7 +23,7 @@ impl Messaging {
         })
     }
 
-    pub fn debug(&self, msg: &str) {
+    pub fn debug(&mut self, msg: &str) {
         self.log.debug(msg);
     }
 }

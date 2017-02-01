@@ -3,6 +3,10 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
+use super::super::process;
+use std::process::{Command, Stdio};
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 enum LoggerFormat {
@@ -15,6 +19,8 @@ pub enum LoggerError {
     FileLoadError,
     MissingLoggerSection,
     MissingExecSection,
+    MakeCommandFailed,
+    ExecCommandFailed,
     InvalidType(String),
 }
 
@@ -106,7 +112,22 @@ impl Logger {
         return &self.id;
     }
 
-    pub fn start(&mut self) -> Result<(), LoggerError> {
+    pub fn start(&self, ts: &TestSet) -> Result<(), LoggerError> {
+        let mut cmd = match process::make_command(self.exec_start.as_str()) {
+            Ok(s) => s,
+            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); ts.debug(format!("Unable to run logger: {:?}", e).as_str()); return Err(LoggerError::MakeCommandFailed) },
+        };
+        cmd.stdout(Stdio::null());
+        cmd.stdin(Stdio::piped());
+        cmd.stderr(Stdio::inherit());
+
+        let child = match cmd.spawn() {
+            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(LoggerError::ExecCommandFailed) },
+            Ok(s) => s,
+        };
+        let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
+        ts.start_logger(move |msg| {writeln!(stdin.lock().unwrap(), "{:?}", msg);});
+
         Ok(())
     }
 }

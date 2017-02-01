@@ -1,5 +1,6 @@
 [Logger]
 Name=File Logger
 Description=Write log messages out to a file
-ExecStart=jig-20-file-logger jig20-log.txt
+ExecStart=C:\\Users\\smcro\\Documents\\Code\\jig-20-file-logger\\target\\debug\\jig-20-file-logger.exe C:\\Users\\smcro\\Documents\\Code\\jig-20\\file-log.txt
 Format=tsv
+Jigs=windows

@@ -3,13 +3,14 @@ use super::types::Scenario;
 use super::types::Logger;
 use super::types::Trigger;
 use super::types::Jig;
+use super::types::Interface;
 /*
 use cfti::types::Coupon;
-use cfti::types::Interface;
 use cfti::types::Updater;
 use cfti::types::Service;
 */
 use super::messaging;
+use super::log;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,6 +18,8 @@ use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::ffi::OsStr;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
@@ -27,8 +30,9 @@ pub struct TestSet {
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
     jigs: HashMap<String, Jig>,
+    interfaces: HashMap<String, Interface>,
 
-    messaging: messaging::Messaging,
+    messaging: Rc<RefCell<messaging::Messaging>>,
     /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
@@ -42,7 +46,7 @@ impl TestSet {
 
         let messaging = match messaging::Messaging::new() {
             Err(_) => return Err(Error::new(ErrorKind::UnexpectedEof, "Unable to create messaging")),
-            Ok(s) => s,
+            Ok(s) => Rc::new(RefCell::new(s)),
         };
 
         let mut test_set = TestSet {
@@ -51,6 +55,7 @@ impl TestSet {
             loggers: HashMap::new(),
             triggers: HashMap::new(),
             jigs: HashMap::new(),
+            interfaces: HashMap::new(),
             messaging: messaging,
         };
 
@@ -105,7 +110,7 @@ impl TestSet {
 
         test_set.load_jigs(&jig_paths);
         test_set.load_loggers(&logger_paths);
-        //test_set.load_interfaces(&interface_paths);
+        test_set.load_interfaces(&interface_paths);
         //test_set.load_services(&service_paths);
         //test_set.load_updaters(&updater_paths);
         //test_set.load_tests(&test_paths);
@@ -117,7 +122,7 @@ impl TestSet {
     }
 
     pub fn debug(&self, msg: &str) {
-        self.messaging.debug(msg);
+        self.messaging.borrow_mut().debug(msg);
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -161,15 +166,37 @@ impl TestSet {
             }
             let new_logger = new_logger.unwrap();
             let id = new_logger.id().clone();
+            new_logger.start(&self);
             self.loggers.insert(new_logger.id().clone(), new_logger);
-            self.start_logger(&id);
         }
     }
 
-    fn start_logger(&mut self, logger_id: &String) {
-        let mut logger = self.loggers.get_mut(logger_id).unwrap();
-        logger.start();
+    pub fn start_logger<F>(&self, logger_func: F)
+        where F: Send + 'static + Fn(log::LogItem) {
+        self.messaging.borrow_mut().log.start_logger(logger_func);
     }
+
+    fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
+        for interface_path in interface_paths {
+            let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let path_str = interface_path.to_str().unwrap_or("");
+            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs) {
+                // In this case, it just means the interface is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => { self.debug(format!("Unable to load interface: {:?}", e).as_str()); continue; },
+                        Ok(s) => s,
+                    }
+                },
+            };
+
+            let id = new_interface.id().clone();
+            new_interface.start(&self);
+            self.interfaces.insert(new_interface.id().clone(), new_interface);
+        }
+    }
+
 
     fn resolve_scenarios(&mut self) {
         for (_, ref mut scenario) in self.scenarios.iter_mut() {
