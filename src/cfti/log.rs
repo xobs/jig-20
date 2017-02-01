@@ -11,22 +11,22 @@ pub enum LogError {
 #[derive(Debug, Clone)]
 pub struct LogItem {
     /// A numerical indication of the type of message. 0 is internal messages such as test-start, 1 is test log output from various units, 2 is internal debug log.
-    message_type: u32,
+    pub message_type: u32,
 
     /// The name of the unit that generated the message.
-    unit: String,
+    pub unit: String,
 
     /// The type of unit, such as "test", "logger", "trigger", etc.
-    unit_type: String,
+    pub unit_type: String,
 
     /// Number of seconds since the epoch
-    unix_time: u64,
+    pub unix_time: u64,
 
     /// Number of nanoseconds since the epoch
-    unix_time_nsecs: u32,
+    pub unix_time_nsecs: u32,
 
     /// Textual representation of the message, minus linefeeds.
-    message: String,
+    pub message: String,
 }
 
 pub struct Log {
