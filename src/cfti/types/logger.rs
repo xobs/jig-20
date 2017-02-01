@@ -7,6 +7,7 @@ use super::super::process;
 use std::process::{Command, Stdio};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+extern crate json;
 
 #[derive(Debug, Clone)]
 enum LoggerFormat {
@@ -136,13 +137,16 @@ impl Logger {
                                                                 msg.unix_time,
                                                                 msg.unix_time_nsecs,
                                                                 msg.message.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
-                LoggerFormat::JSON => writeln!(stdin.lock().unwrap(), "{{\"message_type\":{},\"unit\":\"{}\",\"unit_type\":\"{}\",\"unix_time\":{},\"unix_time_nsecs\":{},\"message\":\"{}\"}}",
-                                                                msg.message_type,
-                                                                msg.unit,
-                                                                msg.unit_type,
-                                                                msg.unix_time,
-                                                                msg.unix_time_nsecs,
-                                                                msg.message),
+                LoggerFormat::JSON => {
+                    let mut object = json::JsonValue::new_object();
+                    object["message_type"] = msg.message_type.into();
+                    object["unit"] = msg.unit.into();
+                    object["unit_type"] = msg.unit_type.into();
+                    object["unix_time"] = msg.unix_time.into();
+                    object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
+                    object["message"] = msg.message.into();
+                    writeln!(stdin.lock().unwrap(), "{}", json::stringify(object))
+                },
             };
         });
 
