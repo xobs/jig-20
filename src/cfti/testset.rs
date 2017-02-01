@@ -121,8 +121,8 @@ impl TestSet {
         Ok(test_set)
     }
 
-    pub fn debug(&self, msg: &str) {
-        self.messaging.borrow_mut().debug(msg);
+    pub fn debug(&self, unit_type: &str, unit: &str, msg: &str) {
+        self.messaging.borrow_mut().debug(unit_type, unit, msg);
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -185,7 +185,7 @@ impl TestSet {
                 None => continue,
                 Some(s) => {
                     match s {
-                        Err(e) => { self.debug(format!("Unable to load interface: {:?}", e).as_str()); continue; },
+                        Err(e) => { self.debug("interface", item_name, format!("Unable to load interface: {:?}", e).as_str()); continue; },
                         Ok(s) => s,
                     }
                 },

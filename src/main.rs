@@ -10,7 +10,7 @@ fn main() {
 
     for i in 0..10 {
         println!("i: {}", i);
-        test_set.debug(format!("I loop: {}", i).as_str());
+        test_set.debug("main", "main", format!("I loop: {}", i).as_str());
         thread::sleep(time::Duration::from_millis(100));
     }
     println!("Test set: {:?}", test_set);

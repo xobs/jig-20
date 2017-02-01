@@ -69,7 +69,7 @@ impl Interface {
                     }
                 }
                 if found_it == false {
-                    ts.debug(format!("The interface '{}' is not compatible with this jig", id).as_str());
+                    ts.debug("interface", id, format!("The interface '{}' is not compatible with this jig", id).as_str());
                     return None;
                 }
             }
@@ -115,7 +115,7 @@ impl Interface {
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
-            Err(e) => { println!(">>> UNABLE TO RUN INTERFACE: {:?}", e); ts.debug(format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
+            Err(e) => { println!(">>> UNABLE TO RUN INTERFACE: {:?}", e); ts.debug("interface", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
         };
         cmd.stdout(Stdio::null());
         cmd.stdin(Stdio::piped());

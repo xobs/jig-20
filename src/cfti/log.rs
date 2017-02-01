@@ -66,17 +66,17 @@ impl Log {
         );
     }
 
-    pub fn debug(&mut self, msg: &str) {
+    pub fn debug(&mut self, unit_type: &str, unit: &str, msg: &str) {
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
             Ok(d) => d,
-            Err(e) => time::Duration::new(0, 0),
+            Err(_) => time::Duration::new(0, 0),
         };
 
         self.bus.broadcast(LogItem {
             message_type: 2,
-            unit: "<internal>".to_string(),
-            unit_type: "<internal>".to_string(),
+            unit: unit.to_string(),
+            unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: msg.to_string(),

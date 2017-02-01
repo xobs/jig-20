@@ -70,7 +70,7 @@ impl Logger {
                     }
                 }
                 if found_it == false {
-                    ts.debug(format!("The logger '{}' is not compatible with this jig", id).as_str());
+                    ts.debug("logger", id, format!("The logger '{}' is not compatible with this jig", id).as_str());
                     return None;
                 }
             }
@@ -116,7 +116,7 @@ impl Logger {
     pub fn start(&self, ts: &TestSet) -> Result<(), LoggerError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
-            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); ts.debug(format!("Unable to run logger: {:?}", e).as_str()); return Err(LoggerError::MakeCommandFailed) },
+            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); ts.debug("logger", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(LoggerError::MakeCommandFailed) },
         };
         cmd.stdout(Stdio::null());
         cmd.stdin(Stdio::piped());

@@ -28,7 +28,7 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
 pub fn try_command(ts: &TestSet, cmd: &str, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
         Err(_) => {
-            ts.debug("Unable to make command");
+            ts.debug("internal", "unknown", "Unable to make command");
             return false;
         },
         Ok(val) => val,

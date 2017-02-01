@@ -23,7 +23,7 @@ impl Messaging {
         })
     }
 
-    pub fn debug(&mut self, msg: &str) {
-        self.log.debug(msg);
+    pub fn debug(&mut self, unit_type: &str, unit: &str, msg: &str) {
+        self.log.debug(unit_type, unit, msg);
     }
 }

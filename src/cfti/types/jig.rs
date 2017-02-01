@@ -46,30 +46,30 @@ impl Jig {
         // Determine if this is the jig we're running on
         match jig_section.get("TestFile") {
             None => {
-                ts.debug("Test file not specified, skipping");
+                ts.debug("jig", id, "Test file not specified, skipping");
                 ()
             },
             Some(s) => {
                 if !Path::new(s).exists() {
-                    ts.debug(format!("Test file {} DOES NOT EXIST", s).as_str());
+                    ts.debug("jig", id, format!("Test file {} DOES NOT EXIST", s).as_str());
                     return None;
                 };
-                ts.debug("Test file exists");
+                ts.debug("jig", id, "Test file exists");
                 ()
             }
         };
 
         match jig_section.get("TestProgram") {
             None => {
-                ts.debug("No TestProgram specified");
+                ts.debug("jig", id, "No TestProgram specified");
                 ()
             },
             Some(s) => {
                 if !process::try_command(ts, s, config::default_timeout()) {
-                    ts.debug("Test program FAILED");
+                    ts.debug("jig", id, "Test program FAILED");
                     return None;
                 }
-                ts.debug("Test program passed");
+                ts.debug("jig", id, "Test program passed");
                 ()
             },
         };
