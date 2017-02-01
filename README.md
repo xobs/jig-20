@@ -195,7 +195,7 @@ The following fields can go in the [Interface] section:
 * Description: A longer paragraph describing this interface.
 * ExecStart: The program to invoke to act as the interface.
 * Format: Describes the interface format.  May be "tsv" or "json".  Defaults to "tsv" if unspecified.
-
+* Jigs: A list of jigs that this interface is compatible with.  Omit this field for "all".
 
 .coupon
 -------
