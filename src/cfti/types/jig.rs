@@ -4,7 +4,8 @@ use std::path::Path;
 use std::process::Command;
 use super::super::process;
 use super::super::config;
-use super::super::log;
+use super::super::messaging;
+use super::super::testset::TestSet;
 
 #[derive(Debug)]
 pub enum JigError {
@@ -29,7 +30,7 @@ pub struct Jig {
 }
 
 impl Jig {
-    pub fn new(id: &str, path: &str) -> Option<Result<Jig, JigError>> {
+    pub fn new(ts: &TestSet, id: &str, path: &str) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -45,30 +46,30 @@ impl Jig {
         // Determine if this is the jig we're running on
         match jig_section.get("TestFile") {
             None => {
-                log::debug("Test file not specified, skipping");
+                ts.debug("Test file not specified, skipping");
                 ()
             },
             Some(s) => {
                 if !Path::new(s).exists() {
-                    log::debug(format!("Test file {} DOES NOT EXIST", s).as_str());
+                    ts.debug(format!("Test file {} DOES NOT EXIST", s).as_str());
                     return None;
                 };
-                log::debug("Test file exists");
+                ts.debug("Test file exists");
                 ()
             }
         };
 
         match jig_section.get("TestProgram") {
             None => {
-                log::debug("No TestProgram specified");
+                ts.debug("No TestProgram specified");
                 ()
             },
             Some(s) => {
-                if !process::try_command(s, config::default_timeout()) {
-                    log::debug("Test program FAILED");
+                if !process::try_command(ts, s, config::default_timeout()) {
+                    ts.debug("Test program FAILED");
                     return None;
                 }
-                log::debug("Test program passed");
+                ts.debug("Test program passed");
                 ()
             },
         };

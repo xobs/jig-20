@@ -1,19 +1,20 @@
-use cfti::types::Test;
-use cfti::types::Scenario;
-use cfti::types::Logger;
-use cfti::types::Trigger;
-use cfti::types::Jig;
+use super::types::Test;
+use super::types::Scenario;
+use super::types::Logger;
+use super::types::Trigger;
+use super::types::Jig;
 /*
 use cfti::types::Coupon;
 use cfti::types::Interface;
 use cfti::types::Updater;
 use cfti::types::Service;
 */
+use super::messaging;
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::fs;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::ffi::OsStr;
 
@@ -26,6 +27,8 @@ pub struct TestSet {
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
     jigs: HashMap<String, Jig>,
+
+    messaging: messaging::Messaging,
     /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
@@ -37,12 +40,18 @@ impl TestSet {
     /// Create a new `TestSet` from the given `dir`
     pub fn new(dir: &str) -> Result<TestSet, Error> {
 
+        let messaging = match messaging::Messaging::new() {
+            Err(_) => return Err(Error::new(ErrorKind::UnexpectedEof, "Unable to create messaging")),
+            Ok(s) => s,
+        };
+
         let mut test_set = TestSet {
             tests: HashMap::new(),
             scenarios: HashMap::new(),
             loggers: HashMap::new(),
             triggers: HashMap::new(),
             jigs: HashMap::new(),
+            messaging: messaging,
         };
 
         /* TestSet ordering:
@@ -107,12 +116,16 @@ impl TestSet {
         Ok(test_set)
     }
 
+    pub fn debug(&self, msg: &str) {
+        self.messaging.debug(msg);
+    }
+
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
         for jig_path in jig_paths {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = Jig::new(item_name, path_str);
+            let new_jig = Jig::new(&self, item_name, path_str);
 
             // The jig will return "None" if it is incompatible.
             if new_jig.is_none() {
@@ -134,7 +147,7 @@ impl TestSet {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger = Logger::new(item_name, path_str, &self.jigs);
+            let new_logger = Logger::new(&self, item_name, path_str, &self.jigs);
 
             // In this case, it just means the logger is incompatible.
             if new_logger.is_none() {
@@ -147,9 +160,15 @@ impl TestSet {
                 continue;
             }
             let new_logger = new_logger.unwrap();
-
+            let id = new_logger.id().clone();
             self.loggers.insert(new_logger.id().clone(), new_logger);
+            self.start_logger(&id);
         }
+    }
+
+    fn start_logger(&mut self, logger_id: &String) {
+        let mut logger = self.loggers.get_mut(logger_id).unwrap();
+        logger.start();
     }
 
     fn resolve_scenarios(&mut self) {

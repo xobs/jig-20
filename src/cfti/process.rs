@@ -2,21 +2,17 @@
 extern crate wait_timeout;
 extern crate shlex;
 
-use std::io::Read;
-use std::process::Child;
 use std::process::Command;
-use std::thread;
 use std::time::Duration;
 use self::wait_timeout::ChildExt;
-use std::result;
-use super::log;
+use super::testset::TestSet;
 
 pub enum CommandError {
     NoCommandSpecified,
 }
 
 pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
-    let mut args = shlex::split(cmd);
+    let args = shlex::split(cmd);
     if args.is_none() {
         return Err(CommandError::NoCommandSpecified);
     }
@@ -26,16 +22,16 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     Ok(cmd)
 }
 
-pub fn try_command(cmd: &str, max: Duration) -> bool {
+pub fn try_command(ts: &TestSet, cmd: &str, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
         Err(_) => {
-            log::debug("Unable to make command");
+            ts.debug("Unable to make command");
             return false;
         },
         Ok(val) => val,
     };
 
-    let mut child = cmd.spawn();
+    let child = cmd.spawn();
     if child.is_err() {
         let err = child.err().unwrap();
         println!("Unable to spawn child: {}", err);

@@ -2,7 +2,7 @@ extern crate ini;
 use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
-use super::super::log;
+use super::super::testset::TestSet;
 
 #[derive(Debug)]
 enum LoggerFormat {
@@ -37,7 +37,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(id: &str, path: &str, jigs: &HashMap<String, Jig>) -> Option<Result<Logger, LoggerError>> {
+    pub fn new(ts: &TestSet, id: &str, path: &str, jigs: &HashMap<String, Jig>) -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -63,7 +63,7 @@ impl Logger {
                     }
                 }
                 if found_it == false {
-                    log::debug(format!("The logger '{}' is not compatible with this jig", id).as_str());
+                    ts.debug(format!("The logger '{}' is not compatible with this jig", id).as_str());
                     return None;
                 }
             }
@@ -104,5 +104,9 @@ impl Logger {
 
     pub fn id(&self) -> &String {
         return &self.id;
+    }
+
+    pub fn start(&mut self) -> Result<(), LoggerError> {
+        Ok(())
     }
 }
