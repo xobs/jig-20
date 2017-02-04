@@ -1,6 +1,5 @@
 mod cfti;
 use std::{thread, time};
-use std::sync::{Arc, Mutex};
 
 fn main() {
 

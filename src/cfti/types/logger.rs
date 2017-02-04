@@ -5,7 +5,7 @@ use cfti::types::Jig;
 use super::super::testset::TestSet;
 use super::super::controller::{Message, MessageContents};
 use super::super::process;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 extern crate json;

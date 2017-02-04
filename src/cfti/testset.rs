@@ -188,7 +188,6 @@ impl TestSet {
                 continue;
             }
             let new_logger = new_logger.unwrap();
-            let id = new_logger.id().clone();
             new_logger.start(&self);
             self.loggers.insert(new_logger.id().clone(), new_logger);
         }

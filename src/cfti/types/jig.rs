@@ -1,7 +1,6 @@
 extern crate ini;
 use self::ini::Ini;
 use std::path::Path;
-use std::process::Command;
 use super::super::process;
 use super::super::config;
 use super::super::testset::TestSet;
