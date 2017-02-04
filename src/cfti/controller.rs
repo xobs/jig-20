@@ -37,8 +37,6 @@ pub struct Message {
 
 #[derive(Debug)]
 pub enum ControllerError {
-    UnableToCreateLog,
-    UnableToCreateInterface,
 }
 
 pub struct Controller {
@@ -57,7 +55,7 @@ impl Controller {
 
         let (tx, rx) = mpsc::channel();
         let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
-        let mut controller = Controller {
+        let controller = Controller {
             broadcast: bus.clone(),
             control: tx,
         };
@@ -78,6 +76,9 @@ impl Controller {
             match msg.message {
                 /// Log messages: simply rebroadcast them onto the broadcast bus.
                 MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
+
+                // Get the current jig information and broadcast it on the bus.
+                MessageContents::GetJig => 
                 _ => println!("Unrecognized message"),
             };
         };
@@ -115,7 +116,7 @@ impl Controller {
     }
 
     pub fn control_message(&self, message: &Message) {
-        self.control.send((message.clone()));
+        self.control.send(message.clone()).unwrap();
     }
 /*
                  * HELLO identifier - Identify this particular client.  Optional.

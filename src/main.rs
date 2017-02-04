@@ -1,8 +1,4 @@
 mod cfti;
-use cfti::types::Test;
-use cfti::types::Scenario;
-use cfti::TestSet;
-use cfti::controller;
 use std::{thread, time};
 use std::sync::{Arc, Mutex};
 
