@@ -41,6 +41,9 @@ pub struct Logger {
 
     /// exec_start: A command to run when starting tests.
     exec_start: String,
+
+    /// working_directory: The path where exec_start will be run from.
+    working_directory: Option<String>,
 }
 
 impl Logger {
@@ -86,6 +89,11 @@ impl Logger {
             Some(s) => s.to_string(),
         };
 
+        let working_directory = match logger_section.get("WorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         let exec_start = match logger_section.get("ExecStart") {
             None => return Some(Err(LoggerError::MissingExecSection)),
             Some(s) => s.to_string(),
@@ -105,6 +113,7 @@ impl Logger {
             name: name,
             description: description,
             exec_start: exec_start,
+            working_directory: working_directory,
             format: format,
        }))
     }
@@ -122,6 +131,11 @@ impl Logger {
         cmd.stdin(Stdio::piped());
         cmd.stderr(Stdio::inherit());
 
+        match self.working_directory {
+            None => (),
+            Some(ref s) => {cmd.current_dir(s); },
+        }
+
         let child = match cmd.spawn() {
             Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(LoggerError::ExecCommandFailed) },
             Ok(s) => s,
@@ -136,7 +150,8 @@ impl Logger {
                                                                 msg.unit_type,
                                                                 msg.unix_time,
                                                                 msg.unix_time_nsecs,
-                                                                msg.message.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
+                                                                "xx".to_string()),
+//                                                                msg.message.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
                 LoggerFormat::JSON => {
                     let mut object = json::JsonValue::new_object();
                     object["message_type"] = msg.message_type.into();
@@ -144,7 +159,7 @@ impl Logger {
                     object["unit_type"] = msg.unit_type.into();
                     object["unix_time"] = msg.unix_time.into();
                     object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
-                    object["message"] = msg.message.into();
+//                    object["message"] = msg.message.into();
                     writeln!(stdin.lock().unwrap(), "{}", json::stringify(object))
                 },
             };

@@ -1,0 +1,7 @@
+[Interface]
+Name=Web Server
+Description=Runs a web server on port 3000
+Format=text
+ExecStart=cargo run
+[Exec]
+arg0=app.bin

@@ -1,4 +1,3 @@
-extern crate bus;
 use std::thread;
 use std::fmt;
 use std::time;
@@ -30,7 +29,7 @@ pub struct LogItem {
 }
 
 pub struct Log {
-    bus: bus::Bus<LogItem>,
+    //bus: bus::Bus<LogItem>,
 }
 
 impl fmt::Debug for Log {
@@ -44,13 +43,13 @@ impl Log {
 
         // Create a new channel pair.  Log messages will be broadcast to "rx"
         let mut log: Log = Log {
-            bus: bus::Bus::new(4096),
+            //bus: bus::Bus::new(4096),
         };
 
-        log.start_logger(|msg| println!("DEBUG>>: {:?}", msg));
         Ok(log)
     }
 
+/*
     pub fn start_logger<F>(&mut self, logger_func: F)
         where F: Send + 'static + Fn(LogItem) {
 
@@ -65,7 +64,8 @@ impl Log {
             }
         );
     }
-
+*/
+/*
     pub fn debug(&mut self, unit_type: &str, unit: &str, msg: &str) {
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
@@ -82,4 +82,5 @@ impl Log {
             message: msg.to_string(),
         });
     }
+    */
 }

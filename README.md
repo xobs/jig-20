@@ -145,6 +145,7 @@ The following fields are allowed in the [Jig] section:
 * Name: The name of the jig and the device or product that it tests.
 * Description: A longer description of the jig and the product or device being tested, up to one paragraph long.
 * TestProgram: Optional path to a program to determine if this is the jig we're running on.
+* WorkingDirectory: Directory to run the test program from.
 * TestFile: Optional path to a file to determine if this is the jig we're running on.  If both TestFile and TestProgram are specified, then they must both pass for this to be true.
 * DefaultScenario: The name of the scenario to run by default.
 
@@ -157,6 +158,7 @@ The following fields are allowed in the [Jig] section:
 * ExecStart: A command to be run when the scenario is first started.
 * ExecStopSuccess: A command to run if a test scenario completes successfully.
 * ExecStopFailure: A command to be run if a test scenario fails.
+* WorkingDirectory: Directory to run the programs from.
 * Timeout: Maximum number of seconds this scenario should take.
 
 
@@ -169,6 +171,7 @@ The following fields are valid in the [Trigger] section:
 * Name: A short string describing this trigger
 * Description: A longer decsription of this trigger, up to one paragraph long.
 * ExecStart: Name of the program to run to get trigger information from.
+* WorkingDirectory: Directory to run the ExecStart program from.
 * Jigs: A comma-separated list of jigs that this trigger is compatible with.
 
 
@@ -194,7 +197,8 @@ The following fields can go in the [Interface] section:
 * Name: A name describing this interface.
 * Description: A longer paragraph describing this interface.
 * ExecStart: The program to invoke to act as the interface.
-* Format: Describes the interface format.  May be "tsv" or "json".  Defaults to "tsv" if unspecified.
+* WorkingDirectory: Directory to run the ExecStart program from.
+* Format: Describes the interface format.  May be "text" or "json".  Defaults to "text" if unspecified.
 * Jigs: A list of jigs that this interface is compatible with.  Omit this field for "all".
 
 .coupon

@@ -1,0 +1,131 @@
+extern crate bus;
+use std::thread;
+use std::fmt;
+use std::time;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
+
+#[derive(Clone, Debug)]
+pub enum MessageContents {
+    Hello(String),
+    Log(String),
+    GetJig,
+}
+
+#[derive(Clone, Debug)]
+pub struct Message {
+
+    /// A numerical indication of the type of message. 0 is internal messages such as test-start, 1 is test log output from various units, 2 is internal debug log.
+    pub message_type: u32,
+
+    /// The name of the unit that generated the message.
+    pub unit: String,
+
+    /// The type of unit, such as "test", "logger", "trigger", etc.
+    pub unit_type: String,
+
+    /// Number of seconds since the epoch
+    pub unix_time: u64,
+
+    /// Number of nanoseconds since the epoch
+    pub unix_time_nsecs: u32,
+
+    /// The actual contents of the message being sent.
+    pub message: MessageContents,
+}
+
+#[derive(Debug)]
+pub enum ControllerError {
+    UnableToCreateLog,
+    UnableToCreateInterface,
+}
+
+pub struct Controller {
+    broadcast: Arc<Mutex<bus::Bus<Message>>>,
+    control: mpsc::Sender<Message>,
+}
+
+impl fmt::Debug for Controller {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Controller")
+    }
+}
+
+impl Controller {
+    pub fn new() -> Result<Controller, ControllerError> {
+
+        let (tx, rx) = mpsc::channel();
+        let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
+        let mut controller = Controller {
+            broadcast: bus.clone(),
+            control: tx,
+        };
+
+        thread::spawn(move || Controller::controller_thread(rx, bus));
+
+        Ok(controller)
+    }
+
+    pub fn controller_thread(rx: mpsc::Receiver<Message>,
+                             bus: Arc<Mutex<bus::Bus<Message>>>) {
+        loop {
+            let msg = match rx.recv() {
+                Err(e) => {println!("Error receiving: {:?}", e); continue; },
+                Ok(o) => o,
+            };
+
+            match msg.message {
+                /// Log messages: simply rebroadcast them onto the broadcast bus.
+                MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
+                _ => println!("Unrecognized message"),
+            };
+        };
+    }
+
+    pub fn add_logger<F>(&mut self, logger_func: F)
+        where F: Send + 'static + Fn(Message) {
+
+        self.add_broadcast(move |msg| match msg {
+            Message { message: MessageContents::Log(_), .. } => logger_func(msg),
+            _ => (),
+        });
+    }
+
+    pub fn add_broadcast<F>(&mut self, broadcast_func: F)
+        where F: Send + 'static + Fn(Message) {
+
+        let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
+        thread::spawn(move ||
+            loop {
+                match console_rx_channel.recv() {
+                    Err(e) => { println!("DEBUG!! Channel closed, probably quitting.  Err: {:?}", e); return; },
+                    Ok(msg) => broadcast_func(msg),
+                };
+            }
+        );
+    }
+    
+    pub fn add_listener(&mut self) -> bus::BusReader<Message> {
+        self.broadcast.lock().unwrap().deref_mut().add_rx()
+    }
+
+    pub fn add_sender(&self) -> mpsc::Sender<Message> {
+        self.control.clone()
+    }
+
+    pub fn control_message(&self, message: &Message) {
+        self.control.send((message.clone()));
+    }
+/*
+                 * HELLO identifier - Identify this particular client.  Optional.
+ * JIG - Request the current jig name.
+ * SCENARIOS - Request the list of scenarios.
+ * SCENARIO [selection] - Select a particular scenario.
+ * TESTS - Request a list of tests.
+ * START - Begins running the current scenario.
+ * ABORT - Stop the current scenario without running all tests.
+ * PONG [id] - Respond to a PING command, to indicate the program is still active.  Must respond withing five seconds.
+ * LOG [message] - Log a message to the log bus.  Note that it will be echoed back, so be careful not to create an infinite loop.
+ */
+}

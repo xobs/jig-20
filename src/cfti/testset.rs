@@ -9,22 +9,26 @@ use cfti::types::Coupon;
 use cfti::types::Updater;
 use cfti::types::Service;
 */
-use super::messaging;
-use super::log;
+use super::controller;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::time;
+use std::ops::DerefMut;
+
+use super::controller::{Message, MessageContents};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
 #[derive(Debug)]
 pub struct TestSet {
+    controller: Arc<Mutex<controller::Controller>>,
     tests: HashMap<String, Arc<Test>>,
     scenarios: HashMap<String, Scenario>,
     triggers: HashMap<String, Trigger>,
@@ -32,7 +36,7 @@ pub struct TestSet {
     jigs: HashMap<String, Jig>,
     interfaces: HashMap<String, Interface>,
 
-    messaging: Rc<RefCell<messaging::Messaging>>,
+    //messaging: Rc<RefCell<messaging::Messaging>>,
     /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
@@ -42,13 +46,18 @@ pub struct TestSet {
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str) -> Result<TestSet, Error> {
+    pub fn new(dir: &str, controller: Arc<Mutex<controller::Controller>>) -> Result<TestSet, Error> {
 
-        let messaging = match messaging::Messaging::new() {
-            Err(_) => return Err(Error::new(ErrorKind::UnexpectedEof, "Unable to create messaging")),
-            Ok(s) => Rc::new(RefCell::new(s)),
-        };
-
+/*
+        {
+            let controller = controller.unwrap().lock().unwrap();
+            let messaging = match messaging::Messaging::new(controller.add_listener()) {
+                Err(_) => return Err(Error::new(ErrorKind::UnexpectedEof, "Unable to create messaging")),
+                Ok(s) => Rc::new(RefCell::new(s)),
+            };
+        }
+*/
+        controller.lock().unwrap().add_logger(|msg| println!("DEBUG>> {:?}", msg));
         let mut test_set = TestSet {
             tests: HashMap::new(),
             scenarios: HashMap::new(),
@@ -56,7 +65,7 @@ impl TestSet {
             triggers: HashMap::new(),
             jigs: HashMap::new(),
             interfaces: HashMap::new(),
-            messaging: messaging,
+            controller: controller.clone(),
         };
 
         /* TestSet ordering:
@@ -122,7 +131,20 @@ impl TestSet {
     }
 
     pub fn debug(&self, unit_type: &str, unit: &str, msg: &str) {
-        self.messaging.borrow_mut().debug(unit_type, unit, msg);
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        self.controller.lock().unwrap().control_message(&Message {
+            message_type: 2,
+            unit: unit.to_string(),
+            unit_type: unit_type.to_string(),
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: MessageContents::Log(msg.to_string()),
+        });
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -172,8 +194,8 @@ impl TestSet {
     }
 
     pub fn start_logger<F>(&self, logger_func: F)
-        where F: Send + 'static + Fn(log::LogItem) {
-        self.messaging.borrow_mut().log.start_logger(logger_func);
+        where F: Send + 'static + Fn(Message) {
+        self.controller.lock().unwrap().deref_mut().add_logger(logger_func);
     }
 
     fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
@@ -197,38 +219,9 @@ impl TestSet {
         }
     }
 
-
     fn resolve_scenarios(&mut self) {
         for (_, ref mut scenario) in self.scenarios.iter_mut() {
             scenario.resolve_tests(&self.tests);
-        }
-    }
-    fn add_item(&mut self, path: PathBuf) {
-        let item_name = path.file_stem().unwrap().to_str().unwrap();
-        let path_str = path.to_str().unwrap();
-
-        match path.extension() {
-            None => return,
-            Some(entry) => {
-                match entry.to_str().unwrap() {
-                    "test" => {
-                        let new_test = Test::new(item_name, path_str).unwrap();
-                        self.tests.insert(new_test.id().clone(), Arc::new(new_test));
-                    },
-                    "scenario" => {
-                        let new_scenario = Scenario::new(item_name, path_str).unwrap();
-                        self.scenarios.insert(new_scenario.id().clone(), new_scenario);
-                    },
-                    "trigger" => {
-                        let new_trigger = Trigger::new(item_name, path_str).unwrap();
-                        self.triggers.insert(new_trigger.id().clone(), new_trigger);
-                    },
-                    _ => {
-                        println!("Unrecognized file type: {:?}", path);
-                        return
-                    },
-                }
-            }
         }
     }
 

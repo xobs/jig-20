@@ -4,7 +4,6 @@ use std::path::Path;
 use std::process::Command;
 use super::super::process;
 use super::super::config;
-use super::super::messaging;
 use super::super::testset::TestSet;
 
 #[derive(Debug)]
@@ -59,13 +58,18 @@ impl Jig {
             }
         };
 
+        let working_directory = match jig_section.get("WorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         match jig_section.get("TestProgram") {
             None => {
                 ts.debug("jig", id, "No TestProgram specified");
                 ()
             },
             Some(s) => {
-                if !process::try_command(ts, s, config::default_timeout()) {
+                if !process::try_command(ts, s, &working_directory, config::default_timeout()) {
                     ts.debug("jig", id, "Test program FAILED");
                     return None;
                 }

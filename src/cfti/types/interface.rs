@@ -40,6 +40,9 @@ pub struct Interface {
 
     /// exec_start: A command to run when starting the interface.
     exec_start: String,
+
+    /// working_directory: The path where the program will be run from.
+    working_directory: Option<String>,
 }
 
 impl Interface {
@@ -90,6 +93,11 @@ impl Interface {
             Some(s) => s.to_string(),
         };
 
+        let working_directory = match interface_section.get("WorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         let format = match interface_section.get("Format") {
             None => InterfaceFormat::TabSeparatedValue,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
@@ -104,6 +112,7 @@ impl Interface {
             name: name,
             description: description,
             exec_start: exec_start,
+            working_directory: working_directory,
             format: format,
        }))
     }
@@ -120,6 +129,10 @@ impl Interface {
         cmd.stdout(Stdio::null());
         cmd.stdin(Stdio::piped());
         cmd.stderr(Stdio::inherit());
+        match self.working_directory {
+            None => (),
+            Some(ref s) => {cmd.current_dir(s); },
+        }
 
         let child = match cmd.spawn() {
             Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(InterfaceError::ExecCommandFailed) },

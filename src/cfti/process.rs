@@ -25,13 +25,18 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     Ok(cmd)
 }
 
-pub fn try_command(ts: &TestSet, cmd: &str, max: Duration) -> bool {
+pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
         Err(_) => {
             ts.debug("internal", "unknown", "Unable to make command");
             return false;
         },
         Ok(val) => val,
+    };
+
+    match *wd {
+        None => (),
+        Some(ref s) => {cmd.current_dir(s); },
     };
 
     let child = cmd.spawn();
