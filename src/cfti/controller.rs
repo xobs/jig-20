@@ -5,12 +5,17 @@ use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
+use std::ops::Deref;
+
+use super::testset::TestSet;
 
 #[derive(Clone, Debug)]
 pub enum MessageContents {
     Hello(String),
     Log(String),
+
     GetJig,
+    Jig(String),
 }
 
 #[derive(Clone, Debug)]
@@ -42,6 +47,7 @@ pub enum ControllerError {
 pub struct Controller {
     broadcast: Arc<Mutex<bus::Bus<Message>>>,
     control: mpsc::Sender<Message>,
+    testset: Arc<Mutex<Option<Arc<Mutex<TestSet>>>>>,
 }
 
 impl fmt::Debug for Controller {
@@ -51,22 +57,30 @@ impl fmt::Debug for Controller {
 }
 
 impl Controller {
-    pub fn new() -> Result<Controller, ControllerError> {
+    pub fn new() -> Result<Arc<Mutex<Controller>>, ControllerError> {
 
         let (tx, rx) = mpsc::channel();
         let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
-        let controller = Controller {
+        let controller = Arc::new(Mutex::new(Controller {
             broadcast: bus.clone(),
             control: tx,
-        };
+            testset: Arc::new(Mutex::new(Option::None)),
+        }));
 
-        thread::spawn(move || Controller::controller_thread(rx, bus));
+        let controller_clone = controller.clone();
+        thread::spawn(move || Controller::controller_thread(rx, bus, controller_clone));
 
         Ok(controller)
     }
 
+    pub fn set_testset(&mut self, testset: Arc<Mutex<TestSet>>) {
+        let mut t = self.testset.lock().unwrap();
+        *t = Some(testset.clone());
+    }
+
     pub fn controller_thread(rx: mpsc::Receiver<Message>,
-                             bus: Arc<Mutex<bus::Bus<Message>>>) {
+                             bus: Arc<Mutex<bus::Bus<Message>>>,
+                             myself: Arc<Mutex<Controller>>) {
         loop {
             let msg = match rx.recv() {
                 Err(e) => {println!("Error receiving: {:?}", e); continue; },
@@ -78,10 +92,42 @@ impl Controller {
                 MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
 
                 // Get the current jig information and broadcast it on the bus.
-                MessageContents::GetJig => 
+                MessageContents::GetJig => {
+                    let  me = myself.lock().unwrap();
+                    let testset = me.testset.lock().unwrap();
+                    let ref refval = testset.as_ref();
+                    if testset.is_none() {
+                        Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
+                    }
+                    else {
+                        let a = refval.unwrap();
+                        let b = a.lock();
+                        let c = b.unwrap();
+                        let d = c.get_jig();
+                        Controller::broadcast_internal(&bus, MessageContents::Jig(d));
+                    }
+                },
                 _ => println!("Unrecognized message"),
             };
         };
+    }
+
+    fn broadcast_internal(bus: &Arc<Mutex<bus::Bus<Message>>>,
+                          msg: MessageContents) {
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        bus.lock().unwrap().deref_mut().broadcast(Message {
+            message_type: 2,
+            unit: "internal".to_string(),
+            unit_type: "core".to_string(),
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: msg,
+        });
     }
 
     pub fn add_logger<F>(&mut self, logger_func: F)

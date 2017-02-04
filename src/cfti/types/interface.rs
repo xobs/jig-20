@@ -3,14 +3,16 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
+use super::super::controller;
 use super::super::process;
-use std::process::{Command, Stdio};
-use std::io::Write;
+use std::process::{Command, Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
+use std::io::Write;
 
 #[derive(Debug)]
 enum InterfaceFormat {
-    TabSeparatedValue,
+    Text,
     JSON,
 }
 
@@ -99,9 +101,9 @@ impl Interface {
         };
 
         let format = match interface_section.get("Format") {
-            None => InterfaceFormat::TabSeparatedValue,
+            None => InterfaceFormat::Text,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
-                "tsv" => InterfaceFormat::TabSeparatedValue,
+                "text" => InterfaceFormat::Text,
                 "json" => InterfaceFormat::JSON,
                 _ => return Some(Err(InterfaceError::InvalidType(s.clone()))),
             },
@@ -121,12 +123,25 @@ impl Interface {
         return &self.id;
     }
 
+    fn interface_text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
+        writeln!(stdin.lock().unwrap().deref_mut(), "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                                msg.message_type,
+                                                                msg.unit,
+                                                                msg.unit_type,
+                                                                msg.unix_time,
+                                                                msg.unix_time_nsecs,
+                                                                "xx".to_string());
+
+    }
+    fn interface_json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
+    }
+
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
             Err(e) => { println!(">>> UNABLE TO RUN INTERFACE: {:?}", e); ts.debug("interface", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
         };
-        cmd.stdout(Stdio::null());
+        cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
         cmd.stderr(Stdio::inherit());
         match self.working_directory {
@@ -139,8 +154,12 @@ impl Interface {
             Ok(s) => s,
         };
         let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
-        ts.start_logger(move |msg| {writeln!(stdin.lock().unwrap(), "{:?}", msg);});
+        let mut stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
 
+        match self.format {
+            InterfaceFormat::Text => ts.monitor_broadcasts(move |msg| {Interface::interface_text_write(stdin.clone(), msg);}),
+            InterfaceFormat::JSON => ts.monitor_broadcasts(move |msg| {Interface::interface_json_write(stdin.clone(), msg);}),
+        };
         Ok(())
     }
 }

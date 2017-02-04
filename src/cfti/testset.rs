@@ -36,6 +36,9 @@ pub struct TestSet {
     jigs: HashMap<String, Jig>,
     interfaces: HashMap<String, Interface>,
 
+    /// The id of the jig that we've decided to use.
+    jig: String,
+
     //messaging: Rc<RefCell<messaging::Messaging>>,
     /*
     coupons: HashMap<String, Coupon>,
@@ -46,27 +49,24 @@ pub struct TestSet {
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str, controller: Arc<Mutex<controller::Controller>>) -> Result<TestSet, Error> {
+    pub fn new(dir: &str, controller: Arc<Mutex<controller::Controller>>) -> Result<Arc<Mutex<TestSet>>, Error> {
 
-/*
-        {
-            let controller = controller.unwrap().lock().unwrap();
-            let messaging = match messaging::Messaging::new(controller.add_listener()) {
-                Err(_) => return Err(Error::new(ErrorKind::UnexpectedEof, "Unable to create messaging")),
-                Ok(s) => Rc::new(RefCell::new(s)),
-            };
-        }
-*/
+        // Add a simple logger to show us debug data.
         controller.lock().unwrap().add_logger(|msg| println!("DEBUG>> {:?}", msg));
-        let mut test_set = TestSet {
+        controller.lock().unwrap().add_logger(|msg| println!("DEBUG2>> {:?}", msg));
+
+        let mut test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
             scenarios: HashMap::new(),
             loggers: HashMap::new(),
             triggers: HashMap::new(),
             jigs: HashMap::new(),
+            jig: "Unknown Jig".to_string(),
             interfaces: HashMap::new(),
             controller: controller.clone(),
-        };
+        }));
+
+        controller.lock().unwrap().set_testset(test_set.clone());
 
         /* TestSet ordering:
          * When a TestSet is loaded off the disk, the order of unit files is
@@ -117,9 +117,9 @@ impl TestSet {
             }
         }
 
-        test_set.load_jigs(&jig_paths);
-        test_set.load_loggers(&logger_paths);
-        test_set.load_interfaces(&interface_paths);
+        test_set.lock().unwrap().load_jigs(&jig_paths);
+        test_set.lock().unwrap().load_loggers(&logger_paths);
+        test_set.lock().unwrap().load_interfaces(&interface_paths);
         //test_set.load_services(&service_paths);
         //test_set.load_updaters(&updater_paths);
         //test_set.load_tests(&test_paths);
@@ -166,6 +166,7 @@ impl TestSet {
             }
 
             let new_jig = new_jig.unwrap();
+            self.jig = new_jig.id().clone();
             self.jigs.insert(new_jig.id().clone(), new_jig);
         }
     }
@@ -193,9 +194,14 @@ impl TestSet {
         }
     }
 
-    pub fn start_logger<F>(&self, logger_func: F)
+    pub fn monitor_logs<F>(&self, logger_func: F)
         where F: Send + 'static + Fn(Message) {
         self.controller.lock().unwrap().deref_mut().add_logger(logger_func);
+    }
+
+    pub fn monitor_broadcasts<F>(&self, broadcast_func: F)
+        where F: Send + 'static + Fn(Message) {
+        self.controller.lock().unwrap().deref_mut().add_broadcast(broadcast_func);
     }
 
     fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
@@ -234,5 +240,9 @@ impl TestSet {
             result.push(self.tests.get(key).unwrap());
         }
         result
+    }
+
+    pub fn get_jig(&self) -> String {
+        self.jig.clone()
     }
 }

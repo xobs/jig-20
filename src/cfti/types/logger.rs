@@ -3,6 +3,7 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
+use super::super::controller::{Message, MessageContents};
 use super::super::process;
 use std::process::{Command, Stdio};
 use std::io::Write;
@@ -142,28 +143,36 @@ impl Logger {
         };
         let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
         let format = self.format.clone();
-        ts.start_logger(move |msg| {
-            match format {
-                LoggerFormat::TabSeparatedValue => writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
-                                                                msg.message_type,
-                                                                msg.unit,
-                                                                msg.unit_type,
-                                                                msg.unix_time,
-                                                                msg.unix_time_nsecs,
-                                                                "xx".to_string()),
-//                                                                msg.message.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
-                LoggerFormat::JSON => {
-                    let mut object = json::JsonValue::new_object();
-                    object["message_type"] = msg.message_type.into();
-                    object["unit"] = msg.unit.into();
-                    object["unit_type"] = msg.unit_type.into();
-                    object["unix_time"] = msg.unix_time.into();
-                    object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
-//                    object["message"] = msg.message.into();
-                    writeln!(stdin.lock().unwrap(), "{}", json::stringify(object))
-                },
-            };
-        });
+        match format {
+            LoggerFormat::TabSeparatedValue => ts.monitor_logs(move |msg| {
+                match msg {
+                    Message { message: MessageContents::Log(log), .. } => 
+                        writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                        msg.message_type,
+                                        msg.unit,
+                                        msg.unit_type,
+                                        msg.unix_time,
+                                        msg.unix_time_nsecs,
+                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
+                    _ => return,
+                };
+            }),
+            LoggerFormat::JSON => ts.monitor_logs(move |msg| {
+                match msg {
+                    Message { message: MessageContents::Log(log), .. } => {
+                        let mut object = json::JsonValue::new_object();
+                        object["message_type"] = msg.message_type.into();
+                        object["unit"] = msg.unit.into();
+                        object["unit_type"] = msg.unit_type.into();
+                        object["unix_time"] = msg.unix_time.into();
+                        object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
+                        object["message"] = log.into();
+                        writeln!(stdin.lock().unwrap(), "{}", json::stringify(object));
+                    },
+                    _ => return,
+                }
+            }),
+        };
 
         Ok(())
     }
