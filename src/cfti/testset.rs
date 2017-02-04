@@ -245,4 +245,8 @@ impl TestSet {
     pub fn get_jig(&self) -> String {
         self.jig.clone()
     }
+
+    pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {
+        return self.controller.clone();
+    }
 }

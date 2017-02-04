@@ -8,7 +8,8 @@ use super::super::process;
 use std::process::{Command, Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
-use std::io::Write;
+use std::{thread, time};
+use std::io::{BufRead, BufReader, Write};
 
 #[derive(Debug)]
 enum InterfaceFormat {
@@ -157,8 +158,20 @@ impl Interface {
         let mut stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
 
         match self.format {
-            InterfaceFormat::Text => ts.monitor_broadcasts(move |msg| {Interface::interface_text_write(stdin.clone(), msg);}),
-            InterfaceFormat::JSON => ts.monitor_broadcasts(move |msg| {Interface::interface_json_write(stdin.clone(), msg);}),
+            InterfaceFormat::Text => {
+                ts.monitor_broadcasts(move |msg| {Interface::interface_text_write(stdin.clone(), msg);});
+                let controller_clone = ts.get_controller();
+                thread::spawn(move || {
+                    let mut var = stdout.lock().unwrap();
+                    let ref mut stdout2 = var.deref_mut();
+                    for line in BufReader::new(stdout2).lines() {
+                        println!("Got line: {}", line.unwrap());
+                    }
+                });
+            },
+            InterfaceFormat::JSON => {
+                ts.monitor_broadcasts(move |msg| {Interface::interface_json_write(stdin.clone(), msg);});
+            },
         };
         Ok(())
     }
