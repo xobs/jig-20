@@ -46,10 +46,15 @@ pub struct Interface {
 
     /// working_directory: The path where the program will be run from.
     working_directory: Option<String>,
+
+    /// The controller where messages go.
+    controller: Arc<Mutex<controller::Controller>>,
 }
 
 impl Interface {
-    pub fn new(ts: &TestSet, id: &str, path: &str, jigs: &HashMap<String, Jig>) -> Option<Result<Interface, InterfaceError>> {
+    pub fn new(ts: &TestSet, id: &str,
+               path: &str, jigs: &HashMap<String, Jig>,
+               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Interface, InterfaceError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -117,6 +122,7 @@ impl Interface {
             exec_start: exec_start,
             working_directory: working_directory,
             format: format,
+            controller: controller,
        }))
     }
 

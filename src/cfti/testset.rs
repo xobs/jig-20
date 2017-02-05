@@ -207,7 +207,7 @@ impl TestSet {
         for interface_path in interface_paths {
             let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
-            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs) {
+            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs, self.controller.clone()) {
                 // In this case, it just means the interface is incompatible.
                 None => continue,
                 Some(s) => {

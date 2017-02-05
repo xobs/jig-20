@@ -56,8 +56,8 @@ impl fmt::Debug for Controller {
 }
 
 impl Controller {
-    pub fn new() -> Result<Arc<Mutex<Controller>>, ControllerError> {
 
+    pub fn new() -> Result<Arc<Mutex<Controller>>, ControllerError> {
         let (tx, rx) = mpsc::channel();
         let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
         let controller = Arc::new(Mutex::new(Controller {
@@ -66,6 +66,7 @@ impl Controller {
             testset: Arc::new(Mutex::new(Option::None)),
         }));
 
+        // The controller runs in its own thread.
         let controller_clone = controller.clone();
         thread::spawn(move || Controller::controller_thread(rx, bus, controller_clone));
 
@@ -160,15 +161,4 @@ impl Controller {
     pub fn control_message(&self, message: &Message) {
         self.control.send(message.clone()).unwrap();
     }
-/*
-                 * HELLO identifier - Identify this particular client.  Optional.
- * JIG - Request the current jig name.
- * SCENARIOS - Request the list of scenarios.
- * SCENARIO [selection] - Select a particular scenario.
- * TESTS - Request a list of tests.
- * START - Begins running the current scenario.
- * ABORT - Stop the current scenario without running all tests.
- * PONG [id] - Respond to a PING command, to indicate the program is still active.  Must respond withing five seconds.
- * LOG [message] - Log a message to the log bus.  Note that it will be echoed back, so be careful not to create an infinite loop.
- */
 }
