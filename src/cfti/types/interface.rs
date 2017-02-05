@@ -125,6 +125,7 @@ impl Interface {
     }
 
     fn interface_text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
+        println!("Sending data to interface: {:?}", msg);
         writeln!(stdin.lock().unwrap().deref_mut(), "{}\t{}\t{}\t{}\t{}\t{}\t",
                                                                 msg.message_type,
                                                                 msg.unit,
@@ -154,8 +155,15 @@ impl Interface {
             Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(InterfaceError::ExecCommandFailed) },
             Ok(s) => s,
         };
+        println!("Launched an interface: {}", self.id());
         let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
         let mut stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
+
+        // Send some initial information to the client.
+        writeln!(stdin.lock().unwrap(), "HELLO Jig/20");
+        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig());
+        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG NAME {}", ts.get_jig_name());
+        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description());
 
         match self.format {
             InterfaceFormat::Text => {
@@ -165,7 +173,10 @@ impl Interface {
                     let mut var = stdout.lock().unwrap();
                     let ref mut stdout2 = var.deref_mut();
                     for line in BufReader::new(stdout2).lines() {
-                        println!("Got line: {}", line.unwrap());
+                        match line {
+                            Err(e) => {println!("Error in interface: {}", e); return; },
+                            Ok(l) => {println!("Got line: {}", l); },
+                        }
                     }
                 });
             },

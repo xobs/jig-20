@@ -105,6 +105,10 @@ impl Jig {
         return &self.name;
     }
 
+    pub fn description(&self) -> &String {
+        return &self.description;
+    }
+
     pub fn id(&self) -> &String {
         return &self.id;
     }

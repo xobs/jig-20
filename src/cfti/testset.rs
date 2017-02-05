@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time;
-use std::ops::DerefMut;
+use std::ops::{DerefMut, Deref};
 
 use super::controller::{Message, MessageContents};
 
@@ -243,6 +243,14 @@ impl TestSet {
 
     pub fn get_jig(&self) -> String {
         self.jig.clone()
+    }
+
+    pub fn get_jig_name(&self) -> String {
+        self.jigs[self.jig.deref()].name().clone()
+    }
+
+    pub fn get_jig_description(&self) -> String {
+        self.jigs[self.jig.deref()].description().clone()
     }
 
     pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {

@@ -5,7 +5,6 @@ use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
-use std::ops::Deref;
 
 use super::testset::TestSet;
 
