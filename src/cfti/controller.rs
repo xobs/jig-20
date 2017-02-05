@@ -99,11 +99,8 @@ impl Controller {
                         Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
                     }
                     else {
-                        let a = refval.unwrap();
-                        let b = a.lock();
-                        let c = b.unwrap();
-                        let d = c.get_jig();
-                        Controller::broadcast_internal(&bus, MessageContents::Jig(d));
+                        let jig_name = refval.unwrap().lock().unwrap().get_jig();
+                        Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                     }
                 },
                 _ => println!("Unrecognized message"),
