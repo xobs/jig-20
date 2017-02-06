@@ -102,14 +102,18 @@ impl Jig {
     }
 
     pub fn name(&self) -> &String {
-        return &self.name;
+        &self.name
     }
 
     pub fn description(&self) -> &String {
-        return &self.description;
+        &self.description
     }
 
     pub fn id(&self) -> &String {
-        return &self.id;
+        &self.id
+    }
+
+    pub fn default_scenario(&self) -> &Option<String> {
+        &self.default_scenario
     }
 }

@@ -5,6 +5,3 @@ Description=Program the final LtC example application.
 Description[zh]=编程最终的LtC示例应用程序。
 Tests=log-registers,program-os,program-test
 Timeout=200
-
-[Exec]
-arg0=app.bin
