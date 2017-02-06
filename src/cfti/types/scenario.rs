@@ -18,7 +18,7 @@ pub struct Scenario {
     name: String,
 
     /// description: Paragraph describing this scenario.
-    description: Option<String>,
+    description: String,
 
     /// timeout: Maximum number of seconds this scenario should take.
     timeout: u32,
@@ -59,8 +59,8 @@ impl Scenario {
         };
 
         let description = match scenario_section.get("Description") {
-            None => None,
-            Some(s) => Some(s.to_string()),
+            None => "".to_string(),
+            Some(s) => s.to_string(),
         };
 
         let name = match scenario_section.get("Name") {

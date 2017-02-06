@@ -29,7 +29,7 @@ use super::controller::{Message, MessageContents};
 #[derive(Debug)]
 pub struct TestSet {
     controller: Arc<Mutex<controller::Controller>>,
-    tests: HashMap<String, Arc<Test>>,
+    tests: HashMap<String, Arc<Mutex<Test>>>,
     scenarios: HashMap<String, Scenario>,
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
@@ -126,7 +126,7 @@ impl TestSet {
         test_set.lock().unwrap().load_interfaces(&interface_paths);
         //test_set.load_services(&service_paths);
         //test_set.load_updaters(&updater_paths);
-        //test_set.load_tests(&test_paths);
+        test_set.lock().unwrap().load_tests(&test_paths);
         //test_set.load_scenarios(&scenario_paths);
         //test_set.load_triggers(&trigger_paths);
         //test_set.load_coupons(&coupon_paths);
@@ -228,19 +228,45 @@ impl TestSet {
         }
     }
 
-    fn resolve_scenarios(&mut self) {
-        for (_, ref mut scenario) in self.scenarios.iter_mut() {
-            scenario.resolve_tests(&self.tests);
+    fn load_tests(&mut self, test_paths: &Vec<PathBuf>) {
+        for test_path in test_paths {
+            let item_name = test_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let path_str = test_path.to_str().unwrap_or("");
+            let new_test = match Test::new(&self,
+                                           item_name,
+                                           path_str,
+                                           &self.jigs,
+                                           self.controller.clone()) {
+                // In this case, it just means the test is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => { self.debug("test", item_name, format!("Unable to load test: {:?}", e).as_str()); continue; },
+                        Ok(s) => s,
+                    }
+                },
+            };
+
+            //let id = new_test.id().clone();
+            self.tests.insert(new_test.id().clone(), Arc::new(Mutex::new(new_test)));
         }
     }
 
-    pub fn all_tests(&self) -> Vec<&Test> {
+    fn resolve_scenarios(&mut self) {
+        /*
+        for (_, ref mut scenario) in self.scenarios.iter_mut() {
+            scenario.resolve_tests(&self.tests);
+        }
+        */
+    }
+
+    pub fn all_tests(&self) -> Vec<Arc<Mutex<Test>>> {
         let mut sorted_keys: Vec<&String> = self.tests.keys().collect();
         sorted_keys.sort();
 
-        let mut result: Vec<&Test> = Vec::new();
+        let mut result = vec![];
         for key in sorted_keys {
-            result.push(self.tests.get(key).unwrap());
+            result.push(self.tests.get(key).unwrap().clone());
         }
         result
     }

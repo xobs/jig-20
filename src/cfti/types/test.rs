@@ -1,5 +1,20 @@
 extern crate ini;
 use self::ini::Ini;
+use std::sync::{Arc, Mutex};
+use cfti::types::Jig;
+use std::collections::HashMap;
+use super::super::testset::TestSet;
+use super::super::controller;
+
+#[derive(Debug)]
+pub enum TestError {
+    FileLoadError,
+    MissingTestSection,
+    MissingExecSection,
+    MakeCommandFailed,
+    ExecCommandFailed,
+    InvalidType(String),
+}
 
 #[derive(Debug)]
 enum TestType {
@@ -39,33 +54,59 @@ pub struct Test {
 
     /// ExecStopSuccess: When stopping tests, if the test succeeded, then this stop command will be run.
     exec_stop_success: Option<String>,
+
+    /// The controller where messages go.
+    controller: Arc<Mutex<controller::Controller>>,
 }
 
 impl Test {
-    pub fn new(id: &str, path: &str) -> Result<Test, &'static str> {
+    pub fn new(ts: &TestSet,
+               id: &str,
+               path: &str,
+               jigs: &HashMap<String, Jig>,
+               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Test, TestError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Err("Unable to load test file"),
+            Err(_) => return Some(Err(TestError::FileLoadError)),
             Ok(s) => s,
         };
 
         let test_section = match ini_file.section(Some("Test")) {
-            None => return Err("Test is missing '[Test]' section"),
+            None => return Some(Err(TestError::MissingTestSection)),
             Some(s) => s,
         };
+
+        // Check to see if this test is compatible with this jig.
+        match test_section.get("Jigs") {
+            None => (),
+            Some(s) => {
+                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let mut found_it = false;
+                for jig_name in jig_names {
+                    if jigs.get(&jig_name).is_some() {
+                        found_it = true;
+                        break
+                    }
+                }
+                if found_it == false {
+                    ts.debug("test", id, format!("The test '{}' is not compatible with this jig", id).as_str());
+                    return None;
+                }
+            }
+        }
 
         let test_type = match test_section.get("Type") {
             None => TestType::Simple,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
                 "simple" => TestType::Simple,
                 "daemon" => TestType::Daemon,
-                _ => return Err("Test has invalid 'Type'")
+                other => return Some(Err(TestError::InvalidType(other.to_string()))),
             },
         };
 
         let exec_start = match test_section.get("ExecStart") {
-            None => return Err("Test is missing 'ExecStart'"),
+            None => return Some(Err(TestError::MissingExecSection)),
             Some(s) => s.to_string(),
         };
 
@@ -125,7 +166,7 @@ impl Test {
             }
         };
 
-        Ok(Test {
+        Some(Ok(Test {
             id: id.to_string(),
             name: name,
             description: description,
@@ -140,7 +181,8 @@ impl Test {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
 
-        })
+            controller: controller,
+        }))
     }
 
     pub fn name(&self) -> &String {

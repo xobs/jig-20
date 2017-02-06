@@ -52,8 +52,10 @@ pub struct Interface {
 }
 
 impl Interface {
-    pub fn new(ts: &TestSet, id: &str,
-               path: &str, jigs: &HashMap<String, Jig>,
+    pub fn new(ts: &TestSet,
+               id: &str,
+               path: &str,
+               jigs: &HashMap<String, Jig>,
                controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Interface, InterfaceError>> {
 
         // Load the .ini file
@@ -67,7 +69,7 @@ impl Interface {
             Some(s) => s,
         };
 
-        // Check to see if this logger is compatible with this jig.
+        // Check to see if this interface is compatible with this jig.
         match interface_section.get("Jigs") {
             None => (),
             Some(s) => {
