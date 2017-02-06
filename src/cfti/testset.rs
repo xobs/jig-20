@@ -39,6 +39,9 @@ pub struct TestSet {
     /// The id of the jig that we've decided to use.
     jig: String,
 
+    /// The id of the scenario that we're using.
+    scenario: String,
+
     //messaging: Rc<RefCell<messaging::Messaging>>,
     /*
     coupons: HashMap<String, Coupon>,
@@ -62,6 +65,7 @@ impl TestSet {
             triggers: HashMap::new(),
             jigs: HashMap::new(),
             jig: "Unknown Jig".to_string(),
+            scenario: "Unknown Scenario".to_string(),
             interfaces: HashMap::new(),
             controller: controller.clone(),
         }));
@@ -255,5 +259,25 @@ impl TestSet {
 
     pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {
         return self.controller.clone();
+    }
+
+    pub fn set_scenario(&mut self, scenario_name: &String) {
+        let scenario = match self.scenarios.get(scenario_name) {
+            None => {
+                self.debug(self.unit_type(), self.unit_name(), format!("Unable to find scenario: {}", scenario_name).as_str());
+                return;
+            },
+            Some(s) => s,
+        };
+        self.scenario = scenario_name.clone();
+        scenario.describe();
+    }
+
+    pub fn unit_type(&self) -> &'static str {
+        "internal"
+    }
+
+    pub fn unit_name(&self) -> &'static str {
+        "testset"
     }
 }

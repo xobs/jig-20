@@ -1,8 +1,9 @@
 extern crate ini;
 use self::ini::Ini;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use super::test::Test;
+use super::super::controller;
 
 pub enum ScenarioError {
     TestNotFound(String),
@@ -36,10 +37,15 @@ pub struct Scenario {
 
     /// exec_stop_failure: A command to run if this scenario fails.
     exec_stop_failure: Option<String>,
+
+    /// The controller where messages go.
+    controller: Arc<Mutex<controller::Controller>>,
 }
 
 impl Scenario {
-    pub fn new(id: &str, path: &str) -> Result<Scenario, &'static str> {
+    pub fn new(id: &str,
+               path: &str,
+               controller: Arc<Mutex<controller::Controller>>) -> Result<Scenario, &'static str> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -103,6 +109,7 @@ impl Scenario {
             exec_start: exec_start,
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
+            controller: controller,
         })
     }
 
@@ -121,6 +128,23 @@ impl Scenario {
             println!("Test {} was found", test_name);
         }
         Ok(())
+    }
+
+    // Broadcast a description of ourselves.
+    pub fn describe(&self) {
+        let controller = self.controller.lock().unwrap();
+        controller.send_control(self.id().clone(),
+                                "scenario".to_string(),
+                                &controller::MessageContents::Describe("scenario".to_string(),
+                                                                      "name".to_string(),
+                                                                      self.id().clone(),
+                                                                      self.name.clone()));
+        controller.send_control(self.id().clone(),
+                                "scenario".to_string(),
+                                &controller::MessageContents::Describe("scenario".to_string(),
+                                                                      "description".to_string(),
+                                                                      self.id().clone(),
+                                                                      self.description.clone()));
     }
 
     pub fn id(&self) -> &String {

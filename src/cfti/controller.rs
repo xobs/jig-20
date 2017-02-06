@@ -13,6 +13,9 @@ pub enum MessageContents {
     Hello(String),
     Log(String),
 
+    /// DESCRIBE [type] [field] [item] [value]
+    Describe(String, String, String, String),
+
     GetJig,
     Jig(String),
 }
@@ -76,6 +79,19 @@ impl Controller {
     pub fn set_testset(&mut self, testset: Arc<Mutex<TestSet>>) {
         let mut t = self.testset.lock().unwrap();
         *t = Some(testset.clone());
+    }
+
+    pub fn set_scenario(&self, scenario: String) {
+        let mut t = self.testset.lock().unwrap();
+        match *t {
+            None => return,
+            Some(ref mut s) => {
+                let mut testset = s.lock().unwrap();
+                println!("Testset: {:?}", *testset);
+                testset.set_scenario(&scenario);
+            },
+        };
+        println!("Setting scenario to: {}", scenario);
     }
 
     pub fn controller_thread(rx: mpsc::Receiver<Message>,
@@ -160,5 +176,26 @@ impl Controller {
 
     pub fn control_message(&self, message: &Message) {
         self.control.send(message.clone()).unwrap();
+    }
+
+    pub fn send_control(&self,
+                        unit_name: String,
+                        unit_type: String,
+                        contents: &MessageContents) {
+
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        self.control_message(&Message {
+            message_type: 2,
+            unit: unit_name,
+            unit_type: unit_type,
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: contents.clone(),
+        });
     }
 }
