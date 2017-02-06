@@ -40,7 +40,7 @@ pub struct TestSet {
     jig: Option<Arc<Mutex<Jig>>>,
 
     /// The id of the scenario that we're using.
-    scenario: String,
+    scenario: Option<Arc<Mutex<Scenario>>>,
 
     //messaging: Rc<RefCell<messaging::Messaging>>,
     /*
@@ -65,7 +65,7 @@ impl TestSet {
             triggers: HashMap::new(),
             jigs: HashMap::new(),
             jig: None,
-            scenario: "Unknown Scenario".to_string(),
+            scenario: None,
             interfaces: HashMap::new(),
             controller: controller.clone(),
         }));
@@ -255,6 +255,7 @@ impl TestSet {
     }
 
     fn load_scenarios(&mut self, paths: &Vec<PathBuf>) {
+        let default_scenario_name = self.get_jig_default_scenario().clone();
         for path in paths {
             let item_name = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = path.to_str().unwrap_or("");
@@ -274,7 +275,13 @@ impl TestSet {
                 },
             };
 
-            self.scenarios.insert(new_scenario.id().clone(), Arc::new(Mutex::new(new_scenario)));
+            let new_scenario_id = new_scenario.id().clone();
+            let new_scenario = Arc::new(Mutex::new(new_scenario));
+
+            if Some(new_scenario_id.clone()) == default_scenario_name {
+                self.scenario = Some(new_scenario.clone());
+            }
+            self.scenarios.insert(new_scenario_id, new_scenario);
         }
     }
 
@@ -287,6 +294,16 @@ impl TestSet {
             result.push(self.tests.get(key).unwrap().clone());
         }
         result
+    }
+
+    pub fn get_jig_default_scenario(&self) -> Option<String> {
+        match self.jig.as_ref() {
+            None => None,
+            Some(s) => {
+                let jig = s.lock().unwrap();
+                jig.default_scenario().clone()
+            }
+        }
     }
 
     pub fn get_jig(&self) -> Option<Arc<Mutex<Jig>>> {
@@ -338,7 +355,7 @@ impl TestSet {
             },
             Some(s) => s,
         };
-        self.scenario = scenario_name.clone();
+        self.scenario = Some(scenario.clone());
         scenario.lock().unwrap().deref_mut().describe();
     }
 
