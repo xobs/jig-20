@@ -30,7 +30,7 @@ use super::controller::{Message, MessageContents};
 pub struct TestSet {
     controller: Arc<Mutex<controller::Controller>>,
     tests: HashMap<String, Arc<Mutex<Test>>>,
-    scenarios: HashMap<String, Scenario>,
+    scenarios: HashMap<String, Arc<Mutex<Scenario>>>,
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
     jigs: HashMap<String, Jig>,
@@ -127,7 +127,7 @@ impl TestSet {
         //test_set.load_services(&service_paths);
         //test_set.load_updaters(&updater_paths);
         test_set.lock().unwrap().load_tests(&test_paths);
-        //test_set.load_scenarios(&scenario_paths);
+        test_set.lock().unwrap().load_scenarios(&scenario_paths);
         //test_set.load_triggers(&trigger_paths);
         //test_set.load_coupons(&coupon_paths);
 
@@ -156,20 +156,17 @@ impl TestSet {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = Jig::new(&self, item_name, path_str);
+            let new_jig = match Jig::new(&self, item_name, path_str) {
+                // The jig will return "None" if it is incompatible.
+                None => continue,
+                Some(s) => s,
+            };
 
-            // The jig will return "None" if it is incompatible.
-            if new_jig.is_none() {
-                continue;
-            }
+            let new_jig = match new_jig {
+                Err(e) => {println!("Unable to load jig file: {:?}", e); continue;},
+                Ok(s) => s,
+            };
 
-            let new_jig = new_jig.unwrap();
-            if new_jig.is_err() {
-                println!("Unable to load jig file: {:?}", new_jig.unwrap_err());
-                continue;
-            }
-
-            let new_jig = new_jig.unwrap();
             self.jig = new_jig.id().clone();
             self.jigs.insert(new_jig.id().clone(), new_jig);
         }
@@ -252,12 +249,34 @@ impl TestSet {
         }
     }
 
-    fn resolve_scenarios(&mut self) {
-        /*
-        for (_, ref mut scenario) in self.scenarios.iter_mut() {
-            scenario.resolve_tests(&self.tests);
+    fn load_scenarios(&mut self, paths: &Vec<PathBuf>) {
+        for path in paths {
+            let item_name = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let path_str = path.to_str().unwrap_or("");
+            let new_scenario = match Scenario::new(&self,
+                                                   item_name,
+                                                   path_str,
+                                                   &self.jigs,
+                                                   self.controller.clone()) {
+                // In this case, it just means the test is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => { self.debug("scenario", item_name, format!("Unable to load scenario: {:?}", e).as_str()); continue; },
+                        Ok(s) => s,
+                    }
+                },
+            };
+
+            //let id = new_test.id().clone();
+            self.scenarios.insert(new_scenario.id().clone(), Arc::new(Mutex::new(new_scenario)));
         }
-        */
+    }
+
+    fn resolve_scenarios(&mut self) {
+        for (_, scenario) in self.scenarios.iter_mut() {
+            scenario.lock().unwrap().deref_mut().resolve_tests(&self.tests);
+        }
     }
 
     pub fn all_tests(&self) -> Vec<Arc<Mutex<Test>>> {
@@ -296,7 +315,7 @@ impl TestSet {
             Some(s) => s,
         };
         self.scenario = scenario_name.clone();
-        scenario.describe();
+        scenario.lock().unwrap().deref_mut().describe();
     }
 
     pub fn unit_type(&self) -> &'static str {

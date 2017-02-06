@@ -3,9 +3,18 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use super::test::Test;
+use cfti::types::Jig;
+use super::super::testset::TestSet;
 use super::super::controller;
 
+#[derive(Debug)]
 pub enum ScenarioError {
+    FileLoadError,
+    MissingScenarioSection,
+    MakeCommandFailed,
+    ExecCommandFailed,
+    TestListNotFound,
+    InvalidType(String),
     TestNotFound(String),
 }
 
@@ -24,7 +33,7 @@ pub struct Scenario {
     timeout: u32,
 
     /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
-    pub tests: Vec<Arc<Test>>,
+    pub tests: Vec<Arc<Mutex<Test>>>,
 
     /// test_names: A vector containing the names of all the tests.
     pub test_names: Vec<String>,
@@ -43,20 +52,41 @@ pub struct Scenario {
 }
 
 impl Scenario {
-    pub fn new(id: &str,
+    pub fn new(ts: &TestSet,
+               id: &str,
                path: &str,
-               controller: Arc<Mutex<controller::Controller>>) -> Result<Scenario, &'static str> {
+               jigs: &HashMap<String, Jig>,
+               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Err("Unable to load scenario file"),
+            Err(_) => return Some(Err(ScenarioError::FileLoadError)),
             Ok(s) => s,
         };
 
         let scenario_section = match ini_file.section(Some("Scenario")) {
-            None => return Err("Configuration is missing '[Scenario]' section"),
+            None => return Some(Err(ScenarioError::MissingScenarioSection)),
             Some(s) => s,
         };
+
+        // Check to see if this scenario is compatible with this jig.
+        match scenario_section.get("Jigs") {
+            None => (),
+            Some(s) => {
+                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let mut found_it = false;
+                for jig_name in jig_names {
+                    if jigs.get(&jig_name).is_some() {
+                        found_it = true;
+                        break
+                    }
+                }
+                if found_it == false {
+                    ts.debug("scenario", id, format!("The scenario '{}' is not compatible with this jig", id).as_str());
+                    return None;
+                }
+            }
+        }
 
         let description = match scenario_section.get("Description") {
             None => "".to_string(),
@@ -95,11 +125,11 @@ impl Scenario {
         };
 
         let test_names = match scenario_section.get("Tests") {
-            None => return Err("Unable to find test list"),
+            None => return Some(Err(ScenarioError::TestListNotFound)),
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
-        Ok(Scenario {
+        Some(Ok(Scenario {
             id: id.to_string(),
             test_names: test_names,
             tests: Vec::new(),
@@ -110,10 +140,10 @@ impl Scenario {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
             controller: controller,
-        })
+        }))
     }
 
-    pub fn resolve_tests(&mut self, test_set: &HashMap<String, Arc<Test>>) -> Result<(), ScenarioError> {
+    pub fn resolve_tests(&mut self, test_set: &HashMap<String, Arc<Mutex<Test>>>) -> Result<(), ScenarioError> {
 
         println!("Resolving tests for {}", self.name);
         for test_name in self.test_names.iter() {
