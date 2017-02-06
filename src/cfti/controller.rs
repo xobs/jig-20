@@ -16,6 +16,9 @@ pub enum MessageContents {
     /// DESCRIBE [type] [field] [item] [value]
     Describe(String, String, String, String),
 
+    /// SCENARIO [string] -- Sets the scenario to the specified id
+    Scenario(String),
+
     GetJig,
     Jig(String),
 }
@@ -81,19 +84,6 @@ impl Controller {
         *t = Some(testset.clone());
     }
 
-    pub fn set_scenario(&self, scenario: String) {
-        let mut t = self.testset.lock().unwrap();
-        match *t {
-            None => return,
-            Some(ref mut s) => {
-                let mut testset = s.lock().unwrap();
-                println!("Testset: {:?}", *testset);
-                testset.set_scenario(&scenario);
-            },
-        };
-        println!("Setting scenario to: {}", scenario);
-    }
-
     pub fn controller_thread(rx: mpsc::Receiver<Message>,
                              bus: Arc<Mutex<bus::Bus<Message>>>,
                              myself: Arc<Mutex<Controller>>) {
@@ -103,15 +93,16 @@ impl Controller {
                 Ok(o) => o,
             };
 
+            let me = myself.lock().unwrap();
+            let testset = me.testset.lock().unwrap();
+            let ref refval = testset.as_ref();
+
             match msg.message {
                 /// Log messages: simply rebroadcast them onto the broadcast bus.
                 MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
 
                 // Get the current jig information and broadcast it on the bus.
                 MessageContents::GetJig => {
-                    let  me = myself.lock().unwrap();
-                    let testset = me.testset.lock().unwrap();
-                    let ref refval = testset.as_ref();
                     if testset.is_none() {
                         Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
                     }
@@ -120,6 +111,15 @@ impl Controller {
                         Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                     }
                 },
+
+                MessageContents::Scenario(s) => {
+                    if testset.is_none() {
+                        Controller::broadcast_internal(&bus, MessageContents::Scenario("Unknown".to_string()));
+                    }
+                    else {
+                        refval.unwrap().lock().unwrap().deref_mut().set_scenario(&s);
+                    }
+                }
                 _ => println!("Unrecognized message"),
             };
         };
@@ -166,6 +166,7 @@ impl Controller {
         );
     }
     
+    /*
     pub fn add_listener(&mut self) -> bus::BusReader<Message> {
         self.broadcast.lock().unwrap().deref_mut().add_rx()
     }
@@ -173,6 +174,7 @@ impl Controller {
     pub fn add_sender(&self) -> mpsc::Sender<Message> {
         self.control.clone()
     }
+    */
 
     pub fn control_message(&self, message: &Message) {
         self.control.send(message.clone()).unwrap();

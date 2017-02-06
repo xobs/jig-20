@@ -5,10 +5,10 @@ use cfti::types::Jig;
 use super::super::testset::TestSet;
 use super::super::controller;
 use super::super::process;
-use std::process::{Command, Stdio, ChildStdin};
+use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
-use std::{thread, time};
+use std::thread;
 use std::io::{BufRead, BufReader, Write};
 
 #[derive(Debug)]
@@ -134,20 +134,32 @@ impl Interface {
 
     fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
         println!("Sending data to interface: {:?}", msg);
-        writeln!(stdin.lock().unwrap().deref_mut(), "{}\t{}\t{}\t{}\t{}\t{}\t",
-                                                                msg.message_type,
-                                                                msg.unit,
-                                                                msg.unit_type,
-                                                                msg.unix_time,
-                                                                msg.unix_time_nsecs,
-                                                                "xx".to_string());
-
+        match msg.message {
+            controller::MessageContents::Log(l) => writeln!(stdin.lock().unwrap().deref_mut(),
+                                                            "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                            msg.message_type,
+                                                            msg.unit,
+                                                            msg.unit_type,
+                                                            msg.unix_time,
+                                                            msg.unix_time_nsecs,
+                                                            l.to_string()).unwrap(),
+            _ => (),
+        }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
     }
 
-    fn text_read(line: String, controller: &mut controller::Controller) {
+    fn text_read(line: String, id: &String, controller: &mut controller::Controller) {
         println!("Got line: {}", line);
+        let words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
+        let verb = words[0].to_lowercase();
+
+        let response = match verb.as_str() {
+            "scenario" => controller::MessageContents::Scenario(words[1].to_lowercase()),
+            _ => controller::MessageContents::Log(format!("Unrecognized verb: {}", verb)),
+        };
+
+        controller.send_control(id.clone(), "interface".to_string(), &response);
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
@@ -168,14 +180,14 @@ impl Interface {
             Ok(s) => s,
         };
         println!("Launched an interface: {}", self.id());
-        let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
-        let mut stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
+        let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
+        let stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
 
         // Send some initial information to the client.
-        writeln!(stdin.lock().unwrap(), "HELLO Jig/20 1.0");
-        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig_id());
-        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG NAME {}", ts.get_jig_name());
-        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description());
+        writeln!(stdin.lock().unwrap(), "HELLO Jig/20 1.0").unwrap();
+        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig_id()).unwrap();
+        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG NAME {}", ts.get_jig_name()).unwrap();
+        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description()).unwrap();
 
         match self.format {
             InterfaceFormat::Text => {
@@ -184,13 +196,14 @@ impl Interface {
 
                 // Monitor the child process' stdout, and pass values to the controller.
                 let controller_clone = ts.get_controller();
+                let id = self.id.clone();
                 thread::spawn(move || {
                     let mut var = stdout.lock().unwrap();
                     let ref mut stdout2 = var.deref_mut();
                     for line in BufReader::new(stdout2).lines() {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
-                            Ok(l) => Interface::text_read(l, &mut controller_clone.lock().unwrap()),
+                            Ok(l) => Interface::text_read(l, &id, &mut controller_clone.lock().unwrap()),
                         }
                     }
                 });

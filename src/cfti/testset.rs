@@ -13,14 +13,12 @@ use super::controller;
 
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time;
-use std::ops::{DerefMut, Deref};
+use std::ops::DerefMut;
 
 use super::controller::{Message, MessageContents};
 
@@ -58,7 +56,7 @@ impl TestSet {
         controller.lock().unwrap().add_logger(|msg| println!("DEBUG>> {:?}", msg));
         controller.lock().unwrap().add_logger(|msg| println!("DEBUG2>> {:?}", msg));
 
-        let mut test_set = Arc::new(Mutex::new(TestSet {
+        let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
             scenarios: HashMap::new(),
             loggers: HashMap::new(),
@@ -99,7 +97,6 @@ impl TestSet {
 
         // Step 1: Read each unit file from the disk
         let entries_rd: fs::ReadDir = try!(fs::read_dir(dir));
-        let mut entries: Vec<PathBuf> = vec![];
         for entry_opt in entries_rd {
             let entry = try!(entry_opt);
             let path = entry.path();
@@ -117,7 +114,7 @@ impl TestSet {
                 "scenario" => scenario_paths.push(path.clone()),
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
-                unknown => println!("Unrecognized path: {}", path.to_str().unwrap_or("")),
+                unknown => println!("Unrecognized unit type {}, path: {}", unknown, path.to_str().unwrap_or("")),
             }
         }
 
@@ -224,7 +221,6 @@ impl TestSet {
                 },
             };
 
-            let id = new_interface.id().clone();
             new_interface.start(&self);
             self.interfaces.insert(new_interface.id().clone(), new_interface);
         }
@@ -285,17 +281,6 @@ impl TestSet {
         }
     }
 
-    pub fn all_tests(&self) -> Vec<Arc<Mutex<Test>>> {
-        let mut sorted_keys: Vec<&String> = self.tests.keys().collect();
-        sorted_keys.sort();
-
-        let mut result = vec![];
-        for key in sorted_keys {
-            result.push(self.tests.get(key).unwrap().clone());
-        }
-        result
-    }
-
     pub fn get_jig_default_scenario(&self) -> Option<String> {
         match self.jig.as_ref() {
             None => None,
@@ -303,13 +288,6 @@ impl TestSet {
                 let jig = s.lock().unwrap();
                 jig.default_scenario().clone()
             }
-        }
-    }
-
-    pub fn get_jig(&self) -> Option<Arc<Mutex<Jig>>> {
-        match self.jig.as_ref() {
-            None => None,
-            Some(s) => Some(s.clone()),
         }
     }
 

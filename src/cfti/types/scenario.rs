@@ -11,10 +11,7 @@ use super::super::controller;
 pub enum ScenarioError {
     FileLoadError,
     MissingScenarioSection,
-    MakeCommandFailed,
-    ExecCommandFailed,
     TestListNotFound,
-    InvalidType(String),
     TestNotFound(String),
 }
 

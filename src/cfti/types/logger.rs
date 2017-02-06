@@ -144,7 +144,7 @@ impl Logger {
             Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(LoggerError::ExecCommandFailed) },
             Ok(s) => s,
         };
-        let mut stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
+        let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
         let format = self.format.clone();
         match format {
             LoggerFormat::TabSeparatedValue => ts.monitor_logs(move |msg| {
@@ -156,7 +156,7 @@ impl Logger {
                                         msg.unit_type,
                                         msg.unix_time,
                                         msg.unix_time_nsecs,
-                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")),
+                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")).unwrap(),
                     _ => return,
                 };
             }),
@@ -170,7 +170,7 @@ impl Logger {
                         object["unix_time"] = msg.unix_time.into();
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
                         object["message"] = log.into();
-                        writeln!(stdin.lock().unwrap(), "{}", json::stringify(object));
+                        writeln!(stdin.lock().unwrap(), "{}", json::stringify(object)).unwrap();
                     },
                     _ => return,
                 }

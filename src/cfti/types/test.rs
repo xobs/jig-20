@@ -11,8 +11,6 @@ pub enum TestError {
     FileLoadError,
     MissingTestSection,
     MissingExecSection,
-    MakeCommandFailed,
-    ExecCommandFailed,
     InvalidType(String),
 }
 
@@ -185,9 +183,11 @@ impl Test {
         }))
     }
 
+    /*
     pub fn name(&self) -> &String {
         return &self.name;
     }
+    */
 
     pub fn id(&self) -> &String {
         return &self.id;
