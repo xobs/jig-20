@@ -262,6 +262,7 @@ impl TestSet {
                                                    item_name,
                                                    path_str,
                                                    &self.jigs,
+                                                   &self.tests,
                                                    self.controller.clone()) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
@@ -273,14 +274,7 @@ impl TestSet {
                 },
             };
 
-            //let id = new_test.id().clone();
             self.scenarios.insert(new_scenario.id().clone(), Arc::new(Mutex::new(new_scenario)));
-        }
-    }
-
-    fn resolve_scenarios(&mut self) {
-        for (_, scenario) in self.scenarios.iter_mut() {
-            scenario.lock().unwrap().deref_mut().resolve_tests(&self.tests);
         }
     }
 

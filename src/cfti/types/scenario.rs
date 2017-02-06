@@ -55,7 +55,8 @@ impl Scenario {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
                controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
@@ -76,7 +77,7 @@ impl Scenario {
                 let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
-                    if jigs.get(&jig_name).is_some() {
+                    if loaded_jigs.get(&jig_name).is_some() {
                         found_it = true;
                         break
                     }
@@ -124,15 +125,27 @@ impl Scenario {
             Some(s) => Some(s.to_string()),
         };
 
-        let test_names = match scenario_section.get("Tests") {
+        let test_names: Vec<String> = match scenario_section.get("Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
+        // Resolve the test names.
+        let mut tests = vec![];
+        for test_name in test_names.iter() {
+            match loaded_tests.get(test_name) {
+                None => {
+                    ts.debug("scenario", id, format!("Test {} not found when loading scenario", test_name).as_str());
+                    return Some(Err(ScenarioError::TestNotFound(test_name.clone())));
+                },
+                Some(s) => tests.push(s.clone()),
+            }
+        }
+
         Some(Ok(Scenario {
             id: id.to_string(),
             test_names: test_names,
-            tests: Vec::new(),
+            tests: tests,
             timeout: timeout,
             name: name,
             description: description,
@@ -141,23 +154,6 @@ impl Scenario {
             exec_stop_failure: exec_stop_failure,
             controller: controller,
         }))
-    }
-
-    pub fn resolve_tests(&mut self, test_set: &HashMap<String, Arc<Mutex<Test>>>) -> Result<(), ScenarioError> {
-
-        println!("Resolving tests for {}", self.name);
-        for test_name in self.test_names.iter() {
-            let test = match test_set.get(test_name) {
-                None => {
-                    println!("Test {} NOT FOUND", test_name);
-                    return Err(ScenarioError::TestNotFound(test_name.clone()));
-                },
-                Some(t) => t,
-            };
-            self.tests.push(test.clone());
-            println!("Test {} was found", test_name);
-        }
-        Ok(())
     }
 
     // Broadcast a description of ourselves.
