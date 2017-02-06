@@ -48,7 +48,10 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(ts: &TestSet, id: &str, path: &str, jigs: &HashMap<String, Jig>) -> Option<Result<Logger, LoggerError>> {
+    pub fn new(ts: &TestSet,
+               id: &str,
+               path: &str,
+               jigs: &HashMap<String, Arc<Mutex<Jig>>>) -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {

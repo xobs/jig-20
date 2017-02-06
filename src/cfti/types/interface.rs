@@ -55,7 +55,7 @@ impl Interface {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               jigs: &HashMap<String, Jig>,
+               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Interface, InterfaceError>> {
 
         // Load the .ini file
@@ -173,7 +173,7 @@ impl Interface {
 
         // Send some initial information to the client.
         writeln!(stdin.lock().unwrap(), "HELLO Jig/20 1.0");
-        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig());
+        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig_id());
         writeln!(stdin.lock().unwrap(), "DESCRIBE JIG NAME {}", ts.get_jig_name());
         writeln!(stdin.lock().unwrap(), "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description());
 

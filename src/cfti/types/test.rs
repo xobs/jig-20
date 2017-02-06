@@ -63,7 +63,7 @@ impl Test {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               jigs: &HashMap<String, Jig>,
+               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Test, TestError>> {
 
         // Load the .ini file

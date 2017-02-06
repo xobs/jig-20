@@ -33,11 +33,11 @@ pub struct TestSet {
     scenarios: HashMap<String, Arc<Mutex<Scenario>>>,
     triggers: HashMap<String, Trigger>,
     loggers: HashMap<String, Logger>,
-    jigs: HashMap<String, Jig>,
+    jigs: HashMap<String, Arc<Mutex<Jig>>>,
     interfaces: HashMap<String, Interface>,
 
-    /// The id of the jig that we've decided to use.
-    jig: String,
+    /// The jig that we've decided to use.
+    jig: Option<Arc<Mutex<Jig>>>,
 
     /// The id of the scenario that we're using.
     scenario: String,
@@ -64,7 +64,7 @@ impl TestSet {
             loggers: HashMap::new(),
             triggers: HashMap::new(),
             jigs: HashMap::new(),
-            jig: "Unknown Jig".to_string(),
+            jig: None,
             scenario: "Unknown Scenario".to_string(),
             interfaces: HashMap::new(),
             controller: controller.clone(),
@@ -164,11 +164,16 @@ impl TestSet {
 
             let new_jig = match new_jig {
                 Err(e) => {println!("Unable to load jig file: {:?}", e); continue;},
-                Ok(s) => s,
+                Ok(s) => Arc::new(Mutex::new(s)),
             };
 
-            self.jig = new_jig.id().clone();
-            self.jigs.insert(new_jig.id().clone(), new_jig);
+            let new_jig_id = new_jig.lock().unwrap().id().clone();
+
+            if self.jig.is_none() {
+                self.jig = Some(new_jig.clone());
+            }
+
+            self.jigs.insert(new_jig_id, new_jig);
         }
     }
 
@@ -290,16 +295,41 @@ impl TestSet {
         result
     }
 
-    pub fn get_jig(&self) -> String {
-        self.jig.clone()
+    pub fn get_jig(&self) -> Option<Arc<Mutex<Jig>>> {
+        match self.jig.as_ref() {
+            None => None,
+            Some(s) => Some(s.clone()),
+        }
+    }
+
+    pub fn get_jig_id(&self) -> String {
+        match self.jig.as_ref() {
+            None => "".to_string(),
+            Some(s) => {
+                let jig = s.lock().unwrap();
+                jig.id().clone()
+            }
+        }
     }
 
     pub fn get_jig_name(&self) -> String {
-        self.jigs[self.jig.deref()].name().clone()
+        match self.jig.as_ref() {
+            None => "".to_string(),
+            Some(s) => {
+                let jig = s.lock().unwrap();
+                jig.name().clone()
+            }
+        }
     }
 
     pub fn get_jig_description(&self) -> String {
-        self.jigs[self.jig.deref()].description().clone()
+        match self.jig.as_ref() {
+            None => "".to_string(),
+            Some(s) => {
+                let jig = s.lock().unwrap();
+                jig.description().clone()
+            }
+        }
     }
 
     pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {

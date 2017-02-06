@@ -4,7 +4,7 @@ use std::fmt;
 use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 
 use super::testset::TestSet;
 
@@ -116,7 +116,7 @@ impl Controller {
                         Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
                     }
                     else {
-                        let jig_name = refval.unwrap().lock().unwrap().get_jig();
+                        let jig_name = refval.unwrap().lock().unwrap().deref().get_jig_name();
                         Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                     }
                 },
