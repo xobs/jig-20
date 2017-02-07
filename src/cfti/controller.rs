@@ -150,6 +150,7 @@ impl Controller {
 
                     MessageContents::Shutdown(s) => {
                         let mut should_exit = me.should_exit.lock().unwrap();
+                        println!("Shutting down: {}", s);
                         *(should_exit.deref_mut()) = true;
                     },
 
