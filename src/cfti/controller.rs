@@ -248,4 +248,25 @@ impl Controller {
             message: contents.clone(),
         });
     }
+
+    pub fn send_broadcast(&self,
+                          unit_name: String,
+                          unit_type: String,
+                          contents: MessageContents) {
+
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        self.broadcast.lock().unwrap().deref_mut().broadcast(Message {
+            message_type: 2,
+            unit_id: unit_name,
+            unit_type: unit_type,
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: contents,
+        });
+    }
 }
