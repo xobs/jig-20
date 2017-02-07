@@ -156,15 +156,15 @@ impl Scenario {
     // Broadcast a description of ourselves.
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
-        controller.send_control(self.id().clone(),
+        controller.send_broadcast(self.id().clone(),
                                 "scenario".to_string(),
-                                &controller::MessageContents::Describe("scenario".to_string(),
+                                controller::MessageContents::Describe("scenario".to_string(),
                                                                       "name".to_string(),
                                                                       self.id().clone(),
                                                                       self.name.clone()));
-        controller.send_control(self.id().clone(),
+        controller.send_broadcast(self.id().clone(),
                                 "scenario".to_string(),
-                                &controller::MessageContents::Describe("scenario".to_string(),
+                                controller::MessageContents::Describe("scenario".to_string(),
                                                                       "description".to_string(),
                                                                       self.id().clone(),
                                                                       self.description.clone()));

@@ -285,6 +285,10 @@ impl TestSet {
             self.scenarios.insert(new_scenario_id, new_scenario);
         }
 
+        for (_, scenario) in self.scenarios.iter() {
+            scenario.lock().unwrap().deref_mut().describe();
+        }
+
         let ref cx = *(self.controller.lock().unwrap());
         cx.send_broadcast(self.unit_name().to_string(),
                           self.unit_type().to_string(),
