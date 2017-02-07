@@ -29,10 +29,10 @@ pub struct TestSet {
     controller: Arc<Mutex<controller::Controller>>,
     tests: HashMap<String, Arc<Mutex<Test>>>,
     scenarios: HashMap<String, Arc<Mutex<Scenario>>>,
-    triggers: HashMap<String, Trigger>,
-    loggers: HashMap<String, Logger>,
+    triggers: HashMap<String, Arc<Mutex<Trigger>>>,
+    loggers: HashMap<String, Arc<Mutex<Logger>>>,
     jigs: HashMap<String, Arc<Mutex<Jig>>>,
-    interfaces: HashMap<String, Interface>,
+    interfaces: HashMap<String, Arc<Mutex<Interface>>>,
 
     /// The jig that we've decided to use.
     jig: Option<Arc<Mutex<Jig>>>,
@@ -192,7 +192,7 @@ impl TestSet {
             }
             let new_logger = new_logger.unwrap();
             new_logger.start(&self);
-            self.loggers.insert(new_logger.id().clone(), new_logger);
+            self.loggers.insert(new_logger.id().clone(), Arc::new(Mutex::new(new_logger)));
         }
     }
 
@@ -222,7 +222,7 @@ impl TestSet {
             };
 
             new_interface.start(&self);
-            self.interfaces.insert(new_interface.id().clone(), new_interface);
+            self.interfaces.insert(new_interface.id().clone(), Arc::new(Mutex::new(new_interface)));
         }
     }
 
