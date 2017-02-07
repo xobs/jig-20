@@ -21,6 +21,9 @@ pub enum MessageContents {
 
     GetJig,
     Jig(String),
+
+    /// SHUTDOWN [reason] -- Shuts down the test infrastructure
+    Shutdown(String),
 }
 
 #[derive(Clone, Debug)]

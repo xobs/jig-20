@@ -3,7 +3,7 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
-use super::super::controller;
+use super::super::controller::{self, MessageContents};
 use super::super::process;
 use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
@@ -157,14 +157,14 @@ impl Interface {
     fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
         println!("Sending data to interface: {:?}", msg);
         match msg.message {
-            controller::MessageContents::Log(l) => writeln!(stdin.lock().unwrap().deref_mut(),
-                                                            "{}\t{}\t{}\t{}\t{}\t{}\t",
-                                                            msg.message_type,
-                                                            msg.unit_id,
-                                                            msg.unit_type,
-                                                            msg.unix_time,
-                                                            msg.unix_time_nsecs,
-                                                            l.to_string()).unwrap(),
+            MessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
+                                                "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                msg.message_type,
+                                                msg.unit_id,
+                                                msg.unit_type,
+                                                msg.unix_time,
+                                                msg.unix_time_nsecs,
+                                                l.to_string()).unwrap(),
             _ => (),
         }
     }
@@ -178,10 +178,11 @@ impl Interface {
         words.remove(0);
 
         let response = match verb.as_str() {
-            "scenario" => controller::MessageContents::Scenario(words[0].to_lowercase()),
-            "jig" => controller::MessageContents::GetJig,
-            "hello" => controller::MessageContents::Hello(words.join(" ")),
-            _ => controller::MessageContents::Log(format!("Unrecognized verb: {}", verb)),
+            "scenario" => MessageContents::Scenario(words[0].to_lowercase()),
+            "jig" => MessageContents::GetJig,
+            "hello" => MessageContents::Hello(words.join(" ")),
+            "shutdown" => MessageContents::Shutdown(words.join(" ")),
+            _ => MessageContents::Log(format!("Unrecognized verb: {}", verb)),
         };
 
         controller.send_control(id.clone(), "interface".to_string(), &response);
