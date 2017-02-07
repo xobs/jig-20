@@ -165,7 +165,28 @@ impl Interface {
                                                 msg.unix_time,
                                                 msg.unix_time_nsecs,
                                                 l.to_string()).unwrap(),
-            _ => (),
+            MessageContents::Jig(j) => writeln!(&mut stdin.lock().unwrap(),
+                                                "JIG {}", j.to_string()).unwrap(),
+            MessageContents::Describe(class, field, name, value) =>
+                                        writeln!(&mut stdin.lock().unwrap(),
+                                        "DESCRIBE {} {} {} {}",
+                                        class, field, name, value).unwrap(),
+            MessageContents::Scenario(name) => writeln!(&mut stdin.lock().unwrap(),
+                                                "SCENARIO {}", name).unwrap(),
+            MessageContents::Scenarios(list) => writeln!(&mut stdin.lock().unwrap(),
+                                                "SCENARIOS {}", list.join(" ")).unwrap(),
+            MessageContents::Hello(name) => writeln!(&mut stdin.lock().unwrap(),
+                                                "HELLO {}", name).unwrap(),
+            MessageContents::Ping(val) => writeln!(&mut stdin.lock().unwrap(),
+                                                "PING {}", val).unwrap(),
+
+            MessageContents::GetJig => (),
+            MessageContents::GetScenarios => (),
+            MessageContents::GetTests => (),
+            MessageContents::StartTests => (),
+            MessageContents::AbortTests => (),
+            MessageContents::Pong(_) => (),
+            MessageContents::Shutdown(_) => (),
         }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
@@ -179,11 +200,16 @@ impl Interface {
 
         let response = match verb.as_str() {
             "scenario" => MessageContents::Scenario(words[0].to_lowercase()),
+            "scenarios" => MessageContents::GetScenarios,
+            "tests" => MessageContents::GetTests,
+            "start" => MessageContents::StartTests,
+            "abort" => MessageContents::AbortTests,
+            "pong" => MessageContents::Pong(words[0].to_lowercase()),
             "jig" => MessageContents::GetJig,
             "hello" => MessageContents::Hello(words.join(" ")),
             "shutdown" => MessageContents::Shutdown(words.join(" ")),
             "log" => MessageContents::Log(words.join(" ")),
-            _ => MessageContents::Log(format!("Unrecognized verb: {}", verb)),
+            _ => MessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
         controller.send_control(id.clone(), "interface".to_string(), &response);
