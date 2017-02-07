@@ -182,6 +182,7 @@ impl Interface {
             "jig" => MessageContents::GetJig,
             "hello" => MessageContents::Hello(words.join(" ")),
             "shutdown" => MessageContents::Shutdown(words.join(" ")),
+            "log" => MessageContents::Log(words.join(" ")),
             _ => MessageContents::Log(format!("Unrecognized verb: {}", verb)),
         };
 
