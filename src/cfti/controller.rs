@@ -5,6 +5,7 @@ use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
+use std::process;
 
 use super::testset::TestSet;
 
@@ -56,6 +57,7 @@ pub struct Controller {
     broadcast: Arc<Mutex<bus::Bus<Message>>>,
     control: mpsc::Sender<Message>,
     testset: Arc<Mutex<Option<Arc<Mutex<TestSet>>>>>,
+    should_exit: Arc<Mutex<bool>>,
 }
 
 impl fmt::Debug for Controller {
@@ -73,6 +75,7 @@ impl Controller {
             broadcast: bus.clone(),
             control: tx,
             testset: Arc::new(Mutex::new(Option::None)),
+            should_exit: Arc::new(Mutex::new(false)),
         }));
 
         // The controller runs in its own thread.
@@ -87,48 +90,74 @@ impl Controller {
         *t = Some(testset.clone());
     }
 
+    pub fn should_exit(&self) -> bool {
+        *self.should_exit.lock().unwrap()
+    }
+
     pub fn controller_thread(rx: mpsc::Receiver<Message>,
                              bus: Arc<Mutex<bus::Bus<Message>>>,
                              myself: Arc<Mutex<Controller>>) {
-        loop {
+        'new_msg: loop {
             let msg = match rx.recv() {
                 Err(e) => {println!("Error receiving: {:?}", e); continue; },
                 Ok(o) => o,
             };
 
-            let me = myself.lock().unwrap();
-            let testsetref = me.testset.lock().unwrap();
-            let ref testset = testsetref.as_ref();
+            // If the mutex is locked, we come back up here and try it agian.
+            // Doubly-locked mutexes can happen if, for example, someone has
+            // locked the testset and is sending a message (waiting on locking
+            // the controller), and we are running our own code while locking
+            // ourselves.
+            'retry_mutex: loop {
 
-            if testset.is_none() {
-                Controller::broadcast_internal(&bus, MessageContents::Log("TestSet is None".to_string()));
-                continue;
+                let ref mut me = myself.lock().unwrap();
+                let mut testset_option_ref = me.testset.lock().unwrap();
+                let mut testset_option = testset_option_ref.deref_mut();
+                let ref mut testset_ref = match testset_option {
+                    &mut None => {
+                        Controller::broadcast_internal(&bus,
+                                                    MessageContents::Log("TestSet is None".to_string()));
+                        continue 'new_msg;
+                    },
+                    &mut Some(ref mut s) => s,
+                };
+
+                let ref mut testset_ref = match testset_ref.try_lock() {
+                    Err(_) => continue 'retry_mutex,
+                    Ok(r) => r,
+                };
+                let mut testset = testset_ref.deref_mut();
+
+                match msg.message {
+                    /// Log messages: simply rebroadcast them onto the broadcast bus.
+                    MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
+
+                    // Get the current jig information and broadcast it on the bus.
+                    MessageContents::GetJig => {
+                        let jig_name = testset.get_jig_name();
+                        Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
+                    },
+
+                    // Set the current scenario to the specified one.
+                    MessageContents::Scenario(s) => {
+                        testset.set_scenario(&s);
+                    },
+
+                    MessageContents::Hello(s) => {
+                        testset.set_interface_hello(msg.unit_id, s);
+                        process::exit(0);
+                    },
+
+                    MessageContents::Shutdown(s) => {
+                        let mut should_exit = me.should_exit.lock().unwrap();
+                        *(should_exit.deref_mut()) = true;
+                    },
+
+                    _ => println!("Unhandled message: {:?}", msg),
+                };
+
+                continue 'new_msg;
             }
-
-            let mut testset = testset.unwrap().lock().unwrap();
-            let mut testset = testset.deref_mut();
-
-            match msg.message {
-                /// Log messages: simply rebroadcast them onto the broadcast bus.
-                MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
-
-                // Get the current jig information and broadcast it on the bus.
-                MessageContents::GetJig => {
-                    let jig_name = testset.get_jig_name();
-                    Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
-                },
-
-                // Set the current scenario to the specified one.
-                MessageContents::Scenario(s) => {
-                    testset.set_scenario(&s);
-                },
-
-                MessageContents::Hello(s) => {
-                    testset.set_interface_hello(msg.unit_id, s);
-                },
-
-                _ => println!("Unrecognized message"),
-            };
         };
     }
 
