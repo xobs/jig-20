@@ -284,6 +284,11 @@ impl TestSet {
             }
             self.scenarios.insert(new_scenario_id, new_scenario);
         }
+
+        let ref cx = *(self.controller.lock().unwrap());
+        cx.send_broadcast(self.unit_name().to_string(),
+                          self.unit_type().to_string(),
+                          MessageContents::Scenarios(self.scenarios.keys().map(|x| x.to_string()).collect()));
     }
 
     pub fn get_jig_default_scenario(&self) -> Option<String> {
