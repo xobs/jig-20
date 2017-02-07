@@ -2,7 +2,6 @@ mod cfti;
 use std::{thread, time};
 
 fn main() {
-
     let controller = cfti::controller::Controller::new().unwrap();
     let test_set = cfti::TestSet::new("ltc-tests", controller.clone()).unwrap();
 
@@ -16,6 +15,9 @@ fn main() {
 
     println!("Test set: {:?}", test_set);
     loop {
+        if controller.lock().unwrap().should_exit() {
+            break;
+        }
         thread::sleep(time::Duration::from_millis(100));
     }
 }
