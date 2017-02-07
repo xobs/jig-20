@@ -158,7 +158,7 @@ impl Interface {
         println!("Sending data to interface: {:?}", msg);
         match msg.message {
             MessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
-                                                "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                "LOG {}\t{}\t{}\t{}\t{}\t{}\t",
                                                 msg.message_type,
                                                 msg.unit_id,
                                                 msg.unit_type,
