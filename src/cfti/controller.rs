@@ -20,11 +20,22 @@ pub enum MessageContents {
     /// SCENARIO [string] -- Sets the scenario to the specified id
     Scenario(String),
 
+    /// SCENARIOS [first] [...] -- Lists the scenarios that are available
+    GetScenarios,
+    Scenarios(Vec<String>),
+
     GetJig,
     Jig(String),
 
+    /// TESTS
+    GetTests,
+    StartTests,
+    AbortTests,
+
     /// SHUTDOWN [reason] -- Shuts down the test infrastructure
     Shutdown(String),
+    Ping(String),
+    Pong(String),
 }
 
 #[derive(Clone, Debug)]
