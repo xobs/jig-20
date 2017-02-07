@@ -140,7 +140,7 @@ impl TestSet {
 
         self.controller.lock().unwrap().control_message(&Message {
             message_type: 2,
-            unit: unit.to_string(),
+            unit_id: unit.to_string(),
             unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),

@@ -166,7 +166,7 @@ impl Logger {
                     Message { message: MessageContents::Log(log), .. } => 
                         writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
                                         msg.message_type,
-                                        msg.unit,
+                                        msg.unit_id,
                                         msg.unit_type,
                                         msg.unix_time,
                                         msg.unix_time_nsecs,
@@ -179,7 +179,7 @@ impl Logger {
                     Message { message: MessageContents::Log(log), .. } => {
                         let mut object = json::JsonValue::new_object();
                         object["message_type"] = msg.message_type.into();
-                        object["unit"] = msg.unit.into();
+                        object["unit"] = msg.unit_id.into();
                         object["unit_type"] = msg.unit_type.into();
                         object["unix_time"] = msg.unix_time.into();
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();

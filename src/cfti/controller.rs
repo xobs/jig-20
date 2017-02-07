@@ -30,7 +30,7 @@ pub struct Message {
     pub message_type: u32,
 
     /// The name of the unit that generated the message.
-    pub unit: String,
+    pub unit_id: String,
 
     /// The type of unit, such as "test", "logger", "trigger", etc.
     pub unit_type: String,
@@ -139,7 +139,7 @@ impl Controller {
 
         bus.lock().unwrap().deref_mut().broadcast(Message {
             message_type: 2,
-            unit: "internal".to_string(),
+            unit_id: "internal".to_string(),
             unit_type: "core".to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
@@ -197,7 +197,7 @@ impl Controller {
 
         self.control_message(&Message {
             message_type: 2,
-            unit: unit_name,
+            unit_id: unit_name,
             unit_type: unit_type,
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),

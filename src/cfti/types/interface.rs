@@ -63,6 +63,9 @@ pub struct Interface {
 
     /// The controller where messages go.
     controller: Arc<Mutex<controller::Controller>>,
+
+    /// The value set by the "HELLO" command
+    hello: String,
 }
 
 impl Interface {
@@ -139,11 +142,16 @@ impl Interface {
             working_directory: working_directory,
             format: format,
             controller: controller,
+            hello: "".to_string(),
        }))
     }
 
     pub fn id(&self) -> &String {
         return &self.id;
+    }
+
+    pub fn set_hello(&mut self, hello: String) {
+        self.hello = hello;
     }
 
     fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
@@ -152,7 +160,7 @@ impl Interface {
             controller::MessageContents::Log(l) => writeln!(stdin.lock().unwrap().deref_mut(),
                                                             "{}\t{}\t{}\t{}\t{}\t{}\t",
                                                             msg.message_type,
-                                                            msg.unit,
+                                                            msg.unit_id,
                                                             msg.unit_type,
                                                             msg.unix_time,
                                                             msg.unix_time_nsecs,
