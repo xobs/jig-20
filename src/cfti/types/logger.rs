@@ -9,6 +9,7 @@ use std::process::Stdio;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 extern crate json;
+use std::fmt::{Formatter, Display, Error};
 
 #[derive(Debug, Clone)]
 enum LoggerFormat {
@@ -24,6 +25,19 @@ pub enum LoggerError {
     MakeCommandFailed,
     ExecCommandFailed,
     InvalidType(String),
+}
+
+impl Display for LoggerError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            &LoggerError::FileLoadError => write!(f, "Unable to load file"),
+            &LoggerError::MissingLoggerSection => write!(f, "Unit file is missing logger section"),
+            &LoggerError::MissingExecSection => write!(f, "Unit file is missing exec section"),
+            &LoggerError::MakeCommandFailed => write!(f, "Unable to make command"),
+            &LoggerError::ExecCommandFailed => write!(f, "Unable to exec command"),
+            &LoggerError::InvalidType(ref s) => write!(f, "Invalid logger type: {}", s),
+        }
+    }
 }
 
 #[derive(Debug)]
