@@ -131,7 +131,7 @@ impl TestSet {
         Ok(test_set)
     }
 
-    pub fn debug(&self, unit_type: &str, unit: &str, msg: &str) {
+    pub fn debug(&self, unit_type: &str, unit_id: &str, msg: &str) {
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
             Ok(d) => d,
@@ -140,7 +140,7 @@ impl TestSet {
 
         self.controller.lock().unwrap().control_message(&Message {
             message_type: 2,
-            unit_id: unit.to_string(),
+            unit_id: unit_id.to_string(),
             unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
@@ -228,6 +228,7 @@ impl TestSet {
                 Err(e) => {println!("Unable to start interface: {}", e);},
                 Ok(_) => (),
             }
+
             self.interfaces.insert(new_interface.id().clone(), Arc::new(Mutex::new(new_interface)));
         }
     }
@@ -251,7 +252,6 @@ impl TestSet {
                 },
             };
 
-            //let id = new_test.id().clone();
             self.tests.insert(new_test.id().clone(), Arc::new(Mutex::new(new_test)));
         }
     }
