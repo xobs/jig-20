@@ -115,8 +115,13 @@ impl Controller {
                     Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                 },
 
+                // Set the current scenario to the specified one.
                 MessageContents::Scenario(s) => {
                     testset.set_scenario(&s);
+                },
+
+                MessageContents::Hello(s) => {
+                    testset.set_interface_hello(msg.unit_id, s);
                 },
 
                 _ => println!("Unrecognized message"),
