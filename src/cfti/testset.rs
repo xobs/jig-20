@@ -331,6 +331,13 @@ impl TestSet {
         return self.controller.clone();
     }
 
+    pub fn set_interface_hello(&self, id: String, hello: String) {
+        match self.interfaces.get(&id) {
+            None => return,
+            Some(s) => s.lock().unwrap().set_hello(hello),
+        }
+    }
+
     pub fn set_scenario(&mut self, scenario_name: &String) {
         let scenario = match self.scenarios.get(scenario_name) {
             None => {
