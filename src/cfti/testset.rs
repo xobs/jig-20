@@ -54,7 +54,6 @@ impl TestSet {
 
         // Add a simple logger to show us debug data.
         controller.lock().unwrap().add_logger(|msg| println!("DEBUG>> {:?}", msg));
-        controller.lock().unwrap().add_logger(|msg| println!("DEBUG2>> {:?}", msg));
 
         let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
