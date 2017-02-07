@@ -4,7 +4,7 @@ use std::fmt;
 use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 
 use super::testset::TestSet;
 
@@ -97,29 +97,28 @@ impl Controller {
             let testsetref = me.testset.lock().unwrap();
             let ref testset = testsetref.as_ref();
 
+            if testset.is_none() {
+                Controller::broadcast_internal(&bus, MessageContents::Log("TestSet is None".to_string()));
+                continue;
+            }
+
+            let mut testset = testset.unwrap().lock().unwrap();
+            let mut testset = testset.deref_mut();
+
             match msg.message {
                 /// Log messages: simply rebroadcast them onto the broadcast bus.
                 MessageContents::Log(_) => bus.lock().unwrap().deref_mut().broadcast(msg),
 
                 // Get the current jig information and broadcast it on the bus.
                 MessageContents::GetJig => {
-                    if testset.is_none() {
-                        Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
-                    }
-                    else {
-                        let jig_name = testset.unwrap().lock().unwrap().deref().get_jig_name();
-                        Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
-                    }
+                    let jig_name = testset.get_jig_name();
+                    Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                 },
 
                 MessageContents::Scenario(s) => {
-                    if testset.is_none() {
-                        Controller::broadcast_internal(&bus, MessageContents::Scenario("Unknown".to_string()));
-                    }
-                    else {
-                        testset.unwrap().lock().unwrap().deref_mut().set_scenario(&s);
-                    }
-                }
+                    testset.set_scenario(&s);
+                },
+
                 _ => println!("Unrecognized message"),
             };
         };
