@@ -165,11 +165,14 @@ impl Interface {
 
     fn text_read(line: String, id: &String, controller: &mut controller::Controller) {
         println!("Got line: {}", line);
-        let words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
+        let mut words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
         let verb = words[0].to_lowercase();
+        words.remove(0);
 
         let response = match verb.as_str() {
-            "scenario" => controller::MessageContents::Scenario(words[1].to_lowercase()),
+            "scenario" => controller::MessageContents::Scenario(words[0].to_lowercase()),
+            "jig" => controller::MessageContents::GetJig,
+            "hello" => controller::MessageContents::Hello(words.join(" ")),
             _ => controller::MessageContents::Log(format!("Unrecognized verb: {}", verb)),
         };
 
