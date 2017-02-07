@@ -94,8 +94,8 @@ impl Controller {
             };
 
             let me = myself.lock().unwrap();
-            let testset = me.testset.lock().unwrap();
-            let ref refval = testset.as_ref();
+            let testsetref = me.testset.lock().unwrap();
+            let ref testset = testsetref.as_ref();
 
             match msg.message {
                 /// Log messages: simply rebroadcast them onto the broadcast bus.
@@ -107,7 +107,7 @@ impl Controller {
                         Controller::broadcast_internal(&bus, MessageContents::Jig("Unknown".to_string()));
                     }
                     else {
-                        let jig_name = refval.unwrap().lock().unwrap().deref().get_jig_name();
+                        let jig_name = testset.unwrap().lock().unwrap().deref().get_jig_name();
                         Controller::broadcast_internal(&bus, MessageContents::Jig(jig_name));
                     }
                 },
@@ -117,7 +117,7 @@ impl Controller {
                         Controller::broadcast_internal(&bus, MessageContents::Scenario("Unknown".to_string()));
                     }
                     else {
-                        refval.unwrap().lock().unwrap().deref_mut().set_scenario(&s);
+                        testset.unwrap().lock().unwrap().deref_mut().set_scenario(&s);
                     }
                 }
                 _ => println!("Unrecognized message"),
