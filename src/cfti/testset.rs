@@ -191,7 +191,10 @@ impl TestSet {
                 continue;
             }
             let new_logger = new_logger.unwrap();
-            new_logger.start(&self);
+            match new_logger.start(&self) {
+                Err(e) => {println!("Unable to start logger: {}", e);},
+                Ok(_) => (),
+            }
             self.loggers.insert(new_logger.id().clone(), Arc::new(Mutex::new(new_logger)));
         }
     }
@@ -221,7 +224,10 @@ impl TestSet {
                 },
             };
 
-            new_interface.start(&self);
+            match new_interface.start(&self) {
+                Err(e) => {println!("Unable to start interface: {}", e);},
+                Ok(_) => (),
+            }
             self.interfaces.insert(new_interface.id().clone(), Arc::new(Mutex::new(new_interface)));
         }
     }
