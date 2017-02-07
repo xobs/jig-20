@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
 use std::thread;
 use std::io::{BufRead, BufReader, Write};
+use std::fmt::{Formatter, Display, Error};
 
 #[derive(Debug)]
 enum InterfaceFormat {
@@ -25,6 +26,19 @@ pub enum InterfaceError {
     MakeCommandFailed,
     ExecCommandFailed,
     InvalidType(String),
+}
+
+impl Display for InterfaceError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            &InterfaceError::FileLoadError => write!(f, "Unable to load file"),
+            &InterfaceError::MissingInterfaceSection => write!(f, "Unit file is missing interface section"),
+            &InterfaceError::MissingExecSection => write!(f, "Unit file is missing exec entry"),
+            &InterfaceError::MakeCommandFailed => write!(f, "Unable to make command"),
+            &InterfaceError::ExecCommandFailed => write!(f, "Unable to exec command"),
+            &InterfaceError::InvalidType(ref s) => write!(f, "Invalid interface type: {}", s),
+        }
+    }
 }
 
 #[derive(Debug)]
