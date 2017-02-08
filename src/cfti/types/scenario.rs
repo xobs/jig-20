@@ -1,5 +1,9 @@
 extern crate ini;
+extern crate daggy;
+
 use self::ini::Ini;
+use self::daggy::{Dag, Walker, NodeIndex};
+
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use super::test::Test;
@@ -13,7 +17,11 @@ pub enum ScenarioError {
     MissingScenarioSection,
     TestListNotFound,
     TestNotFound(String),
+    TestDependencyNotFound(String, String),
 }
+
+#[derive(Copy, Clone, Debug)]
+struct TestEdge;
 
 #[derive(Debug)]
 pub struct Scenario {
@@ -122,22 +130,15 @@ impl Scenario {
             Some(s) => Some(s.to_string()),
         };
 
-        let test_names: Vec<String> = match scenario_section.get("Tests") {
+        let test_names = match scenario_section.get("Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
-        // Resolve the test names.
-        let mut tests = vec![];
-        for test_name in test_names.iter() {
-            match loaded_tests.get(test_name) {
-                None => {
-                    ts.debug("scenario", id, format!("Test {} not found when loading scenario", test_name).as_str());
-                    return Some(Err(ScenarioError::TestNotFound(test_name.clone())));
-                },
-                Some(s) => tests.push(s.clone()),
-            }
-        }
+        let tests = match Scenario::build_graph(ts, id, &test_names, &loaded_tests) {
+            Err(e) => return Some(Err(e)),
+            Ok(v) => v,
+        };
 
         Some(Ok(Scenario {
             id: id.to_string(),
@@ -151,6 +152,105 @@ impl Scenario {
             exec_stop_failure: exec_stop_failure,
             controller: controller,
         }))
+    }
+
+    fn visit_node(seen_nodes: &mut HashMap<NodeIndex, bool>,
+                  loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
+                  node: &NodeIndex,
+                  test_graph: &Dag<String, TestEdge>,
+                  node_bucket: &HashMap<String, NodeIndex>,
+                  test_order: &mut Vec<Arc<Mutex<Test>>>) {
+
+        // If this node has been seen already, don't re-visit it.
+        if seen_nodes.get(node).is_some() {
+            return;
+        }
+        seen_nodes.insert(node.clone(), true);
+
+        /*
+        // 1. Visit all parents
+        // 2. Visit ourselves
+        // 3. Visit all children
+        // Build the nodes into a vec
+        */
+
+        let parents = test_graph.parents(*node);
+        for (edge_index, parent_index) in parents.iter(test_graph) {
+            Scenario::visit_node(seen_nodes,
+                                 loaded_tests,
+                                 &parent_index,
+                                 test_graph,
+                                 node_bucket,
+                                 test_order);
+        }
+        let test_item = loaded_tests.get(&test_graph[*node]).unwrap();
+        println!("Visiting node {:?}", test_graph[*node]);
+        test_order.push(test_item.clone());
+
+        let children = test_graph.children(*node);
+        for (edge_index, child_index) in children.iter(test_graph) {
+            Scenario::visit_node(seen_nodes,
+                                 loaded_tests,
+                                 &child_index,
+                                 test_graph,
+                                 node_bucket,
+                                 test_order);
+        }
+    }
+
+    fn build_graph(ts: &TestSet,
+                   id: &str,
+                   test_names: &Vec<String>,
+                   loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
+                   -> Result<Vec<Arc<Mutex<Test>>>, ScenarioError> {
+
+        // Resolve the test names.
+        let mut test_graph = Dag::<String, TestEdge>::new();
+        let mut node_bucket = HashMap::new();
+        for (test_name, _) in loaded_tests {
+            node_bucket.insert(test_name.clone(), test_graph.add_node(test_name.clone()));
+        }
+        for test_name in test_names.iter() {
+            match loaded_tests.get(test_name) {
+                None => {
+                    ts.debug("scenario", id, format!("Test {} not found when loading scenario", test_name).as_str());
+                    return Err(ScenarioError::TestNotFound(test_name.clone()));
+                },
+                Some(s) => {
+                    let ref test = s.lock().unwrap();
+                    for req in test.requirements() {
+                        if let Err(e) = test_graph.add_edge(node_bucket[test_name],
+                                            node_bucket[req],
+                                            TestEdge) {
+                            ts.debug("scenario", id, format!("Test {} failed to find requirement {}: {}", test_name, req, e).as_str());
+                            return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), req.clone()));
+                        }
+                    }
+                    for req in test.suggestions() {
+                        if let Err(e) = test_graph.add_edge(node_bucket[test_name],
+                                            node_bucket[req],
+                                            TestEdge) {
+                            ts.debug("scenario", id, format!("Test {} failed to find requirement {}: {}", test_name, req, e).as_str());
+                            return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), req.clone()));
+                        }
+                    }
+                },
+            }
+        }
+        ts.debug("scenario", id, format!("Created node bucket: {:?}", node_bucket).as_str());
+        ts.debug("scenario", id, format!("Created graph: {:?}", test_graph).as_str());
+
+        let mut seen_nodes = HashMap::new();
+        let mut node_bucket_iter = node_bucket.iter();
+        let (_, some_node) = node_bucket_iter.next().unwrap();
+        let mut test_order = vec![];
+        Scenario::visit_node(&mut seen_nodes,
+                             loaded_tests,
+                             some_node,
+                             &test_graph,
+                             &node_bucket,
+                             &mut test_order);
+        Ok(test_order)
     }
 
     // Broadcast a description of ourselves.
@@ -168,6 +268,10 @@ impl Scenario {
                                                             "description".to_string(),
                                                             self.id(),
                                                             self.description()));
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Tests(self.id(),
+                                                                  self.test_names.clone()));
     }
 
     pub fn kind(&self) -> String {

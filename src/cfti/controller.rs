@@ -31,6 +31,9 @@ pub enum BroadcastMessageContents {
 
     /// PING [string] -- Sends a challenge.  Must respond with PONG [string]
     Ping(String),
+
+    /// TESTS [list of tests] -- Report the tests associated with a scenario
+    Tests(String, Vec<String>),
 }
 
 #[derive(Clone, Debug)]

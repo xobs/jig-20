@@ -41,7 +41,6 @@ pub struct TestSet {
     /// The id of the scenario that we're using.
     scenario: Option<Arc<Mutex<Scenario>>>,
 
-    //messaging: Rc<RefCell<messaging::Messaging>>,
     /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
@@ -363,13 +362,14 @@ impl TestSet {
             Some(s) => s,
         };
         self.scenario = Some(scenario.clone());
+
+        {
+            let ref cx = *(self.controller.lock().unwrap());
+            cx.send_broadcast(self.unit_name().to_string(),
+                            self.unit_type().to_string(),
+                            BroadcastMessageContents::Scenario(scenario_name.clone()));
+        }
         scenario.lock().unwrap().deref_mut().describe();
-
-        let ref cx = *(self.controller.lock().unwrap());
-        cx.send_broadcast(self.unit_name().to_string(),
-                          self.unit_type().to_string(),
-                          BroadcastMessageContents::Scenario(scenario_name.clone()));
-
     }
 
     pub fn unit_type(&self) -> &'static str {

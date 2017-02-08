@@ -199,6 +199,14 @@ impl Test {
                                                                    self.description()));
     }
 
+    pub fn requirements(&self) -> &Vec<String> {
+        &self.requires
+    }
+
+    pub fn suggestions(&self) -> &Vec<String> {
+        &self.suggests
+    }
+
     pub fn kind(&self) -> String {
         "test".to_string()
     }

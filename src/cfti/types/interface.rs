@@ -158,13 +158,13 @@ impl Interface {
         println!("Sending data to interface: {:?}", msg);
         match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
-                                                "LOG {}\t{}\t{}\t{}\t{}\t{}\t",
+                                                "LOG {}\t{}\t{}\t{}\t{}\t{}",
                                                 msg.message_type,
                                                 msg.unit_id,
                                                 msg.unit_type,
                                                 msg.unix_time,
                                                 msg.unix_time_nsecs,
-                                                l.to_string()).unwrap(),
+                                                l.to_string().replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")).unwrap(),
             BroadcastMessageContents::Jig(j) => writeln!(&mut stdin.lock().unwrap(),
                                                 "JIG {}", j.to_string()).unwrap(),
             BroadcastMessageContents::Describe(class, field, name, value) =>
@@ -181,6 +181,8 @@ impl Interface {
                                                 "PING {}", val).unwrap(),
             BroadcastMessageContents::Shutdown(reason) => writeln!(&mut stdin.lock().unwrap(),
                                                 "SHUTDOWN {}", reason).unwrap(),
+            BroadcastMessageContents::Tests(scenario, tests) => writeln!(&mut stdin.lock().unwrap(),
+                                                "TESTS {} {}", scenario, tests.join(" ")).unwrap(),
         }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
