@@ -40,9 +40,9 @@ Verbs sent by the CFTI server:
  * START [scenario] - Sent at the start, when a scenario is begun.
  * RUNNING [test] - Indicates the current test is being run.
  * DESCRIBE [type] [field] [item] [value] - Describes a [type] (scenario, jig, or test) field of [field] (name or description) of item [item] to be [value].  E.g. "DESCRIBE TEST NAME simpletest A simple test".
- * PASS [test] - Indicates a particular item passed.
- * FAIL [test] - Indicates a particular item failed.
- * SKIP [test] - Indicates a test was skipped, likely due to an earlier failure.
+ * PASS [test] [message] - Indicates a particular item passed.
+ * FAIL [test] [reason] - Indicates a particular item failed.
+ * SKIP [test] [reason] - Indicates a test was skipped, likely due to an earlier failure.
  * FINISH [result] [scenario] - Sent after all tests have been run or skipped, or if the test has aborted.  Result is an HTTP error code, with "200" indicating success.
  * LOG [log-item] - Relays logging data via the Interface connection.  See Logger - TSV for the log-item format.
  * PING [id] - Sent occasionally to make sure the program is still alive.  Must echo [id] back.

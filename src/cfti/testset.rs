@@ -152,7 +152,7 @@ impl TestSet {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(&self, item_name, path_str) {
+            let new_jig = match Jig::new(&self, item_name, path_str, self.controller.clone()) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,
@@ -230,6 +230,9 @@ impl TestSet {
 
             self.interfaces.insert(new_interface.id().clone(), Arc::new(Mutex::new(new_interface)));
         }
+        if let Some(ref jig) = self.jig.as_ref() {
+            jig.lock().unwrap().describe();
+        }
     }
 
     fn load_tests(&mut self, test_paths: &Vec<PathBuf>) {
@@ -251,6 +254,7 @@ impl TestSet {
                 },
             };
 
+            new_test.describe();
             self.tests.insert(new_test.id().clone(), Arc::new(Mutex::new(new_test)));
         }
     }
@@ -279,10 +283,13 @@ impl TestSet {
             let new_scenario_id = new_scenario.id().clone();
             let new_scenario = Arc::new(Mutex::new(new_scenario));
 
-            if Some(new_scenario_id.clone()) == default_scenario_name {
-                self.scenario = Some(new_scenario.clone());
+            self.scenarios.insert(new_scenario_id.clone(), new_scenario);
+
+            if let Some(default_name) = default_scenario_name.clone() {
+                if new_scenario_id == default_name {
+                    self.set_scenario(&new_scenario_id);
+                }
             }
-            self.scenarios.insert(new_scenario_id, new_scenario);
         }
 
         for (_, scenario) in self.scenarios.iter() {
@@ -356,6 +363,12 @@ impl TestSet {
         };
         self.scenario = Some(scenario.clone());
         scenario.lock().unwrap().deref_mut().describe();
+
+        let ref cx = *(self.controller.lock().unwrap());
+        cx.send_broadcast(self.unit_name().to_string(),
+                          self.unit_type().to_string(),
+                          MessageContents::Scenario(scenario_name.clone()));
+
     }
 
     pub fn unit_type(&self) -> &'static str {

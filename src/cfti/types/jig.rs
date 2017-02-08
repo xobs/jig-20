@@ -4,6 +4,8 @@ use std::path::Path;
 use super::super::process;
 use super::super::config;
 use super::super::testset::TestSet;
+use std::sync::{Arc, Mutex};
+use super::super::controller::{self, MessageContents};
 
 #[derive(Debug)]
 pub enum JigError {
@@ -25,10 +27,16 @@ pub struct Jig {
 
     /// DefaultScenario: Name of the scenario to run by default.
     default_scenario: Option<String>,
+
+    /// The controller where messages go.
+    controller: Arc<Mutex<controller::Controller>>,
 }
 
 impl Jig {
-    pub fn new(ts: &TestSet, id: &str, path: &str) -> Option<Result<Jig, JigError>> {
+    pub fn new(ts: &TestSet,
+               id: &str,
+               path: &str,
+               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -98,19 +106,40 @@ impl Jig {
             description: description,
 
             default_scenario: default_scenario,
+            controller: controller,
         }))
     }
 
-    pub fn name(&self) -> &String {
-        &self.name
+    pub fn describe(&self) {
+        let controller = self.controller.lock().unwrap();
+        controller.send_broadcast(self.id(),
+                                self.kind(),
+                                MessageContents::Describe(self.kind(),
+                                                          "name".to_string(),
+                                                          self.id(),
+                                                          self.name()));
+        controller.send_broadcast(self.id().clone(),
+                                self.kind(),
+                                MessageContents::Describe(self.kind(),
+                                                          "description".to_string(),
+                                                          self.id(),
+                                                          self.description()));
     }
 
-    pub fn description(&self) -> &String {
-        &self.description
+    pub fn kind(&self) -> String {
+        "jig".to_string()
     }
 
-    pub fn id(&self) -> &String {
-        &self.id
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    pub fn id(&self) -> String {
+        self.id.clone()
     }
 
     pub fn default_scenario(&self) -> &Option<String> {

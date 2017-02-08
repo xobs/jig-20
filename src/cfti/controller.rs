@@ -121,23 +121,25 @@ impl Controller {
             // ourselves.
             'retry_mutex: loop {
 
-                let ref mut me = myself.lock().unwrap();
-                let mut testset_option_ref = me.testset.lock().unwrap();
-                let mut testset_option = testset_option_ref.deref_mut();
-                let ref mut testset_ref = match testset_option {
-                    &mut None => {
-                        Controller::broadcast_internal(&bus,
-                                                    MessageContents::Log("TestSet is None".to_string()));
-                        continue 'new_msg;
-                    },
-                    &mut Some(ref mut s) => s,
-                };
-
-                let ref mut testset_ref = match testset_ref.try_lock() {
+                // Get a reference to the testset, but let 'myself' be
+                // unlocked at the end of the whole exercise.
+                let ref mut testset = match myself.try_lock() {
                     Err(_) => continue 'retry_mutex,
-                    Ok(r) => r,
+                    Ok(mut me) => {
+                        let me = me.deref_mut();
+                        match *(me.testset.lock().unwrap()) {
+                            None => {
+                                Controller::broadcast_internal(&bus,
+                                                    MessageContents::Log("TestSet is None".to_string()));
+                                continue 'new_msg;
+                            },
+                            Some(ref mut s) => {
+                                s.clone()
+                            },
+                        }
+                    },
                 };
-                let mut testset = testset_ref.deref_mut();
+                let ref mut testset = testset.lock().unwrap();
 
                 match msg.message {
                     /// Log messages: simply rebroadcast them onto the broadcast bus.
@@ -160,7 +162,8 @@ impl Controller {
                     },
 
                     MessageContents::Shutdown(s) => {
-                        let mut should_exit = me.should_exit.lock().unwrap();
+                        let me = myself.lock().unwrap();
+                        let mut should_exit = (*me).should_exit.lock().unwrap();
                         println!("Shutting down: {}", s);
                         *(should_exit.deref_mut()) = true;
                     },

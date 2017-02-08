@@ -156,21 +156,33 @@ impl Scenario {
     // Broadcast a description of ourselves.
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id().clone(),
-                                "scenario".to_string(),
-                                controller::MessageContents::Describe("scenario".to_string(),
+        controller.send_broadcast(self.id(),
+                                self.kind(),
+                                controller::MessageContents::Describe(self.kind(),
                                                                       "name".to_string(),
-                                                                      self.id().clone(),
-                                                                      self.name.clone()));
+                                                                      self.id(),
+                                                                      self.name()));
         controller.send_broadcast(self.id().clone(),
-                                "scenario".to_string(),
-                                controller::MessageContents::Describe("scenario".to_string(),
+                                self.kind(),
+                                controller::MessageContents::Describe(self.kind(),
                                                                       "description".to_string(),
-                                                                      self.id().clone(),
-                                                                      self.description.clone()));
+                                                                      self.id(),
+                                                                      self.description()));
     }
 
-    pub fn id(&self) -> &String {
-        return &self.id;
+    pub fn kind(&self) -> String {
+        "scenario".to_string()
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn description(&self) -> String {
+        self.description.clone()
+    }
+
+    pub fn id(&self) -> String {
+        self.id.clone()
     }
 }
