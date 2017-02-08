@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use cfti::types::Jig;
 use std::collections::HashMap;
 use super::super::testset::TestSet;
-use super::super::controller;
+use super::super::controller::{self, BroadcastMessageContents};
 
 #[derive(Debug)]
 pub enum TestError {
@@ -187,16 +187,16 @@ impl Test {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
                                 self.kind(),
-                                controller::MessageContents::Describe(self.kind(),
-                                                                      "name".to_string(),
-                                                                      self.id(),
-                                                                      self.name()));
-        controller.send_broadcast(self.id().clone(),
+                                BroadcastMessageContents::Describe(self.kind(),
+                                                                   "name".to_string(),
+                                                                   self.id(),
+                                                                   self.name()));
+        controller.send_broadcast(self.id(),
                                 self.kind(),
-                                controller::MessageContents::Describe(self.kind(),
-                                                                      "description".to_string(),
-                                                                      self.id(),
-                                                                      self.description()));
+                                BroadcastMessageContents::Describe(self.kind(),
+                                                                   "description".to_string(),
+                                                                   self.id(),
+                                                                   self.description()));
     }
 
     pub fn kind(&self) -> String {

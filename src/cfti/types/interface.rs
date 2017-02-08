@@ -3,7 +3,7 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
-use super::super::controller::{self, MessageContents};
+use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
 use super::super::process;
 use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
@@ -154,10 +154,10 @@ impl Interface {
         self.hello = hello;
     }
 
-    fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
+    fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
         println!("Sending data to interface: {:?}", msg);
         match msg.message {
-            MessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}\t",
                                                 msg.message_type,
                                                 msg.unit_id,
@@ -165,31 +165,25 @@ impl Interface {
                                                 msg.unix_time,
                                                 msg.unix_time_nsecs,
                                                 l.to_string()).unwrap(),
-            MessageContents::Jig(j) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Jig(j) => writeln!(&mut stdin.lock().unwrap(),
                                                 "JIG {}", j.to_string()).unwrap(),
-            MessageContents::Describe(class, field, name, value) =>
+            BroadcastMessageContents::Describe(class, field, name, value) =>
                                         writeln!(&mut stdin.lock().unwrap(),
                                         "DESCRIBE {} {} {} {}",
                                         class, field, name, value).unwrap(),
-            MessageContents::Scenario(name) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Scenario(name) => writeln!(&mut stdin.lock().unwrap(),
                                                 "SCENARIO {}", name).unwrap(),
-            MessageContents::Scenarios(list) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Scenarios(list) => writeln!(&mut stdin.lock().unwrap(),
                                                 "SCENARIOS {}", list.join(" ")).unwrap(),
-            MessageContents::Hello(name) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Hello(name) => writeln!(&mut stdin.lock().unwrap(),
                                                 "HELLO {}", name).unwrap(),
-            MessageContents::Ping(val) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Ping(val) => writeln!(&mut stdin.lock().unwrap(),
                                                 "PING {}", val).unwrap(),
-
-            MessageContents::GetJig => (),
-            MessageContents::GetScenarios => (),
-            MessageContents::GetTests => (),
-            MessageContents::StartTests => (),
-            MessageContents::AbortTests => (),
-            MessageContents::Pong(_) => (),
-            MessageContents::Shutdown(_) => (),
+            BroadcastMessageContents::Shutdown(reason) => writeln!(&mut stdin.lock().unwrap(),
+                                                "SHUTDOWN {}", reason).unwrap(),
         }
     }
-    fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::Message) {
+    fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
     }
 
     fn text_read(line: String, id: &String, controller: &mut controller::Controller) {
@@ -199,17 +193,17 @@ impl Interface {
         words.remove(0);
 
         let response = match verb.as_str() {
-            "scenario" => MessageContents::Scenario(words[0].to_lowercase()),
-            "scenarios" => MessageContents::GetScenarios,
-            "tests" => MessageContents::GetTests,
-            "start" => MessageContents::StartTests,
-            "abort" => MessageContents::AbortTests,
-            "pong" => MessageContents::Pong(words[0].to_lowercase()),
-            "jig" => MessageContents::GetJig,
-            "hello" => MessageContents::Hello(words.join(" ")),
-            "shutdown" => MessageContents::Shutdown(words.join(" ")),
-            "log" => MessageContents::Log(words.join(" ")),
-            _ => MessageContents::Log(format!("Unimplemented verb: {}", verb)),
+            "scenario" => ControlMessageContents::Scenario(words[0].to_lowercase()),
+            "scenarios" => ControlMessageContents::GetScenarios,
+            "tests" => ControlMessageContents::GetTests,
+            "start" => ControlMessageContents::StartTests,
+            "abort" => ControlMessageContents::AbortTests,
+            "pong" => ControlMessageContents::Pong(words[0].to_lowercase()),
+            "jig" => ControlMessageContents::GetJig,
+            "hello" => ControlMessageContents::Hello(words.join(" ")),
+            "shutdown" => ControlMessageContents::Shutdown(words.join(" ")),
+            "log" => ControlMessageContents::Log(words.join(" ")),
+            _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
         controller.send_control(id.clone(), "interface".to_string(), &response);

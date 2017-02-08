@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use super::test::Test;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
-use super::super::controller;
+use super::super::controller::{self, BroadcastMessageContents};
 
 #[derive(Debug)]
 pub enum ScenarioError {
@@ -157,17 +157,17 @@ impl Scenario {
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
-                                self.kind(),
-                                controller::MessageContents::Describe(self.kind(),
-                                                                      "name".to_string(),
-                                                                      self.id(),
-                                                                      self.name()));
-        controller.send_broadcast(self.id().clone(),
-                                self.kind(),
-                                controller::MessageContents::Describe(self.kind(),
-                                                                      "description".to_string(),
-                                                                      self.id(),
-                                                                      self.description()));
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                          "name".to_string(),
+                                                          self.id(),
+                                                          self.name()));
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                            "description".to_string(),
+                                                            self.id(),
+                                                            self.description()));
     }
 
     pub fn kind(&self) -> String {

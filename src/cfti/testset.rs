@@ -20,7 +20,8 @@ use std::sync::{Arc, Mutex};
 use std::time;
 use std::ops::DerefMut;
 
-use super::controller::{Message, MessageContents};
+use super::controller::{BroadcastMessage, BroadcastMessageContents,
+                        ControlMessage,   ControlMessageContents};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
@@ -137,13 +138,13 @@ impl TestSet {
             Err(_) => time::Duration::new(0, 0),
         };
 
-        self.controller.lock().unwrap().control_message(&Message {
+        self.controller.lock().unwrap().control_message(&ControlMessage {
             message_type: 2,
             unit_id: unit_id.to_string(),
             unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
-            message: MessageContents::Log(msg.to_string()),
+            message: ControlMessageContents::Log(msg.to_string()),
         });
     }
 
@@ -199,12 +200,12 @@ impl TestSet {
     }
 
     pub fn monitor_logs<F>(&self, logger_func: F)
-        where F: Send + 'static + Fn(Message) {
+        where F: Send + 'static + Fn(BroadcastMessage) {
         self.controller.lock().unwrap().deref_mut().add_logger(logger_func);
     }
 
     pub fn monitor_broadcasts<F>(&self, broadcast_func: F)
-        where F: Send + 'static + Fn(Message) {
+        where F: Send + 'static + Fn(BroadcastMessage) {
         self.controller.lock().unwrap().deref_mut().add_broadcast(broadcast_func);
     }
 
@@ -299,7 +300,7 @@ impl TestSet {
         let ref cx = *(self.controller.lock().unwrap());
         cx.send_broadcast(self.unit_name().to_string(),
                           self.unit_type().to_string(),
-                          MessageContents::Scenarios(self.scenarios.keys().map(|x| x.to_string()).collect()));
+                          BroadcastMessageContents::Scenarios(self.scenarios.keys().map(|x| x.to_string()).collect()));
     }
 
     pub fn get_jig_default_scenario(&self) -> Option<String> {
@@ -367,7 +368,7 @@ impl TestSet {
         let ref cx = *(self.controller.lock().unwrap());
         cx.send_broadcast(self.unit_name().to_string(),
                           self.unit_type().to_string(),
-                          MessageContents::Scenario(scenario_name.clone()));
+                          BroadcastMessageContents::Scenario(scenario_name.clone()));
 
     }
 

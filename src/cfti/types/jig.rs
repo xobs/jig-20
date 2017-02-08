@@ -5,7 +5,7 @@ use super::super::process;
 use super::super::config;
 use super::super::testset::TestSet;
 use std::sync::{Arc, Mutex};
-use super::super::controller::{self, MessageContents};
+use super::super::controller::{self, BroadcastMessageContents};
 
 #[derive(Debug)]
 pub enum JigError {
@@ -113,17 +113,17 @@ impl Jig {
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
-                                self.kind(),
-                                MessageContents::Describe(self.kind(),
-                                                          "name".to_string(),
-                                                          self.id(),
-                                                          self.name()));
-        controller.send_broadcast(self.id().clone(),
-                                self.kind(),
-                                MessageContents::Describe(self.kind(),
-                                                          "description".to_string(),
-                                                          self.id(),
-                                                          self.description()));
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                                     "name".to_string(),
+                                                                     self.id(),
+                                                                     self.name()));
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                                     "description".to_string(),
+                                                                     self.id(),
+                                                                     self.description()));
     }
 
     pub fn kind(&self) -> String {

@@ -46,7 +46,7 @@ Verbs sent by the CFTI server:
  * FINISH [result] [scenario] - Sent after all tests have been run or skipped, or if the test has aborted.  Result is an HTTP error code, with "200" indicating success.
  * LOG [log-item] - Relays logging data via the Interface connection.  See Logger - TSV for the log-item format.
  * PING [id] - Sent occasionally to make sure the program is still alive.  Must echo [id] back.
- * EXIT - Shuts down the server.
+ * SHUTDOWN [reason] - Shuts down the server for the given reason.
 
 Verbs that may be sent by the CFTI client:
 

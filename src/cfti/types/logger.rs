@@ -3,7 +3,7 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
-use super::super::controller::{Message, MessageContents};
+use super::super::controller::{BroadcastMessage, BroadcastMessageContents};
 use super::super::process;
 use std::process::Stdio;
 use std::io::Write;
@@ -163,7 +163,7 @@ impl Logger {
         match format {
             LoggerFormat::TabSeparatedValue => ts.monitor_logs(move |msg| {
                 match msg {
-                    Message { message: MessageContents::Log(log), .. } => 
+                    BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
                         writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
                                         msg.message_type,
                                         msg.unit_id,
@@ -176,7 +176,7 @@ impl Logger {
             }),
             LoggerFormat::JSON => ts.monitor_logs(move |msg| {
                 match msg {
-                    Message { message: MessageContents::Log(log), .. } => {
+                    BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
                         let mut object = json::JsonValue::new_object();
                         object["message_type"] = msg.message_type.into();
                         object["unit"] = msg.unit_id.into();
