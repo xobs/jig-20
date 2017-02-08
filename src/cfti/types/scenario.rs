@@ -154,7 +154,7 @@ impl Scenario {
         }))
     }
 
-    fn visit_node(seen_nodes: &mut HashMap<NodeIndex, bool>,
+    fn visit_node(seen_nodes: &mut HashMap<NodeIndex, ()>,
                   loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
                   node: &NodeIndex,
                   test_graph: &Dag<String, TestEdge>,
@@ -162,10 +162,9 @@ impl Scenario {
                   test_order: &mut Vec<Arc<Mutex<Test>>>) {
 
         // If this node has been seen already, don't re-visit it.
-        if seen_nodes.get(node).is_some() {
+        if seen_nodes.insert(node.clone(), ()).is_some() {
             return;
         }
-        seen_nodes.insert(node.clone(), true);
 
         /*
         // 1. Visit all parents
@@ -184,7 +183,6 @@ impl Scenario {
                                  test_order);
         }
         let test_item = loaded_tests.get(&test_graph[*node]).unwrap();
-        println!("Visiting node {:?}", test_graph[*node]);
         test_order.push(test_item.clone());
 
         let children = test_graph.children(*node);
@@ -207,42 +205,66 @@ impl Scenario {
         // Resolve the test names.
         let mut test_graph = Dag::<String, TestEdge>::new();
         let mut node_bucket = HashMap::new();
+
+        // Create a node for each available test.  We will add
+        // edges later on as we traverse the dependency lists.
         for (test_name, _) in loaded_tests {
-            node_bucket.insert(test_name.clone(), test_graph.add_node(test_name.clone()));
+            node_bucket.insert(test_name.clone(),
+                               test_graph.add_node(test_name.clone()));
         }
-        for test_name in test_names.iter() {
-            match loaded_tests.get(test_name) {
+
+        let mut to_resolve = test_names.clone();
+        let mut resolved = HashMap::new();
+        loop {
+            // Resolve every test.
+            if to_resolve.is_empty() {
+                break;
+            }
+
+            // If this test has been resolved, skip it.
+            let test_name = to_resolve.remove(0);
+            if resolved.get(&test_name).is_some() {
+                continue;
+            }
+            resolved.insert(test_name.clone(), ());
+
+            let ref mut test = match loaded_tests.get(&test_name) {
                 None => {
                     ts.debug("scenario", id, format!("Test {} not found when loading scenario", test_name).as_str());
                     return Err(ScenarioError::TestNotFound(test_name.clone()));
                 },
-                Some(s) => {
-                    let ref test = s.lock().unwrap();
-                    for req in test.requirements() {
-                        if let Err(e) = test_graph.add_edge(node_bucket[test_name],
-                                            node_bucket[req],
-                                            TestEdge) {
-                            ts.debug("scenario", id, format!("Test {} failed to find requirement {}: {}", test_name, req, e).as_str());
-                            return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), req.clone()));
-                        }
-                    }
-                    for req in test.suggestions() {
-                        if let Err(e) = test_graph.add_edge(node_bucket[test_name],
-                                            node_bucket[req],
-                                            TestEdge) {
-                            ts.debug("scenario", id, format!("Test {} failed to find requirement {}: {}", test_name, req, e).as_str());
-                            return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), req.clone()));
-                        }
-                    }
-                },
+                Some(s) => s.lock().unwrap(),
+            };
+
+            // Add an edge for every test requirement.
+            for requirement in test.requirements() {
+                to_resolve.push(requirement.clone());
+                if let Err(e) = test_graph.add_edge(node_bucket[requirement],
+                                                    node_bucket[&test_name],
+                                                    TestEdge) {
+                    ts.debug("scenario",
+                             id,
+                             format!("Test {} failed to find requirement {}: {}", test_name, requirement, e).as_str());
+                    return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), requirement.clone()));
+                }
+            }
+
+            // Also add an edge for every test suggestion.
+            for requirement in test.suggestions() {
+                to_resolve.push(requirement.clone());
+                if let Err(e) = test_graph.add_edge(node_bucket[requirement],
+                                                    node_bucket[&test_name],
+                                                    TestEdge) {
+                    ts.debug("scenario",
+                             id,
+                             format!("Test {} failed to find requirement {}: {}", test_name, requirement, e).as_str());
+                    return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), requirement.clone()));
+                }
             }
         }
-        ts.debug("scenario", id, format!("Created node bucket: {:?}", node_bucket).as_str());
-        ts.debug("scenario", id, format!("Created graph: {:?}", test_graph).as_str());
 
         let mut seen_nodes = HashMap::new();
-        let mut node_bucket_iter = node_bucket.iter();
-        let (_, some_node) = node_bucket_iter.next().unwrap();
+        let some_node = node_bucket.get(&test_names[0]).unwrap();
         let mut test_order = vec![];
         Scenario::visit_node(&mut seen_nodes,
                              loaded_tests,
@@ -250,6 +272,10 @@ impl Scenario {
                              &test_graph,
                              &node_bucket,
                              &mut test_order);
+
+        use std::ops::Deref;
+        let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id()).collect();
+        ts.debug("scenario", id, format!("Vector order: {:?}", vec_names).as_str());
         Ok(test_order)
     }
 
