@@ -22,6 +22,30 @@ pub enum ScenarioError {
     CircularDependency(String, String),
 }
 
+struct GraphResult {
+    graph: Dag<String, TestEdge>,
+    node_bucket: HashMap<String, NodeIndex>,
+    tests: Vec<Arc<Mutex<Test>>>,
+}
+
+#[derive(Debug)]
+enum ScenarioState {
+    /// The scenario has been loaded, and is ready to run.
+    Idle,
+
+    /// The scenario has started, but is waiting for ExecStart to finish
+    PreStart,
+
+    /// The scenario is running, and is on step (u32)
+    Running(u32),
+
+    /// The scenario has succeeded, and is running the ExecStopSuccess step
+    PostSuccess,
+
+    /// The scenario has failed, and is running the ExecStopFailure step
+    PostFailure,
+}
+
 #[derive(Copy, Clone, Debug)]
 struct TestEdge;
 
@@ -39,7 +63,7 @@ pub struct Scenario {
     /// timeout: Maximum number of seconds this scenario should take.
     timeout: u32,
 
-    /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
+    /// tests: A vector containing all the tests in this scenario.
     pub tests: Vec<Arc<Mutex<Test>>>,
 
     /// exec_start: A command to run when starting tests.
@@ -53,6 +77,13 @@ pub struct Scenario {
 
     /// The controller where messages go.
     controller: Arc<Mutex<controller::Controller>>,
+
+    /// What the current state of the scenario is.
+    state: ScenarioState,
+
+    // These should come in handy, I think.
+    graph: Dag<String, TestEdge>,
+    node_bucket: HashMap<String, NodeIndex>,
 }
 
 impl Scenario {
@@ -134,14 +165,14 @@ impl Scenario {
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
-        let tests = match Scenario::build_graph(ts, id, &test_names, &loaded_tests) {
+        let graph_result = match Self::build_graph(ts, id, &test_names, &loaded_tests) {
             Err(e) => return Some(Err(e)),
             Ok(v) => v,
         };
 
         Some(Ok(Scenario {
             id: id.to_string(),
-            tests: tests,
+            tests: graph_result.tests,
             timeout: timeout,
             name: name,
             description: description,
@@ -149,6 +180,9 @@ impl Scenario {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
             controller: controller,
+            state: ScenarioState::Idle,
+            graph: graph_result.graph,
+            node_bucket: graph_result.node_bucket,
         }))
     }
 
@@ -173,24 +207,24 @@ impl Scenario {
 
         let parents = test_graph.parents(*node);
         for (edge_index, parent_index) in parents.iter(test_graph) {
-            Scenario::visit_node(seen_nodes,
-                                 loaded_tests,
-                                 &parent_index,
-                                 test_graph,
-                                 node_bucket,
-                                 test_order);
+            Self::visit_node(seen_nodes,
+                             loaded_tests,
+                             &parent_index,
+                             test_graph,
+                             node_bucket,
+                             test_order);
         }
         let test_item = loaded_tests.get(&test_graph[*node]).unwrap();
         test_order.push(test_item.clone());
 
         let children = test_graph.children(*node);
         for (edge_index, child_index) in children.iter(test_graph) {
-            Scenario::visit_node(seen_nodes,
-                                 loaded_tests,
-                                 &child_index,
-                                 test_graph,
-                                 node_bucket,
-                                 test_order);
+            Self::visit_node(seen_nodes,
+                             loaded_tests,
+                             &child_index,
+                             test_graph,
+                             node_bucket,
+                             test_order);
         }
     }
 
@@ -198,7 +232,7 @@ impl Scenario {
                    id: &str,
                    test_names: &Vec<String>,
                    loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
-                   -> Result<Vec<Arc<Mutex<Test>>>, ScenarioError> {
+                   -> Result<GraphResult, ScenarioError> {
 
         // Resolve the test names.
         let mut test_graph = Dag::<String, TestEdge>::new();
@@ -263,18 +297,23 @@ impl Scenario {
         }
 
         let mut seen_nodes = HashMap::new();
-        let some_node = node_bucket.get(&test_names[0]).unwrap();
         let mut test_order = vec![];
-        Scenario::visit_node(&mut seen_nodes,
-                             loaded_tests,
-                             some_node,
-                             &test_graph,
-                             &node_bucket,
-                             &mut test_order);
-
+        {
+            let some_node = node_bucket.get(&test_names[0]).unwrap();
+            Self::visit_node(&mut seen_nodes,
+                            loaded_tests,
+                            some_node,
+                            &test_graph,
+                            &node_bucket,
+                            &mut test_order);
+        }
         let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id()).collect();
         ts.debug("scenario", id, format!("Vector order: {:?}", vec_names).as_str());
-        Ok(test_order)
+        Ok(GraphResult {
+            tests: test_order,
+            graph: test_graph,
+            node_bucket: node_bucket,
+        })
     }
 
     // Start running a scenario
