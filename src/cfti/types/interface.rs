@@ -146,8 +146,8 @@ impl Interface {
        }))
     }
 
-    pub fn id(&self) -> &String {
-        return &self.id;
+    pub fn id(&self) -> &str {
+        return &self.id.as_ref();
     }
 
     pub fn set_hello(&mut self, hello: String) {
@@ -159,7 +159,7 @@ impl Interface {
         match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}",
-                                                msg.message_type,
+                                                msg.message_class,
                                                 msg.unit_id,
                                                 msg.unit_type,
                                                 msg.unix_time,
@@ -231,7 +231,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        controller.send_control(id.clone(), "interface".to_string(), &response);
+        controller.send_control(id, "interface", &response);
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {

@@ -10,7 +10,7 @@ use std::ops::Deref;
 use super::test::Test;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
-use super::super::controller::{self, BroadcastMessageContents};
+use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
 
 #[derive(Debug)]
 pub enum ScenarioError {
@@ -79,7 +79,10 @@ pub struct Scenario {
     controller: Arc<Mutex<controller::Controller>>,
 
     /// What the current state of the scenario is.
-    state: ScenarioState,
+    state: Arc<Mutex<ScenarioState>>,
+
+    /// How many tests have failed.
+    failures: Arc<Mutex<u32>>,
 
     // These should come in handy, I think.
     graph: Dag<String, TestEdge>,
@@ -180,7 +183,8 @@ impl Scenario {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
             controller: controller,
-            state: ScenarioState::Idle,
+            state: Arc::new(Mutex::new(ScenarioState::Idle)),
+            failures: Arc::new(Mutex::new(0)),
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
         }))
@@ -307,7 +311,7 @@ impl Scenario {
                             &node_bucket,
                             &mut test_order);
         }
-        let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id()).collect();
+        let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
         ts.debug("scenario", id, format!("Vector order: {:?}", vec_names).as_str());
         Ok(GraphResult {
             tests: test_order,
@@ -316,51 +320,167 @@ impl Scenario {
         })
     }
 
+    fn find_next_state(&self) -> ScenarioState {
+        match self.state.lock().unwrap().deref() {
+            &ScenarioState::Idle => {
+                // Reset the number of errors.
+                *(self.failures.lock().unwrap()) = 0;
+
+                let controller = self.controller.lock().unwrap();
+                controller.send_broadcast(self.id(),
+                                        self.kind(),
+                                        BroadcastMessageContents::Start(self.id().to_string()));
+
+                // If there's a preroll script, run that
+                if let Some(ref s) = self.exec_start {
+                    ScenarioState::PreStart
+
+                // If there are no tests, jump straight to the end
+                } else if self.tests.is_empty() {
+                    // Run a post-execution success program, if present
+                    if self.exec_stop_success.is_some() {
+                        ScenarioState::PostSuccess
+                    }
+                    else {
+                        ScenarioState::Idle
+                    }
+                }
+
+                // Start running test 0
+                else {
+                    ScenarioState::Running(0)
+                }
+            },
+
+            // If we've just run the PreStart command, see if we need
+            // to run test 0, or skip straight to Success.
+            &ScenarioState::PreStart =>
+                if self.tests.is_empty() {
+                    if self.exec_stop_success.is_some() {
+                        ScenarioState::PostSuccess
+                    }
+                    else {
+                        ScenarioState::Idle
+                    }
+                }
+                else {
+                    ScenarioState::Running(0)
+                },
+
+            // If we just finished running a test, determine the next test to run.
+            &ScenarioState::Running(i) => {
+                let ref current_test = self.tests[i as usize].lock().unwrap();
+                ScenarioState::Running(i + 1)
+            },
+            &ScenarioState::PostFailure => ScenarioState::Idle,
+            &ScenarioState::PostSuccess => ScenarioState::Idle,
+        }
+    }
+
+    // Given the current state, figure out the next test to run (if any)
+    fn start_next_test(&self) {
+        let new_state = self.find_next_state();
+
+        let failures = *(self.failures.lock().unwrap());
+        match new_state {
+            // If we're transitioning to the idle state, it means we just finished
+            // running some tests.  Broadcast the result.
+            ScenarioState::Idle => {
+                if failures > 0 {
+                    self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
+                                                                    failures + 500,
+                                                                    "At least one test failed".to_string()));
+                }
+                else {
+                    self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
+                                                                    200,
+                                                                    "Finished tests".to_string()));
+                }
+            },
+
+            // If we want to run a preroll command and it fails, log it and start the tests.
+            ScenarioState::PreStart => {
+                // unwrap is safe because we know a PreStart command exists.
+                if let Some(ref cmd) = self.exec_start {
+                    if let Err(e) = self.run_command(cmd.clone(),
+                                                    ControlMessageContents::AdvanceScenario) {
+                        self.log(format!("Unable to run ExecPre command: {:?}", e).as_str());
+                        self.start_next_test();
+                    }
+                }
+            },
+            ScenarioState::Running(next_step) => (),
+            ScenarioState::PostSuccess => (),
+            ScenarioState::PostFailure => (),
+        }
+    }
+
+    fn run_command(&self, command: String, finish_message: ControlMessageContents) -> Result<(), ScenarioError> {
+/*
+        let mut cmd = match process::make_command(self.exec_start.as_str()) {
+            Ok(s) => s,
+            Err(e) => { ts.debug("interface", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
+        };
+        cmd.stdout(Stdio::piped());
+        cmd.stdin(Stdio::piped());
+        cmd.stderr(Stdio::inherit());
+        match self.working_directory {
+            None => (),
+            Some(ref s) => {cmd.current_dir(s); },
+        }
+
+        let child = match cmd.spawn() {
+            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(InterfaceError::ExecCommandFailed) },
+            Ok(s) => s,
+        };
+*/
+        Ok(())
+    }
+
     // Start running a scenario
     pub fn start(&self) {
-        let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Start(self.id()));
+        self.start_next_test();
     }
 
     // Broadcast a description of ourselves.
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
                                                           "name".to_string(),
-                                                          self.id(),
-                                                          self.name()));
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
-                                                            "description".to_string(),
-                                                            self.id(),
-                                                            self.description()));
+                                                          self.id().to_string(),
+                                                          self.name().to_string()));
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                          "description".to_string(),
+                                                          self.id().to_string(),
+                                                          self.description().to_string()));
 
-        let test_names: Vec<String> = self.tests.iter().map(|x| x.lock().unwrap().deref().id()).collect();
+        let test_names: Vec<String> = self.tests.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
 
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Tests(self.id(),
-                                                                  test_names));
+        self.broadcast(BroadcastMessageContents::Tests(self.id().to_string(), test_names));
     }
 
-    pub fn kind(&self) -> String {
-        "scenario".to_string()
+    pub fn kind(&self) -> &str {
+        "scenario"
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn description(&self) -> &str {
+        self.description.as_str()
     }
 
-    pub fn id(&self) -> String {
-        self.id.clone()
+    pub fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn broadcast(&self, msg: BroadcastMessageContents) {
+        let controller = self.controller.lock().unwrap();
+        controller.send_broadcast(self.id(), self.kind(), msg);
+    }
+
+    fn log(&self, msg: &str) {
+        self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
     }
 }

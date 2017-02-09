@@ -61,13 +61,17 @@ pub enum ControlMessageContents {
     StartTests(Option<String>),
     AbortTests,
     Shutdown(Option<String>),
+
+    /// Causes the currently-executing Scenario to move to the next step.
+    AdvanceScenario,
 }
 
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
 
-    /// A numerical indication of the type of message. 0 is internal messages such as test-start, 1 is test log output from various units, 2 is internal debug log.
-    pub message_type: u32,
+    /// A string identifying whta type of message it is.  Common predefined values
+    /// are "internal-debug", "internal-status", and "normal".
+    pub message_class: String,
 
     /// The name of the unit that generated the message.
     pub unit_id: String,
@@ -88,8 +92,8 @@ pub struct BroadcastMessage {
 #[derive(Clone, Debug)]
 pub struct ControlMessage {
 
-    /// A numerical indication of the type of message. 0 is internal messages such as test-start, 1 is test log output from various units, 2 is internal debug log.
-    pub message_type: u32,
+    /// A string indicating what sort of message it is.
+    pub message_class: String,
 
     /// The name of the unit that generated the message.
     pub unit_id: String,
@@ -176,7 +180,7 @@ impl Controller {
                         let me = me.deref_mut();
                         match *(me.testset.lock().unwrap()) {
                             None => {
-                                Controller::broadcast_internal(&bus,
+                                Self::broadcast_internal(&bus,
                                                     BroadcastMessageContents::Log("TestSet is None".to_string()));
                                 continue 'new_msg;
                             },
@@ -192,7 +196,7 @@ impl Controller {
                     /// Log messages: simply rebroadcast them onto the broadcast bus.
                     ControlMessageContents::Log(l) => {
                         let bc_msg = BroadcastMessage {
-                            message_type: msg.message_type,
+                            message_class: msg.message_class,
                             unit_id: msg.unit_id,
                             unit_type: msg.unit_type,
                             unix_time: msg.unix_time,
@@ -205,7 +209,7 @@ impl Controller {
                     // Get the current jig information and broadcast it on the bus.
                     ControlMessageContents::GetJig => {
                         let jig_name = testset.get_jig_name();
-                        Controller::broadcast_internal(&bus, BroadcastMessageContents::Jig(jig_name));
+                        Self::broadcast_internal(&bus, BroadcastMessageContents::Jig(jig_name));
                     },
 
                     // Set the current scenario to the specified one.
@@ -234,6 +238,7 @@ impl Controller {
                     // Start running tests.  Unimplemented.
                     ControlMessageContents::StartTests(s) => testset.start_scenario(s),
                     ControlMessageContents::AbortTests => (),
+                    ControlMessageContents::AdvanceScenario => (),
 
                     ControlMessageContents::GetScenarios => testset.send_scenarios(),
                     ControlMessageContents::GetTests(s) => testset.send_tests(s),
@@ -244,24 +249,6 @@ impl Controller {
                 continue 'new_msg;
             }
         };
-    }
-
-    fn broadcast_internal(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
-                          msg: BroadcastMessageContents) {
-        let now = time::SystemTime::now();
-        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => time::Duration::new(0, 0),
-        };
-
-        bus.lock().unwrap().deref_mut().broadcast(BroadcastMessage {
-            message_type: 2,
-            unit_id: "internal".to_string(),
-            unit_type: "core".to_string(),
-            unix_time: elapsed.as_secs(),
-            unix_time_nsecs: elapsed.subsec_nanos(),
-            message: msg,
-        });
     }
 
     pub fn add_logger<F>(&mut self, logger_func: F)
@@ -286,25 +273,16 @@ impl Controller {
             }
         );
     }
-    
-    /*
-    pub fn add_listener(&mut self) -> bus::BusReader<Message> {
-        self.broadcast.lock().unwrap().deref_mut().add_rx()
-    }
-
-    pub fn add_sender(&self) -> mpsc::Sender<Message> {
-        self.control.clone()
-    }
-    */
 
     pub fn control_message(&self, message: &ControlMessage) {
         self.control.send(message.clone()).unwrap();
     }
 
-    pub fn send_control(&self,
-                        unit_name: String,
-                        unit_type: String,
-                        contents: &ControlMessageContents) {
+    pub fn send_control_class(&self,
+                              message_class: &str,
+                              unit_name: &str,
+                              unit_type: &str,
+                              contents: &ControlMessageContents) {
 
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
@@ -313,19 +291,45 @@ impl Controller {
         };
 
         self.control_message(&ControlMessage {
-            message_type: 2,
-            unit_id: unit_name,
-            unit_type: unit_type,
+            message_class: message_class.to_string(),
+            unit_id: unit_name.to_string(),
+            unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: contents.clone(),
         });
     }
 
-    pub fn send_broadcast(&self,
-                          unit_name: String,
-                          unit_type: String,
-                          contents: BroadcastMessageContents) {
+    pub fn send_control(&self,
+                        unit_name: &str,
+                        unit_type: &str,
+                        contents: &ControlMessageContents) {
+        self.send_control_class("standard", unit_name, unit_type, contents);
+    }
+
+    fn broadcast_internal(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+                          msg: BroadcastMessageContents) {
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        bus.lock().unwrap().deref_mut().broadcast(BroadcastMessage {
+            message_class: "standard".to_string(),
+            unit_id: "internal".to_string(),
+            unit_type: "core".to_string(),
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: msg,
+        });
+    }
+
+    pub fn send_broadcast_class(&self,
+                                message_class: &str,
+                                unit_name: &str,
+                                unit_type: &str,
+                                contents: BroadcastMessageContents) {
 
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
@@ -334,12 +338,19 @@ impl Controller {
         };
 
         self.broadcast.lock().unwrap().deref_mut().broadcast(BroadcastMessage {
-            message_type: 2,
-            unit_id: unit_name,
-            unit_type: unit_type,
+            message_class: message_class.to_string(),
+            unit_id: unit_name.to_string(),
+            unit_type: unit_type.to_string(),
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: contents,
         });
+    }
+
+    pub fn send_broadcast(&self,
+                          unit_name: &str,
+                          unit_type: &str,
+                          contents: BroadcastMessageContents) {
+        self.send_broadcast_class("standard", unit_name, unit_type, contents);
     }
 }

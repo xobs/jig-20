@@ -136,8 +136,8 @@ impl Logger {
        }))
     }
 
-    pub fn id(&self) -> &String {
-        return &self.id;
+    pub fn id(&self) -> &str {
+        return self.id.as_str();
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), LoggerError> {
@@ -165,7 +165,7 @@ impl Logger {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
                         writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
-                                        msg.message_type,
+                                        msg.message_class,
                                         msg.unit_id,
                                         msg.unit_type,
                                         msg.unix_time,
@@ -178,8 +178,8 @@ impl Logger {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
                         let mut object = json::JsonValue::new_object();
-                        object["message_type"] = msg.message_type.into();
-                        object["unit"] = msg.unit_id.into();
+                        object["message_class"] = msg.message_class.into();
+                        object["unit_id"] = msg.unit_id.into();
                         object["unit_type"] = msg.unit_type.into();
                         object["unix_time"] = msg.unix_time.into();
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();

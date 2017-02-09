@@ -187,26 +187,26 @@ impl Test {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                      "name".to_string(),
-                                                                     self.id(),
-                                                                     self.name()));
+                                                                     self.id().to_string(),
+                                                                     self.name().to_string()));
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                      "description".to_string(),
-                                                                     self.id(),
-                                                                     self.description()));
+                                                                     self.id().to_string(),
+                                                                     self.description().to_string()));
     }
 
     pub fn start(&self) {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Running(self.id()));
+                                  BroadcastMessageContents::Running(self.id().to_string()));
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Failed(self.id(), "Test is unimplemented".to_string()));
+                                  BroadcastMessageContents::Failed(self.id().to_string(), "Test is unimplemented".to_string()));
     }
 
     pub fn requirements(&self) -> &Vec<String> {
@@ -217,19 +217,19 @@ impl Test {
         &self.suggests
     }
 
-    pub fn kind(&self) -> String {
-        "test".to_string()
+    pub fn kind(&self) -> &str {
+        "test"
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn description(&self) -> &str {
+        self.description.as_str()
     }
 
-    pub fn id(&self) -> String {
-        self.id.clone()
+    pub fn id(&self) -> &str {
+        self.id.as_str()
     }
 }

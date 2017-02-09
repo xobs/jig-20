@@ -123,32 +123,32 @@ impl Jig {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                      "name".to_string(),
-                                                                     self.id(),
-                                                                     self.name()));
+                                                                     self.id().to_string(),
+                                                                     self.name().to_string()));
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                      "description".to_string(),
-                                                                     self.id(),
-                                                                     self.description()));
+                                                                     self.id().to_string(),
+                                                                     self.description().to_string()));
     }
 
-    pub fn kind(&self) -> String {
-        "jig".to_string()
+    pub fn kind(&self) -> &str {
+        "jig"
     }
 
-    pub fn name(&self) -> String {
-        self.name.clone()
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 
-    pub fn description(&self) -> String {
-        self.description.clone()
+    pub fn description(&self) -> &str {
+        self.description.as_str()
     }
 
-    pub fn id(&self) -> String {
-        self.id.clone()
+    pub fn id(&self) -> &str {
+        self.id.as_str()
     }
 
     pub fn default_scenario(&self) -> &Option<String> {

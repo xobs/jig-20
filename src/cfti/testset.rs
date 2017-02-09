@@ -131,20 +131,10 @@ impl TestSet {
     }
 
     pub fn debug(&self, unit_type: &str, unit_id: &str, msg: &str) {
-        let now = time::SystemTime::now();
-        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => time::Duration::new(0, 0),
-        };
-
-        self.controller.lock().unwrap().control_message(&ControlMessage {
-            message_type: 2,
-            unit_id: unit_id.to_string(),
-            unit_type: unit_type.to_string(),
-            unix_time: elapsed.as_secs(),
-            unix_time_nsecs: elapsed.subsec_nanos(),
-            message: ControlMessageContents::Log(msg.to_string()),
-        });
+        self.controller.lock().unwrap().send_control_class("debug",
+                                                           unit_id,
+                                                           unit_type,
+                                                           &ControlMessageContents::Log(msg.to_string()));
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -163,7 +153,7 @@ impl TestSet {
                 Ok(s) => Arc::new(Mutex::new(s)),
             };
 
-            let new_jig_id = new_jig.lock().unwrap().id().clone();
+            let new_jig_id = new_jig.lock().unwrap().id().to_string();
 
             if self.jig.is_none() {
                 self.jig = Some(new_jig.clone());
@@ -194,7 +184,7 @@ impl TestSet {
                 Err(e) => {println!("Unable to start logger: {}", e);},
                 Ok(_) => (),
             }
-            self.loggers.insert(new_logger.id().clone(), Arc::new(Mutex::new(new_logger)));
+            self.loggers.insert(new_logger.id().to_string(), Arc::new(Mutex::new(new_logger)));
         }
     }
 
@@ -228,7 +218,7 @@ impl TestSet {
                 Ok(_) => (),
             }
 
-            self.interfaces.insert(new_interface.id().clone(), Arc::new(Mutex::new(new_interface)));
+            self.interfaces.insert(new_interface.id().to_string(), Arc::new(Mutex::new(new_interface)));
         }
         if let Some(ref jig) = self.jig.as_ref() {
             jig.lock().unwrap().describe();
@@ -255,7 +245,7 @@ impl TestSet {
             };
 
             new_test.describe();
-            self.tests.insert(new_test.id().clone(), Arc::new(Mutex::new(new_test)));
+            self.tests.insert(new_test.id().to_string(), Arc::new(Mutex::new(new_test)));
         }
     }
 
@@ -280,7 +270,7 @@ impl TestSet {
                 },
             };
 
-            let new_scenario_id = new_scenario.id().clone();
+            let new_scenario_id = new_scenario.id().to_string();
             let new_scenario = Arc::new(Mutex::new(new_scenario));
 
             self.scenarios.insert(new_scenario_id.clone(), new_scenario);
@@ -315,7 +305,7 @@ impl TestSet {
             None => "".to_string(),
             Some(s) => {
                 let jig = s.lock().unwrap();
-                jig.id().clone()
+                jig.id().to_string()
             }
         }
     }
@@ -325,7 +315,7 @@ impl TestSet {
             None => "".to_string(),
             Some(s) => {
                 let jig = s.lock().unwrap();
-                jig.name().clone()
+                jig.name().to_string()
             }
         }
     }
@@ -335,7 +325,7 @@ impl TestSet {
             None => "".to_string(),
             Some(s) => {
                 let jig = s.lock().unwrap();
-                jig.description().clone()
+                jig.description().to_string()
             }
         }
     }
@@ -356,11 +346,11 @@ impl TestSet {
     }
 
     pub fn send_scenarios(&self) {
-        let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id()).collect();
+        let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
 
         let ref cx = *(self.controller.lock().unwrap());
-        cx.send_broadcast(self.unit_name().to_string(),
-                          self.unit_type().to_string(),
+        cx.send_broadcast(self.unit_name(),
+                          self.unit_type(),
                           BroadcastMessageContents::Scenarios(scenario_list));
     }
 
@@ -394,8 +384,8 @@ impl TestSet {
 
         {
             let ref cx = *(self.controller.lock().unwrap());
-            cx.send_broadcast(self.unit_name().to_string(),
-                            self.unit_type().to_string(),
+            cx.send_broadcast(self.unit_name(),
+                            self.unit_type(),
                             BroadcastMessageContents::Scenario(scenario_name.clone()));
         }
         scenario.lock().unwrap().deref_mut().describe();
