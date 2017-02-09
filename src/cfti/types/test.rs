@@ -186,17 +186,27 @@ impl Test {
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(),
-                                self.kind(),
-                                BroadcastMessageContents::Describe(self.kind(),
-                                                                   "name".to_string(),
-                                                                   self.id(),
-                                                                   self.name()));
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                                     "name".to_string(),
+                                                                     self.id(),
+                                                                     self.name()));
         controller.send_broadcast(self.id(),
-                                self.kind(),
-                                BroadcastMessageContents::Describe(self.kind(),
-                                                                   "description".to_string(),
-                                                                   self.id(),
-                                                                   self.description()));
+                                  self.kind(),
+                                  BroadcastMessageContents::Describe(self.kind(),
+                                                                     "description".to_string(),
+                                                                     self.id(),
+                                                                     self.description()));
+    }
+
+    pub fn start(&self) {
+        let controller = self.controller.lock().unwrap();
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Running(self.id()));
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Failed(self.id(), "Test is unimplemented".to_string()));
     }
 
     pub fn requirements(&self) -> &Vec<String> {

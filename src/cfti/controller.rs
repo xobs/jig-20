@@ -34,6 +34,12 @@ pub enum BroadcastMessageContents {
 
     /// TESTS [list of tests] -- Report the tests associated with a scenario
     Tests(String, Vec<String>),
+
+    /// RUNNING [test] -- Report when a test has started running
+    Running(String),
+
+    /// FAILED [test] [reason] -- Report when a test has failed
+    Failed(String, String),
 }
 
 #[derive(Clone, Debug)]
@@ -44,11 +50,11 @@ pub enum ControlMessageContents {
     Pong(String),
     GetScenarios,
     GetJig,
-    GetTests,
+    GetTests(Option<String>),
     /// TESTS
-    StartTests,
+    StartTests(Option<String>),
     AbortTests,
-    Shutdown(String),
+    Shutdown(Option<String>),
 }
 
 #[derive(Clone, Debug)]
@@ -209,11 +215,24 @@ impl Controller {
                     ControlMessageContents::Shutdown(s) => {
                         let me = myself.lock().unwrap();
                         let mut should_exit = (*me).should_exit.lock().unwrap();
-                        println!("Shutting down: {}", s);
+                        match s {
+                            Some(s) => println!("Shutdown called: {}", s),
+                            None => println!("Shutdown called (no reason)"),
+                        }
                         *(should_exit.deref_mut()) = true;
                     },
 
-                    _ => println!("Unhandled message: {:?}", msg),
+                    // Respond to a PING command.  Unimplemented.
+                    ControlMessageContents::Pong(s) => (),
+
+                    // Start running tests.  Unimplemented.
+                    ControlMessageContents::StartTests(s) => testset.start_scenario(s),
+                    ControlMessageContents::AbortTests => (),
+
+                    ControlMessageContents::GetScenarios => testset.send_scenarios(),
+                    ControlMessageContents::GetTests(s) => testset.send_tests(s),
+
+                    //_ => println!("Unhandled message: {:?}", msg),
                 };
 
                 continue 'new_msg;

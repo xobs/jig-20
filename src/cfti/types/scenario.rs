@@ -277,6 +277,11 @@ impl Scenario {
         Ok(test_order)
     }
 
+    // Start running a scenario
+    pub fn start(&self) {
+
+    }
+
     // Broadcast a description of ourselves.
     pub fn describe(&self) {
         let controller = self.controller.lock().unwrap();

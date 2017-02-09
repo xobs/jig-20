@@ -183,6 +183,10 @@ impl Interface {
                                                 "SHUTDOWN {}", reason).unwrap(),
             BroadcastMessageContents::Tests(scenario, tests) => writeln!(&mut stdin.lock().unwrap(),
                                                 "TESTS {} {}", scenario, tests.join(" ")).unwrap(),
+            BroadcastMessageContents::Running(test) => writeln!(&mut stdin.lock().unwrap(),
+                                                "RUNNING {}", test).unwrap(),
+            BroadcastMessageContents::Failed(test, reason) => writeln!(&mut stdin.lock().unwrap(),
+                                                "FAILED {} {}", test, reason).unwrap(),
         }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
@@ -197,13 +201,28 @@ impl Interface {
         let response = match verb.as_str() {
             "scenario" => ControlMessageContents::Scenario(words[0].to_lowercase()),
             "scenarios" => ControlMessageContents::GetScenarios,
-            "tests" => ControlMessageContents::GetTests,
-            "start" => ControlMessageContents::StartTests,
+            "tests" =>
+                if words.is_empty() {
+                    ControlMessageContents::GetTests(None)
+                } else {
+                    ControlMessageContents::GetTests(Some(words[0].to_lowercase()))
+                },
+            "start" =>
+                if words.is_empty() {
+                    ControlMessageContents::StartTests(None)
+                } else {
+                    ControlMessageContents::StartTests(Some(words[0].to_lowercase()))
+                },
             "abort" => ControlMessageContents::AbortTests,
             "pong" => ControlMessageContents::Pong(words[0].to_lowercase()),
             "jig" => ControlMessageContents::GetJig,
             "hello" => ControlMessageContents::Hello(words.join(" ")),
-            "shutdown" => ControlMessageContents::Shutdown(words.join(" ")),
+            "shutdown" =>
+                if words.is_empty() {
+                    ControlMessageContents::Shutdown(None)
+                } else {
+                    ControlMessageContents::Shutdown(Some(words.join(" ")))
+                },
             "log" => ControlMessageContents::Log(words.join(" ")),
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };

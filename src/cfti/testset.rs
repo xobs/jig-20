@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
 use std::time;
-use std::ops::DerefMut;
+use std::ops::{DerefMut, Deref};
 
 use super::controller::{BroadcastMessage, BroadcastMessageContents,
                         ControlMessage,   ControlMessageContents};
@@ -296,10 +296,7 @@ impl TestSet {
             scenario.lock().unwrap().deref_mut().describe();
         }
 
-        let ref cx = *(self.controller.lock().unwrap());
-        cx.send_broadcast(self.unit_name().to_string(),
-                          self.unit_type().to_string(),
-                          BroadcastMessageContents::Scenarios(self.scenarios.keys().map(|x| x.to_string()).collect()));
+        self.send_scenarios();
     }
 
     pub fn get_jig_default_scenario(&self) -> Option<String> {
@@ -344,6 +341,37 @@ impl TestSet {
 
     pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {
         return self.controller.clone();
+    }
+
+    pub fn start_scenario(&self, scenario_id: Option<String>) {
+        let ref scenario = match scenario_id {
+            None => match self.scenario {
+                None => {self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str()); return;},
+                Some(ref t) => t.lock().unwrap(),
+            },
+            Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
+        };
+        scenario.start();
+    }
+
+    pub fn send_scenarios(&self) {
+        let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id()).collect();
+
+        let ref cx = *(self.controller.lock().unwrap());
+        cx.send_broadcast(self.unit_name().to_string(),
+                          self.unit_type().to_string(),
+                          BroadcastMessageContents::Scenarios(scenario_list));
+    }
+
+    pub fn send_tests(&self, scenario_id: Option<String>) {
+        let ref scenario = match scenario_id {
+            None => match self.scenario {
+                None => {self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str()); return;},
+                Some(ref t) => t.lock().unwrap(),
+            },
+            Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
+        };
+        scenario.describe();
     }
 
     pub fn set_interface_hello(&self, id: String, hello: String) {
