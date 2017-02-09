@@ -6,6 +6,7 @@ use self::daggy::{Dag, Walker, NodeIndex};
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::ops::Deref;
 use super::test::Test;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
@@ -18,6 +19,7 @@ pub enum ScenarioError {
     TestListNotFound,
     TestNotFound(String),
     TestDependencyNotFound(String, String),
+    CircularDependency(String, String),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -39,9 +41,6 @@ pub struct Scenario {
 
     /// tests: A vector containing all the tests in this scenario.  Will be resolved after all units are loaded.
     pub tests: Vec<Arc<Mutex<Test>>>,
-
-    /// test_names: A vector containing the names of all the tests.
-    pub test_names: Vec<String>,
 
     /// exec_start: A command to run when starting tests.
     exec_start: Option<String>,
@@ -142,7 +141,6 @@ impl Scenario {
 
         Some(Ok(Scenario {
             id: id.to_string(),
-            test_names: test_names,
             tests: tests,
             timeout: timeout,
             name: name,
@@ -243,9 +241,10 @@ impl Scenario {
                                                     node_bucket[&test_name],
                                                     TestEdge) {
                     ts.debug("scenario",
-                             id,
-                             format!("Test {} failed to find requirement {}: {}", test_name, requirement, e).as_str());
-                    return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), requirement.clone()));
+                            id,
+                            format!("Test {} has a circular requirement on {}",
+                                    test_name, requirement).as_str());
+                    return Err(ScenarioError::CircularDependency(test_name.clone(), requirement.clone()));
                 }
             }
 
@@ -256,9 +255,9 @@ impl Scenario {
                                                     node_bucket[&test_name],
                                                     TestEdge) {
                     ts.debug("scenario",
-                             id,
-                             format!("Test {} failed to find requirement {}: {}", test_name, requirement, e).as_str());
-                    return Err(ScenarioError::TestDependencyNotFound(test_name.clone(), requirement.clone()));
+                            id,
+                            format!("Warning: test {} has a circular suggestion for {}",
+                                    test_name, requirement).as_str());
                 }
             }
         }
@@ -273,7 +272,6 @@ impl Scenario {
                              &node_bucket,
                              &mut test_order);
 
-        use std::ops::Deref;
         let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id()).collect();
         ts.debug("scenario", id, format!("Vector order: {:?}", vec_names).as_str());
         Ok(test_order)
@@ -294,10 +292,13 @@ impl Scenario {
                                                             "description".to_string(),
                                                             self.id(),
                                                             self.description()));
+
+        let test_names: Vec<String> = self.tests.iter().map(|x| x.lock().unwrap().deref().id()).collect();
+
         controller.send_broadcast(self.id(),
                                   self.kind(),
                                   BroadcastMessageContents::Tests(self.id(),
-                                                                  self.test_names.clone()));
+                                                                  test_names));
     }
 
     pub fn kind(&self) -> String {
