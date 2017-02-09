@@ -187,6 +187,10 @@ impl Interface {
                                                 "RUNNING {}", test).unwrap(),
             BroadcastMessageContents::Failed(test, reason) => writeln!(&mut stdin.lock().unwrap(),
                                                 "FAILED {} {}", test, reason).unwrap(),
+            BroadcastMessageContents::Start(scenario) => writeln!(&mut stdin.lock().unwrap(),
+                                                "START {}", scenario).unwrap(),
+            BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(&mut stdin.lock().unwrap(),
+                                                "START {} {} {}", scenario, result, reason).unwrap(),
         }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {

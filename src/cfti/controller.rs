@@ -35,6 +35,12 @@ pub enum BroadcastMessageContents {
     /// TESTS [list of tests] -- Report the tests associated with a scenario
     Tests(String, Vec<String>),
 
+    /// START [scenario] -- Report when a scenario is started
+    Start(String),
+
+    /// FINISH [scenario] [code] [reason] -- Report when a scenario is finished
+    Finish(String, u32, String),
+
     /// RUNNING [test] -- Report when a test has started running
     Running(String),
 

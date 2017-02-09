@@ -28,6 +28,9 @@ pub struct Jig {
     /// DefaultScenario: Name of the scenario to run by default.
     default_scenario: Option<String>,
 
+    /// WorkingDirectory: The default directory for programs on this jig.
+    working_directory: Option<String>,
+
     /// The controller where messages go.
     controller: Arc<Mutex<controller::Controller>>,
 }
@@ -100,12 +103,18 @@ impl Jig {
             Some(s) => Some(s.to_string()),
         };
 
+        let working_directory = match jig_section.get("DefaultWorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         Some(Ok(Jig {
             id: id.to_string(),
             name: name,
             description: description,
 
             default_scenario: default_scenario,
+            working_directory: working_directory,
             controller: controller,
         }))
     }
@@ -144,5 +153,9 @@ impl Jig {
 
     pub fn default_scenario(&self) -> &Option<String> {
         &self.default_scenario
+    }
+
+    pub fn default_working_directory(&self) -> &Option<String> {
+        &self.working_directory
     }
 }

@@ -146,6 +146,7 @@ The following fields are allowed in the [Jig] section:
 * Description: A longer description of the jig and the product or device being tested, up to one paragraph long.
 * TestProgram: Optional path to a program to determine if this is the jig we're running on.
 * WorkingDirectory: Directory to run the test program from.
+* DefaultWorkingDirectory: A default directory to run tests from.
 * TestFile: Optional path to a file to determine if this is the jig we're running on.  If both TestFile and TestProgram are specified, then they must both pass for this to be true.
 * DefaultScenario: The name of the scenario to run by default.
 

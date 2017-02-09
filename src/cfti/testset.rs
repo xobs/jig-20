@@ -292,11 +292,12 @@ impl TestSet {
             }
         }
 
+        self.send_scenarios();
         for (_, scenario) in self.scenarios.iter() {
             scenario.lock().unwrap().deref_mut().describe();
         }
-
-        self.send_scenarios();
+        // If a default test has been selected, send the tests.
+        self.send_tests(None);
     }
 
     pub fn get_jig_default_scenario(&self) -> Option<String> {

@@ -279,7 +279,10 @@ impl Scenario {
 
     // Start running a scenario
     pub fn start(&self) {
-
+        let controller = self.controller.lock().unwrap();
+        controller.send_broadcast(self.id(),
+                                  self.kind(),
+                                  BroadcastMessageContents::Start(self.id()));
     }
 
     // Broadcast a description of ourselves.
