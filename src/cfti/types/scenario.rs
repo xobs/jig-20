@@ -444,7 +444,6 @@ impl Scenario {
 
     // Broadcast a description of ourselves.
     pub fn describe(&self) {
-        let controller = self.controller.lock().unwrap();
         self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
                                                           "name".to_string(),
                                                           self.id().to_string(),
