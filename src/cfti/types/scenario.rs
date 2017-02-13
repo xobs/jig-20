@@ -29,6 +29,21 @@ struct GraphResult {
     tests: Vec<Arc<Mutex<Test>>>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+enum TestResult {
+    /// The test has yet to be run
+    Pending,
+
+    /// The test ended successfully
+    Success,
+
+    /// The test failed
+    Failure,
+
+    /// The test was skipped for some reason
+    Skipped,
+}
+
 #[derive(Clone, Debug)]
 enum ScenarioState {
     /// The scenario has been loaded, and is ready to run.
@@ -47,7 +62,7 @@ enum ScenarioState {
     PostFailure,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum TestEdge {
     /// Test B Requires test A, and a failure of A prevents B from running
     Requires,
@@ -93,6 +108,9 @@ pub struct Scenario {
 
     /// How many tests have failed.
     failures: Arc<Mutex<u32>>,
+
+    /// The result of various tests, indexed by test name.
+    results: Arc<Mutex<HashMap<String, TestResult>>>,
 
     // These should come in handy, I think.
     graph: Dag<String, TestEdge>,
@@ -195,6 +213,7 @@ impl Scenario {
             controller: controller,
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: Arc::new(Mutex::new(0)),
+            results: Arc::new(Mutex::new(HashMap::new())),
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
         }))
@@ -258,7 +277,6 @@ impl Scenario {
             node_bucket.insert(test_name.clone(),
                                test_graph.add_node(test_name.clone()));
         }
-
 
         let mut to_resolve = test_names.clone();
 
@@ -352,6 +370,40 @@ impl Scenario {
         })
     }
 
+    fn all_dependencies_succeeded(&self, test_name: &String) -> bool {
+        let parents = self.graph.parents(self.node_bucket[test_name]);
+
+        for (edge, node) in parents.iter(&self.graph) {
+            // We're only interested in parents that are required.
+            if *(self.graph.edge_weight(edge).unwrap()) != TestEdge::Requires {
+                continue;
+            }
+
+            let parent_name = self.graph.node_weight(node).unwrap();
+            let result = {
+                // Borrow the results hashmap
+                let results = self.results.lock().unwrap();
+                // If the test has no result, it hasn't been run,
+                // and so therefore did not succeed.
+                match results.get(parent_name) {
+                    None => return false,
+                    Some(s) => s.clone(),
+                }
+            };
+
+            // If the dependent test did not succeed, then at least
+            // one dependency failed.
+            if result != TestResult::Success {
+                return false;
+            }
+
+            if !self.all_dependencies_succeeded(parent_name) {
+                return false;
+            }
+        }
+        true
+    }
+
     fn is_state_okay(&self, new_state: &ScenarioState) -> bool {
         match *new_state {
             ScenarioState::Idle => true,
@@ -365,12 +417,17 @@ impl Scenario {
                 }
             },
             ScenarioState::Running(i) => {
-                // Check to see if a dependency test has failed.
-                if i < self.tests.len() {
-                    true
+                let test_name = self.tests[i].lock().unwrap().id().to_string();
+                if i >= self.tests.len() {
+                    false
+                }
+                // Check to make sure all required dependencies succeeded.
+                else if ! self.all_dependencies_succeeded(&test_name) {
+                    self.broadcast(BroadcastMessageContents::Skip(test_name.clone(), "dependency failed".to_string()));
+                    false
                 }
                 else {
-                    false
+                    true
                 }
             },
             ScenarioState::PostSuccess => {

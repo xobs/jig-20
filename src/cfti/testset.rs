@@ -17,11 +17,9 @@ use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
-use std::time;
 use std::ops::{DerefMut, Deref};
 
-use super::controller::{BroadcastMessage, BroadcastMessageContents,
-                        ControlMessage,   ControlMessageContents};
+use super::controller::{BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.

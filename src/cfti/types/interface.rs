@@ -185,6 +185,8 @@ impl Interface {
                                                 "TESTS {} {}", scenario, tests.join(" ")).unwrap(),
             BroadcastMessageContents::Running(test) => writeln!(&mut stdin.lock().unwrap(),
                                                 "RUNNING {}", test).unwrap(),
+            BroadcastMessageContents::Skip(test, reason) => writeln!(&mut stdin.lock().unwrap(),
+                                                "SKIP {} {}", test, reason).unwrap(),
             BroadcastMessageContents::Failed(test, reason) => writeln!(&mut stdin.lock().unwrap(),
                                                 "FAILED {} {}", test, reason).unwrap(),
             BroadcastMessageContents::Start(scenario) => writeln!(&mut stdin.lock().unwrap(),
