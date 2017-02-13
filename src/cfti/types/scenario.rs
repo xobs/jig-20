@@ -423,6 +423,7 @@ impl Scenario {
                 }
                 // Check to make sure all required dependencies succeeded.
                 else if ! self.all_dependencies_succeeded(&test_name) {
+                    self.results.lock().unwrap().insert(test_name.clone(), TestResult::Skipped);
                     self.broadcast(BroadcastMessageContents::Skip(test_name.clone(), "dependency failed".to_string()));
                     false
                 }
@@ -465,6 +466,7 @@ impl Scenario {
             ScenarioState::Idle => {
                 // Reset the number of errors.
                 *(self.failures.lock().unwrap()) = 0;
+                self.results.lock().unwrap().clear();
 
                 let controller = self.controller.lock().unwrap();
                 controller.send_broadcast(self.id(),
