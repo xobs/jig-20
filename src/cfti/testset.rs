@@ -333,6 +333,8 @@ impl TestSet {
     }
 
     pub fn start_scenario(&self, scenario_id: Option<String>) {
+
+        // Figure out what scenario to run.  Run the default scenario if unspecified.
         let ref scenario = match scenario_id {
             None => match self.scenario {
                 None => {self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str()); return;},
@@ -340,7 +342,13 @@ impl TestSet {
             },
             Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
         };
-        scenario.start();
+
+        // Start the scenario with the jig's default working directory.
+        let working_directory = match self.jig {
+            None => None,
+            Some(ref jig) => (jig.lock().unwrap().default_working_directory()).clone(),
+        };
+        scenario.start(&working_directory);
     }
 
     pub fn send_scenarios(&self) {

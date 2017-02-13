@@ -8,8 +8,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::ops::Deref;
 use std::ops::DerefMut;
-use super::test::Test;
+use std::io::{BufRead, BufReader, Write};
+use std::thread;
+use std::process::{Stdio, ChildStdin};
+use cfti::types::test::Test;
 use cfti::types::Jig;
+use cfti::process;
 use super::super::testset::TestSet;
 use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
 
@@ -18,6 +22,8 @@ pub enum ScenarioError {
     FileLoadError,
     MissingScenarioSection,
     TestListNotFound,
+    MakeCommandFailed,
+    ExecCommandFailed,
     TestNotFound(String),
     TestDependencyNotFound(String, String),
     CircularDependency(String, String),
@@ -115,6 +121,7 @@ pub struct Scenario {
     // These should come in handy, I think.
     graph: Dag<String, TestEdge>,
     node_bucket: HashMap<String, NodeIndex>,
+    working_directory: Arc<Mutex<Option<String>>>,
 }
 
 impl Scenario {
@@ -216,6 +223,7 @@ impl Scenario {
             results: Arc::new(Mutex::new(HashMap::new())),
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
+            working_directory: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -404,9 +412,16 @@ impl Scenario {
         true
     }
 
+    // Check the proposed state to make sure it's acceptable.
+    // Reasons it might not be acceptable might be because there
+    // is no exec_start and the new state is PreStart, or because
+    // the new state is on a test whose requirements are not met.
     fn is_state_okay(&self, new_state: &ScenarioState) -> bool {
         match *new_state {
+            // We can always enter the idle state.
             ScenarioState::Idle => true,
+
+            // Run an exec_start command before we run the first test.
             ScenarioState::PreStart => {
                 // If there's a preroll script, run that.
                 if self.exec_start.is_some() {
@@ -416,12 +431,14 @@ impl Scenario {
                     false
                 }
             },
+
+            // Run a given test.
             ScenarioState::Running(i) => {
                 let test_name = self.tests[i].lock().unwrap().id().to_string();
                 if i >= self.tests.len() {
                     false
                 }
-                // Check to make sure all required dependencies succeeded.
+                // Make sure all required dependencies succeeded.
                 else if ! self.all_dependencies_succeeded(&test_name) {
                     self.results.lock().unwrap().insert(test_name.clone(), TestResult::Skipped);
                     self.broadcast(BroadcastMessageContents::Skip(test_name.clone(), "dependency failed".to_string()));
@@ -431,6 +448,8 @@ impl Scenario {
                     true
                 }
             },
+
+            // Run a script on scenario success.
             ScenarioState::PostSuccess => {
                 if self.exec_stop_success.is_some() {
                     true
@@ -439,6 +458,8 @@ impl Scenario {
                     false
                 }
             },
+
+            // Run a script on scenario failure.
             ScenarioState::PostFailure => {
                 if self.exec_stop_failure.is_some() {
                     true
@@ -477,8 +498,7 @@ impl Scenario {
 
             // If we've just run the PreStart command, see if we need
             // to run test 0, or skip straight to Success.
-            ScenarioState::PreStart =>
-                ScenarioState::Running(0),
+            ScenarioState::PreStart => ScenarioState::Running(0),
 
             // If we just finished running a test, determine the next test to run.
             ScenarioState::Running(i) if i < test_count => ScenarioState::Running(i + 1),
@@ -524,12 +544,12 @@ impl Scenario {
             // If we want to run a preroll command and it fails, log it and start the tests.
             ScenarioState::PreStart => {
                 // unwrap is safe because we know a PreStart command exists.
-                if let Some(ref cmd) = self.exec_start {
-                    if let Err(e) = self.run_command(cmd.clone(),
-                                                    ControlMessageContents::AdvanceScenario) {
-                        self.log(format!("Unable to run ExecPre command: {:?}", e).as_str());
-                        self.start_next_test();
-                    }
+                let ref cmd = self.exec_start;
+                let cmd = cmd.clone().unwrap().clone();
+                if let Err(e) = self.run_command(cmd,
+                                                ControlMessageContents::AdvanceScenario) {
+                    self.log(format!("Unable to run ExecPre command: {:?}", e).as_str());
+                    self.start_next_test();
                 }
             },
             ScenarioState::Running(next_step) => (),
@@ -539,29 +559,55 @@ impl Scenario {
     }
 
     fn run_command(&self, command: String, finish_message: ControlMessageContents) -> Result<(), ScenarioError> {
-/*
-        let mut cmd = match process::make_command(self.exec_start.as_str()) {
+
+        let mut cmd = match process::make_command(command.as_str()) {
             Ok(s) => s,
-            Err(e) => { ts.debug("interface", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
+            Err(e) => {
+                self.log(format!("Unable to run logger: {:?}", e).as_str());
+                return Err(ScenarioError::MakeCommandFailed);
+            },
         };
+
         cmd.stdout(Stdio::piped());
-        cmd.stdin(Stdio::piped());
+        cmd.stdin(Stdio::null());
         cmd.stderr(Stdio::inherit());
-        match self.working_directory {
-            None => (),
-            Some(ref s) => {cmd.current_dir(s); },
+        if let Some(ref s) = *(self.working_directory.lock().unwrap()) {
+            cmd.current_dir(s);
         }
 
         let child = match cmd.spawn() {
-            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(InterfaceError::ExecCommandFailed) },
+            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(ScenarioError::ExecCommandFailed) },
             Ok(s) => s,
         };
-*/
+
+        // Listen for messages and send a control message when it exits.
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let stdout = child.stdout.unwrap();
+        thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                match line {
+                    Err(e) => {
+                        let lk = controller.lock().unwrap();
+                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("Error reading line: {}", e)));
+                        lk.send_control_class("support", id.as_str(), kind.as_str(), &finish_message);
+                        return;
+                    },
+                    Ok(l) => {
+                        let lk = controller.lock().unwrap();
+                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("Support line: {}", l)));
+                    },
+                }
+            }
+        });
+
         Ok(())
     }
 
     // Start running a scenario
-    pub fn start(&self) {
+    pub fn start(&self, working_directory: &Option<String>) {
+        *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.start_next_test();
     }
 
