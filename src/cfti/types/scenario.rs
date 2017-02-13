@@ -48,7 +48,16 @@ enum ScenarioState {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct TestEdge;
+enum TestEdge {
+    /// Test B Requires test A, and a failure of A prevents B from running
+    Requires,
+
+    /// Test B Suggests test A, and a failure of A doesn't prevent B from running
+    Suggests,
+
+    /// Test B follows test A in the .scenario file
+    Follows,
+}
 
 #[derive(Debug)]
 pub struct Scenario {
@@ -250,7 +259,27 @@ impl Scenario {
                                test_graph.add_node(test_name.clone()));
         }
 
+
         let mut to_resolve = test_names.clone();
+
+        // Add a dependency on the graph to indicate the order of tests.
+        {
+            let num_tests = test_names.len();
+            for i in 1 .. num_tests {
+                let previous_test = test_names[i - 1].clone();
+                let this_test = test_names[i].clone();
+                if let Err(e) = test_graph.add_edge(*(node_bucket.get(&previous_test).unwrap()),
+                                                    *(node_bucket.get(&this_test).unwrap()),
+                                                    TestEdge::Follows) {
+                    ts.debug("scenario",
+                            id,
+                            format!("Test {} has a circular requirement on {}",
+                                    test_names[i - 1], test_names[i]).as_str());
+                    return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(), test_names[i].clone()));
+                }
+            }
+        }
+
         let mut resolved = HashMap::new();
         loop {
             // Resolve every test.
@@ -278,7 +307,7 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 if let Err(e) = test_graph.add_edge(node_bucket[requirement],
                                                     node_bucket[&test_name],
-                                                    TestEdge) {
+                                                    TestEdge::Requires) {
                     ts.debug("scenario",
                             id,
                             format!("Test {} has a circular requirement on {}",
@@ -292,7 +321,7 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 if let Err(e) = test_graph.add_edge(node_bucket[requirement],
                                                     node_bucket[&test_name],
-                                                    TestEdge) {
+                                                    TestEdge::Suggests) {
                     ts.debug("scenario",
                             id,
                             format!("Warning: test {} has a circular suggestion for {}",
@@ -304,6 +333,8 @@ impl Scenario {
         let mut seen_nodes = HashMap::new();
         let mut test_order = vec![];
         {
+            // Pick a node from the bucket and visit it.  This will cause
+            // all nodes in the graph to be visited, in order.
             let some_node = node_bucket.get(&test_names[0]).unwrap();
             Self::visit_node(&mut seen_nodes,
                             loaded_tests,
