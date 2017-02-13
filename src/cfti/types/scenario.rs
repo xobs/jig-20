@@ -7,12 +7,13 @@ use self::daggy::{Dag, Walker, NodeIndex};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::ops::Deref;
+use std::ops::DerefMut;
 use super::test::Test;
 use cfti::types::Jig;
 use super::super::testset::TestSet;
 use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ScenarioError {
     FileLoadError,
     MissingScenarioSection,
@@ -28,7 +29,7 @@ struct GraphResult {
     tests: Vec<Arc<Mutex<Test>>>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum ScenarioState {
     /// The scenario has been loaded, and is ready to run.
     Idle,
@@ -37,7 +38,7 @@ enum ScenarioState {
     PreStart,
 
     /// The scenario is running, and is on step (u32)
-    Running(u32),
+    Running(usize),
 
     /// The scenario has succeeded, and is running the ExecStopSuccess step
     PostSuccess,
@@ -320,9 +321,60 @@ impl Scenario {
         })
     }
 
-    fn find_next_state(&self) -> ScenarioState {
-        match self.state.lock().unwrap().deref() {
-            &ScenarioState::Idle => {
+    fn is_state_okay(&self, new_state: &ScenarioState) -> bool {
+        match *new_state {
+            ScenarioState::Idle => true,
+            ScenarioState::PreStart => {
+                // If there's a preroll script, run that.
+                if self.exec_start.is_some() {
+                    true
+                }
+                else {
+                    false
+                }
+            },
+            ScenarioState::Running(i) => {
+                // Check to see if a dependency test has failed.
+                if i < self.tests.len() {
+                    true
+                }
+                else {
+                    false
+                }
+            },
+            ScenarioState::PostSuccess => {
+                if self.exec_stop_success.is_some() {
+                    true
+                }
+                else {
+                    false
+                }
+            },
+            ScenarioState::PostFailure => {
+                if self.exec_stop_failure.is_some() {
+                    true
+                }
+                else {
+                    false
+                }
+            },
+        }
+    }
+
+    /* Find the next state.
+     * If we're idle, start the test.
+     * The state order goes:
+     * Idle -> [PreStart] -> Test(0) -> ... -> Test(n) -> [PostSuccess/Fail] -> Idle
+     */
+    fn find_next_state(&self, current_state: ScenarioState) -> ScenarioState {
+        
+        let test_count = self.tests.len();
+        let failure_count = {
+            *(self.failures.lock().unwrap())
+        };
+
+        let new_state = match current_state {
+            ScenarioState::Idle => {
                 // Reset the number of errors.
                 *(self.failures.lock().unwrap()) = 0;
 
@@ -330,56 +382,37 @@ impl Scenario {
                 controller.send_broadcast(self.id(),
                                         self.kind(),
                                         BroadcastMessageContents::Start(self.id().to_string()));
-
-                // If there's a preroll script, run that
-                if let Some(ref s) = self.exec_start {
-                    ScenarioState::PreStart
-
-                // If there are no tests, jump straight to the end
-                } else if self.tests.is_empty() {
-                    // Run a post-execution success program, if present
-                    if self.exec_stop_success.is_some() {
-                        ScenarioState::PostSuccess
-                    }
-                    else {
-                        ScenarioState::Idle
-                    }
-                }
-
-                // Start running test 0
-                else {
-                    ScenarioState::Running(0)
-                }
+                ScenarioState::PreStart
             },
 
             // If we've just run the PreStart command, see if we need
             // to run test 0, or skip straight to Success.
-            &ScenarioState::PreStart =>
-                if self.tests.is_empty() {
-                    if self.exec_stop_success.is_some() {
-                        ScenarioState::PostSuccess
-                    }
-                    else {
-                        ScenarioState::Idle
-                    }
-                }
-                else {
-                    ScenarioState::Running(0)
-                },
+            ScenarioState::PreStart =>
+                ScenarioState::Running(0),
 
             // If we just finished running a test, determine the next test to run.
-            &ScenarioState::Running(i) => {
-                let ref current_test = self.tests[i as usize].lock().unwrap();
-                ScenarioState::Running(i + 1)
-            },
-            &ScenarioState::PostFailure => ScenarioState::Idle,
-            &ScenarioState::PostSuccess => ScenarioState::Idle,
+            ScenarioState::Running(i) if i < test_count => ScenarioState::Running(i + 1),
+            ScenarioState::Running(i) if i >= test_count && failure_count > 0 => ScenarioState::PostFailure,
+            ScenarioState::Running(i) if i >= test_count && failure_count == 0 => ScenarioState::PostSuccess,
+            ScenarioState::Running(i) => panic!("Got into a weird state. Running({}), test_count: {}, failure_count: {}", i, test_count, failure_count),
+            ScenarioState::PostFailure => ScenarioState::Idle,
+            ScenarioState::PostSuccess => ScenarioState::Idle,
+        };
+
+        // If it's an acceptable new state, set that.  Otherwise, recurse
+        // and try the next state.
+        if self.is_state_okay(&new_state) {
+            *(self.state.lock().unwrap().deref_mut()) = new_state.clone();
+            new_state
+        }
+        else {
+            self.find_next_state(new_state)
         }
     }
 
     // Given the current state, figure out the next test to run (if any)
     fn start_next_test(&self) {
-        let new_state = self.find_next_state();
+        let new_state = self.find_next_state(self.state.lock().unwrap().clone());
 
         let failures = *(self.failures.lock().unwrap());
         match new_state {
