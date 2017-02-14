@@ -521,6 +521,57 @@ impl Scenario {
         }
     }
 
+    fn run_support_cmd(&self, cmd: String, testname: String) {
+        // unwrap is safe because we know a PreStart command exists.
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let tn = testname.clone();
+        let res = process::try_command_completion(cmd.as_str(),
+                                        self.working_directory.lock().unwrap().deref(),
+                                        Duration::new(100, 0),
+                                        move |res: Result<(), process::CommandError>| {
+            let msg = match res {
+                Ok(_) => BroadcastMessageContents::Pass(tn, "".to_string()),
+                Err(e) => BroadcastMessageContents::Fail(tn, format!("{:?}", e)),
+            };
+
+            // Send a message indicating what the test did, and advance the scenario.
+            let lk = controller.lock().unwrap();
+            lk.send_broadcast_class("support", id.as_str(), kind.as_str(), msg);
+            lk.send_control_class(
+                "support",
+                id.as_str(),
+                kind.as_str(),
+                &ControlMessageContents::AdvanceScenario);
+        });
+
+        // The command will either return an error, or a tuple containing (stdout,stdin).
+        // If it's an error, then the completion above will be called and the test state
+        // will be advanced there.  Avoid advancing it here.
+        let (stdout, _) = match res {
+            Err(e) => return,
+            Ok(s) => s,
+        };
+
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                match line {
+                    Err(e) => {
+                        return;
+                    },
+                    Ok(l) => {
+                        let lk = controller.lock().unwrap();
+                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("{}: {}", testname, l)));
+                    },
+                }
+            }
+        });
+    }
+
     // Given the current state, figure out the next test to run (if any)
     fn start_next_test(&self) {
         let new_state = self.find_next_state(self.state.lock().unwrap().clone());
@@ -544,57 +595,23 @@ impl Scenario {
 
             // If we want to run a preroll command and it fails, log it and start the tests.
             ScenarioState::PreStart => {
-                // unwrap is safe because we know a PreStart command exists.
                 let ref cmd = self.exec_start;
                 let cmd = cmd.clone().unwrap().clone();
-                let controller = self.controller.clone();
-                let id = self.id().to_string();
-                let kind = self.kind().to_string();
-                process::try_command_completion(cmd.as_str(),
-                                                self.working_directory.lock().unwrap().deref(),
-                                                Duration::new(100, 0),
-                                                move |res: Result<(), process::CommandError>| {
-                    let msg = match res {
-                        Ok(_) => BroadcastMessageContents::Pass("execstart".to_string(), "".to_string()),
-                        Err(e) => BroadcastMessageContents::Fail("execstart".to_string(), format!("{:?}", e)),
-                    };
-
-                    // Send a message indicating what the test did, and advance the scenario.
-                    let lk = controller.lock().unwrap();
-                    lk.send_broadcast_class("support", id.as_str(), kind.as_str(), msg);
-                    lk.send_control_class(
-                        "support",
-                        id.as_str(),
-                        kind.as_str(),
-                        &ControlMessageContents::AdvanceScenario);
-                });
+                self.run_support_cmd(cmd, "execstart".to_string());
             },
             ScenarioState::Running(next_step) => (),
-            ScenarioState::PostSuccess => (),
-            ScenarioState::PostFailure => (),
+            ScenarioState::PostSuccess => {
+                let ref cmd = self.exec_stop_success;
+                let cmd = cmd.clone().unwrap().clone();
+                self.run_support_cmd(cmd, "execstart".to_string());
+            },
+            ScenarioState::PostFailure => {
+                let ref cmd = self.exec_stop_failure;
+                let cmd = cmd.clone().unwrap().clone();
+                self.run_support_cmd(cmd, "execstart".to_string());
+            },
         }
     }
-
-/*
-        // Listen for messages and send a control message when it exits.
-        let stdout = child.stdout.unwrap();
-        thread::spawn(move || {
-            for line in BufReader::new(stdout).lines() {
-                match line {
-                    Err(e) => {
-                        return;
-                    },
-                    Ok(l) => {
-                        let lk = controller.lock().unwrap();
-                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("Support line: {}", l)));
-                    },
-                }
-            }
-        });
-
-        Ok(())
-    }
-*/
 
     // Start running a scenario
     pub fn start(&self, working_directory: &Option<String>) {
