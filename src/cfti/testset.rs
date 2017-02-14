@@ -332,22 +332,36 @@ impl TestSet {
         return self.controller.clone();
     }
 
-    pub fn start_scenario(&self, scenario_id: Option<String>) {
+    pub fn advance_scenario(&self) {
+
+    }
+
+    pub fn start_scenario(&mut self, scenario_id: Option<String>) {
 
         // Figure out what scenario to run.  Run the default scenario if unspecified.
-        let ref scenario = match scenario_id {
+        let scenario: Arc<Mutex<Scenario>> = match scenario_id {
             None => match self.scenario {
-                None => {self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str()); return;},
-                Some(ref t) => t.lock().unwrap(),
+                None => {
+                    self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str());
+                    return;
+                },
+                Some(ref t) => t.clone(),
             },
-            Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
+            Some(s) => self.scenarios[s.as_str()].clone(),
         };
+
+        // Store the scenario that we're running into the testset.
+        self.scenario = Some(scenario.clone());
+
+        // Unlock the scenario so we have exclusive access to it.
+        let ref scenario = scenario.lock().unwrap();
 
         // Start the scenario with the jig's default working directory.
         let working_directory = match self.jig {
             None => None,
             Some(ref jig) => (jig.lock().unwrap().default_working_directory()).clone(),
         };
+
         scenario.start(&working_directory);
     }
 

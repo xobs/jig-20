@@ -244,7 +244,7 @@ impl Controller {
                     // Start running tests.  Unimplemented.
                     ControlMessageContents::StartTests(s) => testset.start_scenario(s),
                     ControlMessageContents::AbortTests => (),
-                    ControlMessageContents::AdvanceScenario => (),
+                    ControlMessageContents::AdvanceScenario => testset.advance_scenario(),
 
                     ControlMessageContents::GetScenarios => testset.send_scenarios(),
                     ControlMessageContents::GetTests(s) => testset.send_tests(s),
