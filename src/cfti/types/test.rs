@@ -206,7 +206,7 @@ impl Test {
                                   BroadcastMessageContents::Running(self.id().to_string()));
         controller.send_broadcast(self.id(),
                                   self.kind(),
-                                  BroadcastMessageContents::Failed(self.id().to_string(), "Test is unimplemented".to_string()));
+                                  BroadcastMessageContents::Fail(self.id().to_string(), "Test is unimplemented".to_string()));
     }
 
     pub fn requirements(&self) -> &Vec<String> {

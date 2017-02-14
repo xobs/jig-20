@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::io::{BufRead, BufReader, Write};
+use std::time::Duration;
 use std::thread;
 use std::process::{Stdio, ChildStdin};
 use cfti::types::test::Test;
@@ -546,11 +547,27 @@ impl Scenario {
                 // unwrap is safe because we know a PreStart command exists.
                 let ref cmd = self.exec_start;
                 let cmd = cmd.clone().unwrap().clone();
-                if let Err(e) = self.run_command(cmd,
-                                                ControlMessageContents::AdvanceScenario) {
-                    self.log(format!("Unable to run ExecPre command: {:?}", e).as_str());
-                    self.start_next_test();
-                }
+                let controller = self.controller.clone();
+                let id = self.id().to_string();
+                let kind = self.kind().to_string();
+                process::try_command_completion(cmd.as_str(),
+                                                self.working_directory.lock().unwrap().deref(),
+                                                Duration::new(100, 0),
+                                                move |res: Result<(), process::CommandError>| {
+                    let msg = match res {
+                        Ok(_) => BroadcastMessageContents::Pass("execstart".to_string(), "".to_string()),
+                        Err(e) => BroadcastMessageContents::Fail("execstart".to_string(), format!("{:?}", e)),
+                    };
+
+                    // Send a message indicating what the test did, and advance the scenario.
+                    let lk = controller.lock().unwrap();
+                    lk.send_broadcast_class("support", id.as_str(), kind.as_str(), msg);
+                    lk.send_control_class(
+                        "support",
+                        id.as_str(),
+                        kind.as_str(),
+                        &ControlMessageContents::AdvanceScenario);
+                });
             },
             ScenarioState::Running(next_step) => (),
             ScenarioState::PostSuccess => (),
@@ -558,40 +575,13 @@ impl Scenario {
         }
     }
 
-    fn run_command(&self, command: String, finish_message: ControlMessageContents) -> Result<(), ScenarioError> {
-
-        let mut cmd = match process::make_command(command.as_str()) {
-            Ok(s) => s,
-            Err(e) => {
-                self.log(format!("Unable to run logger: {:?}", e).as_str());
-                return Err(ScenarioError::MakeCommandFailed);
-            },
-        };
-
-        cmd.stdout(Stdio::piped());
-        cmd.stdin(Stdio::null());
-        cmd.stderr(Stdio::inherit());
-        if let Some(ref s) = *(self.working_directory.lock().unwrap()) {
-            cmd.current_dir(s);
-        }
-
-        let child = match cmd.spawn() {
-            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(ScenarioError::ExecCommandFailed) },
-            Ok(s) => s,
-        };
-
+/*
         // Listen for messages and send a control message when it exits.
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
         let stdout = child.stdout.unwrap();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
                     Err(e) => {
-                        let lk = controller.lock().unwrap();
-                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("Error reading line: {}", e)));
-                        lk.send_control_class("support", id.as_str(), kind.as_str(), &finish_message);
                         return;
                     },
                     Ok(l) => {
@@ -604,6 +594,7 @@ impl Scenario {
 
         Ok(())
     }
+*/
 
     // Start running a scenario
     pub fn start(&self, working_directory: &Option<String>) {

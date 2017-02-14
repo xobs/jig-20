@@ -38,17 +38,20 @@ pub enum BroadcastMessageContents {
     /// START [scenario] -- Report when a scenario is started
     Start(String),
 
-    /// SKIP [scenario] [reason] -- Don't run a test, for some reason
-    Skip(String, String),
-
     /// FINISH [scenario] [code] [reason] -- Report when a scenario is finished
     Finish(String, u32, String),
+
+    /// SKIP [scenario] [reason] -- Don't run a test, for some reason
+    Skip(String, String),
 
     /// RUNNING [test] -- Report when a test has started running
     Running(String),
 
-    /// FAILED [test] [reason] -- Report when a test has failed
-    Failed(String, String),
+    /// PASS [test] [message] -- Report when a test has passed
+    Pass(String, String),
+
+    /// FAIL [test] [reason] -- Report when a test has failed
+    Fail(String, String),
 }
 
 #[derive(Clone, Debug)]
