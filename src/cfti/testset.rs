@@ -333,7 +333,14 @@ impl TestSet {
     }
 
     pub fn advance_scenario(&self) {
-
+        // Unwrap, because if it is None then things are very broken.
+        match self.scenario {
+            None => panic!("self.scenario was None"),
+            Some(ref s) => {
+                let ref scenario = s.lock().unwrap();
+                scenario.advance();
+            },
+        };
     }
 
     pub fn start_scenario(&mut self, scenario_id: Option<String>) {

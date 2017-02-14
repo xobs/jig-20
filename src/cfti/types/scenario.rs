@@ -51,7 +51,7 @@ enum TestResult {
     Skipped,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum ScenarioState {
     /// The scenario has been loaded, and is ready to run.
     Idle,
@@ -573,7 +573,7 @@ impl Scenario {
     }
 
     // Given the current state, figure out the next test to run (if any)
-    fn start_next_test(&self) {
+    pub fn advance(&self) {
         let new_state = self.find_next_state(self.state.lock().unwrap().clone());
 
         let failures = *(self.failures.lock().unwrap());
@@ -613,10 +613,14 @@ impl Scenario {
         }
     }
 
+    pub fn is_finished(&self) -> bool {
+        return *(self.state.lock().unwrap()) == ScenarioState::Idle;
+    }
+
     // Start running a scenario
     pub fn start(&self, working_directory: &Option<String>) {
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
-        self.start_next_test();
+        self.advance();
     }
 
     // Broadcast a description of ourselves.
