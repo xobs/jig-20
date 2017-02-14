@@ -10,6 +10,11 @@ use super::testset::TestSet;
 #[derive(Debug)]
 pub enum CommandError {
     NoCommandSpecified,
+    MakeCommandError(String),
+    SpawnError(String),
+    GetResultError(String),
+    WaitResultError(String),
+    ReturnCodeError(i32),
 }
 
 pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
@@ -69,3 +74,55 @@ pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) 
     };
     return status_code.unwrap() == 0
 }
+
+pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, completion: F)
+        where F: Send + 'static + Fn(Result<bool, CommandError>) {
+
+    let mut cmd = match make_command(cmd) {
+        Err(e) => {
+            completion(Err(CommandError::MakeCommandError(format!("{:?}", e).to_string())));
+            return;
+        },
+        Ok(val) => val,
+    };
+
+    match *wd {
+        None => (),
+        Some(ref s) => {cmd.current_dir(s); },
+    };
+
+    let mut child = match cmd.spawn() {
+        Err(err) => {
+            completion(Err(CommandError::SpawnError(format!("{}", err).to_string())));
+            return;
+        },
+        Ok(s) => s,
+    };
+
+    let status_code = match child.wait_timeout(max).unwrap() {
+        Some(status) => status.code().unwrap(),
+        None => {
+            // child hasn't exited yet
+            if let Err(err) = child.kill() {
+                completion(Err(CommandError::GetResultError(format!("{}", err).to_string())));
+                return;
+            }
+
+            // Call wait() on child, which should return immediately
+            match child.wait() {
+                Err(err) => {
+                    completion(Err(CommandError::WaitResultError(format!("{}", err).to_string())));
+                    return;
+                },
+                Ok(res) => res.code().unwrap()
+            }
+        }
+    };
+
+    // If it's a nonzero exit code, that counts as an error.
+    if status_code != 0 {
+        completion(Err(CommandError::ReturnCodeError(status_code)));
+        return
+    }
+    completion(Ok(true));
+ }
