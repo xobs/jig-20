@@ -93,7 +93,7 @@ pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) 
 
 pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, completion: F)
         -> Result<(ChildStdout, ChildStdin), CommandError>
-        where F: Send + 'static + Fn(Result<(), CommandError>)
+        where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
 
     let mut cmd = match make_command(cmd) {
