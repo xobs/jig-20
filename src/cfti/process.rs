@@ -4,6 +4,8 @@ extern crate shlex;
 
 use std::process::Command;
 use std::time::Duration;
+use std::thread;
+use std::process::{Stdio, ChildStdin, ChildStdout};
 use self::wait_timeout::ChildExt;
 use super::testset::TestSet;
 
@@ -12,8 +14,9 @@ pub enum CommandError {
     NoCommandSpecified,
     MakeCommandError(String),
     SpawnError(String),
-    GetResultError(String),
-    WaitResultError(String),
+    ChildTimeoutTerminateError(String),
+    ChildTimeoutWaitError(String),
+    ChildTimeout,
     ReturnCodeError(i32),
 }
 
@@ -75,16 +78,35 @@ pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) 
     return status_code.unwrap() == 0
 }
 
+/// Tries to run `cmd`.
+///
+/// If `wd` is specified, then runs the command in that working directory.
+/// Will only allow the command to run for `max` duration.
+/// When the command finishes or times out, `completion` will be called.
+///
+/// # Errors
+/// `CommandError::MakeCommandError(String)` - Unable to make a command for some reason.
+/// `CommandError::SpawnError(String)` - Unable to spawn the command for some reason.
+/// `CommandError::ChildTimeoutTerminateError(String)` - Couldn't terminate the child after it timed out.
+/// `CommandError::ChildTimeoutWaitError(String)` - Couldn't wait for the child after it timed out.
+/// `CommandError::ChildTimeout` - Child timed out and was successfully terminated.
+
 pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, completion: F)
-        where F: Send + 'static + Fn(Result<bool, CommandError>) {
+        -> Result<(ChildStdout, ChildStdin), CommandError>
+        where F: Send + 'static + Fn(Result<bool, CommandError>)
+{
 
     let mut cmd = match make_command(cmd) {
         Err(e) => {
             completion(Err(CommandError::MakeCommandError(format!("{:?}", e).to_string())));
-            return;
+            return Err(CommandError::MakeCommandError(format!("{:?}", e).to_string()));
         },
         Ok(val) => val,
     };
+
+    cmd.stdout(Stdio::piped());
+    cmd.stdin(Stdio::piped());
+    cmd.stderr(Stdio::inherit());
 
     match *wd {
         None => (),
@@ -94,35 +116,50 @@ pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, 
     let mut child = match cmd.spawn() {
         Err(err) => {
             completion(Err(CommandError::SpawnError(format!("{}", err).to_string())));
-            return;
+            return Err(CommandError::SpawnError(format!("{}", err).to_string()));
         },
         Ok(s) => s,
     };
 
-    let status_code = match child.wait_timeout(max).unwrap() {
-        Some(status) => status.code().unwrap(),
-        None => {
-            // child hasn't exited yet
-            if let Err(err) = child.kill() {
-                completion(Err(CommandError::GetResultError(format!("{}", err).to_string())));
-                return;
-            }
+    // Take the child's stdio handles and replace them with None.  This allows
+    // us to have the thread take ownership of `child` and return the handles.
+    let stdout = child.stdout.unwrap();
+    child.stdout = None;
+    let stdin = child.stdin.unwrap();
+    child.stdin = None;
 
-            // Call wait() on child, which should return immediately
-            match child.wait() {
-                Err(err) => {
-                    completion(Err(CommandError::WaitResultError(format!("{}", err).to_string())));
+    thread::spawn(move || {
+        let status_code = match child.wait_timeout(max).unwrap() {
+            Some(status) => status.code().unwrap(),
+            None => {
+                // child hasn't exited yet, so terminate it.
+                if let Err(err) = child.kill() {
+                    completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", err).to_string())));
                     return;
-                },
-                Ok(res) => res.code().unwrap()
-            }
-        }
-    };
+                }
 
-    // If it's a nonzero exit code, that counts as an error.
-    if status_code != 0 {
-        completion(Err(CommandError::ReturnCodeError(status_code)));
-        return
-    }
-    completion(Ok(true));
+                // Call wait() on child, which should return immediately
+                match child.wait() {
+                    Err(err) => {
+                        completion(Err(CommandError::ChildTimeoutWaitError(format!("{}", err).to_string())));
+                        return;
+                    },
+                    Ok(res) => {
+                        completion(Err(CommandError::ChildTimeout));
+                        return;
+                    }
+                }
+            }
+        };
+
+        // If it's a nonzero exit code, that counts as an error.
+        if status_code != 0 {
+            completion(Err(CommandError::ReturnCodeError(status_code)));
+            return;
+        }
+        completion(Ok(true));
+    });
+
+    // Return the stdout so that the 
+    Ok((stdout, stdin))
  }
