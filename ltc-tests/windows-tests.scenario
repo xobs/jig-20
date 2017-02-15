@@ -3,6 +3,6 @@ Name=Basic Windows Tests
 Name[zh]=程序应用程序
 Description=Test some Jig20 stuff on Windows
 Description[zh]=编程最终的LtC示例应用程序。
-Tests=check-c-size
+Tests=dir,check-c-size
 Timeout=200
 Jigs=windows

@@ -194,7 +194,7 @@ impl Interface {
             BroadcastMessageContents::Start(scenario) => writeln!(&mut stdin.lock().unwrap(),
                                                 "START {}", scenario).unwrap(),
             BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(&mut stdin.lock().unwrap(),
-                                                "START {} {} {}", scenario, result, reason).unwrap(),
+                                                "FINISH {} {} {}", scenario, result, reason).unwrap(),
         }
     }
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
@@ -217,9 +217,9 @@ impl Interface {
                 },
             "start" =>
                 if words.is_empty() {
-                    ControlMessageContents::StartTests(None)
+                    ControlMessageContents::StartScenario(None)
                 } else {
-                    ControlMessageContents::StartTests(Some(words[0].to_lowercase()))
+                    ControlMessageContents::StartScenario(Some(words[0].to_lowercase()))
                 },
             "abort" => ControlMessageContents::AbortTests,
             "pong" => ControlMessageContents::Pong(words[0].to_lowercase()),

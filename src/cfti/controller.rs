@@ -64,7 +64,7 @@ pub enum ControlMessageContents {
     GetJig,
     GetTests(Option<String>),
     /// TESTS
-    StartTests(Option<String>),
+    StartScenario(Option<String>),
     AbortTests,
     Shutdown(Option<String>),
 
@@ -241,8 +241,8 @@ impl Controller {
                     // Respond to a PING command.  Unimplemented.
                     ControlMessageContents::Pong(s) => (),
 
-                    // Start running tests.  Unimplemented.
-                    ControlMessageContents::StartTests(s) => testset.start_scenario(s),
+                    // Start running tests.
+                    ControlMessageContents::StartScenario(s) => testset.start_scenario(s),
                     ControlMessageContents::AbortTests => (),
                     ControlMessageContents::AdvanceScenario => testset.advance_scenario(),
 

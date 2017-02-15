@@ -91,12 +91,12 @@ pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) 
 /// `CommandError::ChildTimeoutWaitError(String)` - Couldn't wait for the child after it timed out.
 /// `CommandError::ChildTimeout` - Child timed out and was successfully terminated.
 
-pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, completion: F)
+pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Duration, completion: F)
         -> Result<(ChildStdout, ChildStdin), CommandError>
         where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
 
-    let mut cmd = match make_command(cmd) {
+    let mut cmd = match make_command(cmd_str) {
         Err(e) => {
             completion(Err(CommandError::MakeCommandError(format!("{:?}", e).to_string())));
             return Err(CommandError::MakeCommandError(format!("{:?}", e).to_string()));
@@ -108,10 +108,9 @@ pub fn try_command_completion<F>(cmd: &str, wd: &Option<String>, max: Duration, 
     cmd.stdin(Stdio::piped());
     cmd.stderr(Stdio::inherit());
 
-    match *wd {
-        None => (),
-        Some(ref s) => {cmd.current_dir(s); },
-    };
+    if let Some(ref s) = *wd {
+        cmd.current_dir(s);
+    }
 
     let mut child = match cmd.spawn() {
         Err(err) => {

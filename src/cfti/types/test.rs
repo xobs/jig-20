@@ -1,6 +1,7 @@
 extern crate ini;
 use self::ini::Ini;
 use std::sync::{Arc, Mutex};
+use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 use std::time;
 use std::thread;
@@ -60,6 +61,9 @@ pub struct Test {
 
     /// The controller where messages go.
     controller: Arc<Mutex<controller::Controller>>,
+
+    /// The last line outputted by a test, which is the result.
+    last_line: Arc<Mutex<String>>,
 }
 
 impl Test {
@@ -185,6 +189,7 @@ impl Test {
             exec_stop_failure: exec_stop_failure,
 
             controller: controller,
+            last_line: Arc::new(Mutex::new("".to_string())),
         }))
     }
 
@@ -218,13 +223,14 @@ impl Test {
         let kind = self.kind().to_string();
         let name = self.name().to_string();
         let cmd = self.exec_start.clone();
+        let last_line = self.last_line.clone();
         let (stdout, stdin) = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         time::Duration::new(100, 0),
                         move |res: Result<(), process::CommandError>| {
             let msg = match res {
-                Ok(_) => BroadcastMessageContents::Pass(id.clone(), "".to_string()),
+                Ok(_) => BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().deref().to_string()),
                 Err(e) => BroadcastMessageContents::Fail(id.clone(), format!("{:?}", e)),
             };
 
@@ -246,6 +252,7 @@ impl Test {
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let name = self.name().to_string();
+        let last_line = self.last_line.clone();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 let lk = controller.lock().unwrap();
@@ -254,11 +261,14 @@ impl Test {
                         println!("Error in interface: {}", e);
                         return;
                     },
-                    Ok(l) => lk.send_broadcast(
-                        id.as_str(),
-                        kind.as_str(),
-                        BroadcastMessageContents::Log(l)
-                    ),
+                    Ok(l) => {
+                        *(last_line.lock().unwrap().deref_mut()) = l.clone();
+                        lk.send_broadcast(
+                            id.as_str(),
+                            kind.as_str(),
+                            BroadcastMessageContents::Log(l)
+                        );
+                    },
                 }
             }
         });
@@ -267,6 +277,10 @@ impl Test {
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
         let controller = self.controller.lock().unwrap();
         controller.send_broadcast(self.id(), self.kind(), msg);
+    }
+
+    fn log(&self, msg: &str) {
+        self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
     }
 
     pub fn control(&self, msg: ControlMessageContents) {

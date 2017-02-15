@@ -41,6 +41,9 @@ enum TestResult {
     /// The test has yet to be run
     Pending,
 
+    /// The test has started, and is currently running
+    Running,
+
     /// The test ended successfully
     Success,
 
@@ -209,6 +212,21 @@ impl Scenario {
             Ok(v) => v,
         };
 
+        let test_results = Arc::new(Mutex::new(HashMap::new()));
+        let thr_results = test_results.clone();
+
+        // Monitor broadcast states to determine when tests finish.
+        ts.monitor_broadcasts(move |msg| {
+            let mut results = thr_results.lock().unwrap();
+            match msg.message {
+                BroadcastMessageContents::Skip(test, _) => results.insert(test, TestResult::Skipped),
+                BroadcastMessageContents::Fail(test, _) => results.insert(test, TestResult::Failure),
+                BroadcastMessageContents::Pass(test, _) => results.insert(test, TestResult::Success),
+                BroadcastMessageContents::Running(test) => results.insert(test, TestResult::Running),
+                _ => None,
+            };
+        });
+
         Some(Ok(Scenario {
             id: id.to_string(),
             tests: graph_result.tests,
@@ -221,7 +239,7 @@ impl Scenario {
             controller: controller,
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: Arc::new(Mutex::new(0)),
-            results: Arc::new(Mutex::new(HashMap::new())),
+            results: test_results,
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
             working_directory: Arc::new(Mutex::new(None)),
@@ -418,6 +436,7 @@ impl Scenario {
     // is no exec_start and the new state is PreStart, or because
     // the new state is on a test whose requirements are not met.
     fn is_state_okay(&self, new_state: &ScenarioState) -> bool {
+
         match *new_state {
             // We can always enter the idle state.
             ScenarioState::Idle => true,
@@ -502,9 +521,9 @@ impl Scenario {
             ScenarioState::PreStart => ScenarioState::Running(0),
 
             // If we just finished running a test, determine the next test to run.
-            ScenarioState::Running(i) if i < test_count => ScenarioState::Running(i + 1),
-            ScenarioState::Running(i) if i >= test_count && failure_count > 0 => ScenarioState::PostFailure,
-            ScenarioState::Running(i) if i >= test_count && failure_count == 0 => ScenarioState::PostSuccess,
+            ScenarioState::Running(i) if (i + 1) < test_count => ScenarioState::Running(i + 1),
+            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count > 0 => ScenarioState::PostFailure,
+            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count == 0 => ScenarioState::PostSuccess,
             ScenarioState::Running(i) => panic!("Got into a weird state. Running({}), test_count: {}, failure_count: {}", i, test_count, failure_count),
             ScenarioState::PostFailure => ScenarioState::Idle,
             ScenarioState::PostSuccess => ScenarioState::Idle,
@@ -574,7 +593,11 @@ impl Scenario {
 
     // Given the current state, figure out the next test to run (if any)
     pub fn advance(&self) {
-        let new_state = self.find_next_state(self.state.lock().unwrap().clone());
+        let current_state = {
+            let state = self.state.lock().unwrap().clone();
+            state
+        };
+        let new_state = self.find_next_state(current_state);
 
         let failures = *(self.failures.lock().unwrap());
         match new_state {
@@ -599,7 +622,10 @@ impl Scenario {
                 let cmd = cmd.clone().unwrap().clone();
                 self.run_support_cmd(cmd, "execstart".to_string());
             },
-            ScenarioState::Running(next_step) => (),
+            ScenarioState::Running(next_step) => {
+                let ref test = self.tests[next_step].lock().unwrap();
+                test.start(self.working_directory.lock().unwrap().deref());
+            },
             ScenarioState::PostSuccess => {
                 let ref cmd = self.exec_stop_success;
                 let cmd = cmd.clone().unwrap().clone();
