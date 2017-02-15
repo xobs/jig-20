@@ -617,7 +617,10 @@ impl Scenario {
         return *(self.state.lock().unwrap()) == ScenarioState::Idle;
     }
 
-    // Start running a scenario
+    /// Start running a scenario
+    ///
+    /// Start running a scenario.  If `working_directory` is specified,
+    /// then use that for all tests that don't specify one.
     pub fn start(&self, working_directory: &Option<String>) {
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.advance();

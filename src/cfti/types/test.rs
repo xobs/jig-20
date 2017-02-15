@@ -1,10 +1,15 @@
 extern crate ini;
 use self::ini::Ini;
 use std::sync::{Arc, Mutex};
-use cfti::types::Jig;
 use std::collections::HashMap;
-use super::super::testset::TestSet;
-use super::super::controller::{self, BroadcastMessageContents};
+use std::time;
+use std::thread;
+use std::io::{BufRead, BufReader, Write};
+
+use cfti::types::Jig;
+use cfti::testset::TestSet;
+use cfti::controller::{self, BroadcastMessageContents, ControlMessageContents};
+use cfti::process;
 
 #[derive(Debug)]
 pub enum TestError {
@@ -199,14 +204,79 @@ impl Test {
                                                                      self.description().to_string()));
     }
 
-    pub fn start(&self) {
+    /// Start running a test
+    ///
+    /// Start running a test.  If `working_directory` is specified and
+    /// there is no WorkingDirectory in this test, use the provided one.
+    pub fn start(&self, working_directory: &Option<String>) {
+        self.broadcast(BroadcastMessageContents::Running(self.id().to_string()));
+
+        // Try to create a command.  If this fails, then the command completion will be called,
+        // so we can just ignore the error.
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let name = self.name().to_string();
+        let cmd = self.exec_start.clone();
+        let (stdout, stdin) = match process::try_command_completion(
+                        cmd.as_str(),
+                        working_directory,
+                        time::Duration::new(100, 0),
+                        move |res: Result<(), process::CommandError>| {
+            let msg = match res {
+                Ok(_) => BroadcastMessageContents::Pass(id.clone(), "".to_string()),
+                Err(e) => BroadcastMessageContents::Fail(id.clone(), format!("{:?}", e)),
+            };
+
+            // Send a message indicating what the test did, and advance the scenario.
+            let lk = controller.lock().unwrap();
+            lk.send_broadcast_class("support", id.as_str(), kind.as_str(), msg);
+            lk.send_control_class(
+                "support",
+                id.as_str(),
+                kind.as_str(),
+                &ControlMessageContents::AdvanceScenario);
+        }) {
+            Err(e) => return,
+            Ok(o) => o,
+        };
+
+        // Now that the child process is running, hook up the logger.
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let name = self.name().to_string();
+        thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                let lk = controller.lock().unwrap();
+                match line {
+                    Err(e) => {
+                        println!("Error in interface: {}", e);
+                        return;
+                    },
+                    Ok(l) => lk.send_broadcast(
+                        id.as_str(),
+                        kind.as_str(),
+                        BroadcastMessageContents::Log(l)
+                    ),
+                }
+            }
+        });
+    }
+
+    pub fn broadcast(&self, msg: BroadcastMessageContents) {
         let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Running(self.id().to_string()));
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Fail(self.id().to_string(), "Test is unimplemented".to_string()));
+        controller.send_broadcast(self.id(), self.kind(), msg);
+    }
+
+    pub fn control(&self, msg: ControlMessageContents) {
+        let controller = self.controller.lock().unwrap();
+        controller.send_control_class(
+                "support",
+                self.id(),
+                self.kind(),
+                &msg);
+
     }
 
     pub fn requirements(&self) -> &Vec<String> {
