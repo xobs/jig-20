@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::collections::HashMap;
 use std::time;
 use std::thread;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 
 use cfti::types::Jig;
 use cfti::testset::TestSet;
@@ -221,10 +221,9 @@ impl Test {
         let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
-        let name = self.name().to_string();
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
-        let (stdout, stdin) = match process::try_command_completion(
+        let (stdout, _) = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         time::Duration::new(100, 0),
@@ -243,7 +242,7 @@ impl Test {
                 kind.as_str(),
                 &ControlMessageContents::AdvanceScenario);
         }) {
-            Err(e) => return,
+            Err(_) => return,
             Ok(o) => o,
         };
 
@@ -251,7 +250,6 @@ impl Test {
         let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
-        let name = self.name().to_string();
         let last_line = self.last_line.clone();
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
@@ -279,10 +277,13 @@ impl Test {
         controller.send_broadcast(self.id(), self.kind(), msg);
     }
 
+    /*
     fn log(&self, msg: &str) {
         self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
     }
+    */
 
+    /*
     pub fn control(&self, msg: ControlMessageContents) {
         let controller = self.controller.lock().unwrap();
         controller.send_control_class(
@@ -290,8 +291,8 @@ impl Test {
                 self.id(),
                 self.kind(),
                 &msg);
-
     }
+    */
 
     pub fn requirements(&self) -> &Vec<String> {
         &self.requires
