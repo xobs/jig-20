@@ -143,7 +143,7 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
                         completion(Err(CommandError::ChildTimeoutWaitError(format!("{}", err).to_string())));
                         return;
                     },
-                    Ok(res) => {
+                    Ok(_) => {
                         completion(Err(CommandError::ChildTimeout));
                         return;
                     }

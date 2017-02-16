@@ -8,11 +8,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::thread;
 use std::time;
-use std::process::{Stdio, ChildStdin};
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
@@ -26,8 +25,6 @@ pub enum ScenarioError {
     FileLoadError,
     MissingScenarioSection,
     TestListNotFound,
-    MakeCommandFailed,
-    ExecCommandFailed,
     TestNotFound(String),
     TestDependencyNotFound(String, String),
     CircularDependency(String, String),
@@ -40,10 +37,8 @@ struct GraphResult {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// If a test has no TestResult, then it is considered Pending.
 enum TestResult {
-    /// The test has yet to be run
-    Pending,
-
     /// The test has started, and is currently running
     Running,
 
@@ -277,7 +272,7 @@ impl Scenario {
         */
 
         let parents = test_graph.parents(*node);
-        for (edge_index, parent_index) in parents.iter(test_graph) {
+        for (_, parent_index) in parents.iter(test_graph) {
             Self::visit_node(seen_nodes,
                              loaded_tests,
                              &parent_index,
@@ -289,7 +284,7 @@ impl Scenario {
         test_order.push(test_item.clone());
 
         let children = test_graph.children(*node);
-        for (edge_index, child_index) in children.iter(test_graph) {
+        for (_, child_index) in children.iter(test_graph) {
             Self::visit_node(seen_nodes,
                              loaded_tests,
                              &child_index,
@@ -324,7 +319,7 @@ impl Scenario {
             for i in 1 .. num_tests {
                 let previous_test = test_names[i - 1].clone();
                 let this_test = test_names[i].clone();
-                if let Err(e) = test_graph.add_edge(*(node_bucket.get(&previous_test).unwrap()),
+                if let Err(_) = test_graph.add_edge(*(node_bucket.get(&previous_test).unwrap()),
                                                     *(node_bucket.get(&this_test).unwrap()),
                                                     TestEdge::Follows) {
                     ts.debug("scenario",
@@ -361,7 +356,17 @@ impl Scenario {
             // Add an edge for every test requirement.
             for requirement in test.requirements() {
                 to_resolve.push(requirement.clone());
-                if let Err(e) = test_graph.add_edge(node_bucket[requirement],
+                let edge = match node_bucket.get(requirement) {
+                    None => {
+                        ts.debug("scenario",
+                                id,
+                                format!("Test {} has a requirement that doesn't exist: {}",
+                                        test_name, requirement).as_str());
+                        return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
+                    },
+                    Some(e) => e,
+                };
+                if let Err(_) = test_graph.add_edge(*edge,
                                                     node_bucket[&test_name],
                                                     TestEdge::Requires) {
                     ts.debug("scenario",
@@ -375,7 +380,17 @@ impl Scenario {
             // Also add an edge for every test suggestion.
             for requirement in test.suggestions() {
                 to_resolve.push(requirement.clone());
-                if let Err(e) = test_graph.add_edge(node_bucket[requirement],
+                let edge = match node_bucket.get(requirement) {
+                    None => {
+                        ts.debug("scenario",
+                                id,
+                                format!("Test {} has a dependency that doesn't exist: {}",
+                                        test_name, requirement).as_str());
+                        return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
+                    },
+                    Some(e) => e,
+                };
+                if let Err(_) = test_graph.add_edge(*edge,
                                                     node_bucket[&test_name],
                                                     TestEdge::Suggests) {
                     ts.debug("scenario",
@@ -580,7 +595,7 @@ impl Scenario {
         // If it's an error, then the completion above will be called and the test state
         // will be advanced there.  Avoid advancing it here.
         let (stdout, _) = match res {
-            Err(e) => return,
+            Err(_) => return,
             Ok(s) => s,
         };
 
@@ -590,7 +605,8 @@ impl Scenario {
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
-                    Err(e) => {
+                    Err(_) => {
+                        /* Support command ended */
                         return;
                     },
                     Ok(l) => {
@@ -650,10 +666,6 @@ impl Scenario {
         }
     }
 
-    pub fn is_finished(&self) -> bool {
-        return *(self.state.lock().unwrap()) == ScenarioState::Idle;
-    }
-
     /// Start running a scenario
     ///
     /// Start running a scenario.  If `working_directory` is specified,
@@ -700,7 +712,9 @@ impl Scenario {
         controller.send_broadcast(self.id(), self.kind(), msg);
     }
 
+    /*
     fn log(&self, msg: &str) {
         self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
     }
+    */
 }
