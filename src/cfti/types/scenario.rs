@@ -11,12 +11,15 @@ use std::ops::DerefMut;
 use std::io::{BufRead, BufReader, Write};
 use std::time::Duration;
 use std::thread;
+use std::time;
 use std::process::{Stdio, ChildStdin};
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
 use super::super::testset::TestSet;
 use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
+
+const DEFAULT_TIMEOUT: u32 = (60 * 60 * 24);
 
 #[derive(Clone, Debug)]
 pub enum ScenarioError {
@@ -122,10 +125,17 @@ pub struct Scenario {
     /// The result of various tests, indexed by test name.
     results: Arc<Mutex<HashMap<String, TestResult>>>,
 
-    // These should come in handy, I think.
+    /// Dependency graph for all tests to be run.
     graph: Dag<String, TestEdge>,
+
+    /// A hashmap containing all nodes in the graph, indexed by name.
     node_bucket: HashMap<String, NodeIndex>,
+
+    /// The default directory for all tests during this test run.
     working_directory: Arc<Mutex<Option<String>>>,
+
+    /// The timestamp when the test started, used to calculate timeouts.
+    start_time: Arc<Mutex<time::Instant>>,
 }
 
 impl Scenario {
@@ -177,7 +187,7 @@ impl Scenario {
         };
 
         let timeout = match scenario_section.get("Timeout") {
-            None => 2000,
+            None => DEFAULT_TIMEOUT,
             Some(s) => s.parse().unwrap(),
         };
 
@@ -243,6 +253,7 @@ impl Scenario {
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
             working_directory: Arc::new(Mutex::new(None)),
+            start_time: Arc::new(Mutex::new(time::Instant::now())),
         }))
     }
 
