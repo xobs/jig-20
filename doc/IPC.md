@@ -36,10 +36,11 @@ Verbs sent by the CFTI server:
  * JIG jigname - Sent at startup, and if/when the jig is changed.
  * SCENARIOS [list] - Sent whenever the list of scenarios is updated.  [list] is a whitespace-separated list of available scenarios.
  * SCENARIO [item] - Sent whenever a scenario is chosen.  This will happen automatically at startup.
+ * DESCRIBE [type] [field] [item] [value] - Describes a [type] (scenario, jig, or test) field of [field] (name or description) of item [item] to be [value].  E.g. "DESCRIBE TEST NAME simpletest A simple test".
  * TESTS [scenario] [list] - Sent whenever the list of tests is updated, or whenever a new scenario is chosen.
  * START [scenario] - Sent at the start, when a scenario is begun.
  * RUNNING [test] - Indicates the current test is being run.
- * DESCRIBE [type] [field] [item] [value] - Describes a [type] (scenario, jig, or test) field of [field] (name or description) of item [item] to be [value].  E.g. "DESCRIBE TEST NAME simpletest A simple test".
+ * DAEMONIZED [test] - Sent when a test has entered "daemon" mode.
  * PASS [test] [message] - Indicates a particular item passed.
  * FAIL [test] [reason] - Indicates a particular item failed.
  * SKIP [test] [reason] - Indicates a test was skipped, likely due to an earlier failure.
