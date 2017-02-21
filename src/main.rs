@@ -5,19 +5,16 @@ fn main() {
     let controller = cfti::controller::Controller::new().unwrap();
     let test_set = cfti::TestSet::new("ltc-tests", controller.clone()).unwrap();
 
-/*
-    for i in 0..10 {
-        println!("i: {}", i);
-        test_set.lock().unwrap().debug("main", "main", format!("I loop: {}", i).as_str());
-        thread::sleep(time::Duration::from_millis(100));
-    }
-*/
-
     println!("Test set: {:?}", test_set);
     loop {
-        if controller.lock().unwrap().should_exit() {
-            break;
-        }
+        match controller.try_lock() {
+            Ok(lock) => {
+                if lock.should_exit() {
+                    break;
+                }
+            },
+            Err(e) => println!("Controller mutex is locked: {:?}", e),
+        };
         thread::sleep(time::Duration::from_millis(100));
     }
 }
