@@ -230,11 +230,11 @@ impl Controller {
 
                     ControlMessageContents::Shutdown(s) => {
                         let me = myself.lock().unwrap();
-                        let mut should_exit = (*me).should_exit.lock().unwrap();
                         match s {
                             Some(s) => println!("Shutdown called: {}", s),
                             None => println!("Shutdown called (no reason)"),
                         }
+                        let mut should_exit = (*me).should_exit.lock().unwrap();
                         *(should_exit.deref_mut()) = true;
                     },
 
