@@ -217,17 +217,24 @@ impl Scenario {
             Ok(v) => v,
         };
 
+        let failures = Arc::new(Mutex::new(0));
+
         let test_results = Arc::new(Mutex::new(HashMap::new()));
         let thr_results = test_results.clone();
+        let thr_failures = failures.clone();
 
         // Monitor broadcast states to determine when tests finish.
         ts.monitor_broadcasts(move |msg| {
             let mut results = thr_results.lock().unwrap();
             match msg.message {
                 BroadcastMessageContents::Skip(test, _) => results.insert(test, TestResult::Skipped),
-                BroadcastMessageContents::Fail(test, _) => results.insert(test, TestResult::Failure),
                 BroadcastMessageContents::Pass(test, _) => results.insert(test, TestResult::Success),
                 BroadcastMessageContents::Running(test) => results.insert(test, TestResult::Running),
+                BroadcastMessageContents::Fail(test, _) => {
+                    let mut failures = thr_failures.lock().unwrap();
+                    *failures = *failures + 1;
+                    results.insert(test, TestResult::Failure)
+                },
                 _ => None,
             };
         });
@@ -243,7 +250,7 @@ impl Scenario {
             exec_stop_failure: exec_stop_failure,
             controller: controller,
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
-            failures: Arc::new(Mutex::new(0)),
+            failures: failures,
             results: test_results,
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
