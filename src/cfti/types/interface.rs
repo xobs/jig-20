@@ -1,16 +1,20 @@
 extern crate ini;
+extern crate bus;
+
 use self::ini::Ini;
+
 use std::collections::HashMap;
 use cfti::types::Jig;
 use cfti::testset::TestSet;
-use cfti::controller::{self, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::{self, Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
+
 use std::process::{Stdio, ChildStdin};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::ops::DerefMut;
 use std::thread;
 use std::io::{BufRead, BufReader, Write};
-use std::fmt::{Formatter, Display, Error};
+use std::fmt::{Formatter, Display, Error, self};
 
 #[derive(Debug)]
 enum InterfaceFormat {
@@ -41,7 +45,6 @@ impl Display for InterfaceError {
     }
 }
 
-#[derive(Debug)]
 pub struct Interface {
     /// id: The string that other units refer to this file as.
     id: String,
@@ -61,11 +64,20 @@ pub struct Interface {
     /// working_directory: The path where the program will be run from.
     working_directory: Option<String>,
 
-    /// The controller where messages go.
-    controller: Arc<Mutex<controller::Controller>>,
+    /// The channel where control messages go.
+    control: mpsc::Sender<ControlMessage>,
+
+    /// The bus where broadcast messages come from.
+    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
 
     /// The value set by the "HELLO" command
     hello: String,
+}
+
+impl fmt::Debug for Interface {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[Interface]")
+    }
 }
 
 impl Interface {
@@ -73,7 +85,8 @@ impl Interface {
                id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Interface, InterfaceError>> {
+               control: &mpsc::Sender<ControlMessage>,
+               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Interface, InterfaceError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -141,7 +154,8 @@ impl Interface {
             exec_start: exec_start,
             working_directory: working_directory,
             format: format,
-            controller: controller,
+            control: control.clone(),
+            broadcast: broadcast.clone(),
             hello: "".to_string(),
        }))
     }
@@ -197,10 +211,11 @@ impl Interface {
                                                 "FINISH {} {} {}", scenario, result, reason).unwrap(),
         }
     }
+
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
     }
 
-    fn text_read(line: String, id: &String, controller: &mut controller::Controller) {
+    fn text_read(line: String, id: &String, control: &mpsc::Sender<ControlMessage>) {
         println!("Got line: {}", line);
         let mut words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
         let verb = words[0].to_lowercase();
@@ -235,7 +250,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        controller.send_control(id, "interface", &response);
+        Controller::control(control, id, "interface", &response);
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
@@ -271,7 +286,7 @@ impl Interface {
                 ts.monitor_broadcasts(move |msg| Interface::text_write(stdin.clone(), msg));
 
                 // Monitor the child process' stdout, and pass values to the controller.
-                let controller_clone = ts.get_controller();
+                let control = self.control.clone();
                 let id = self.id.clone();
                 let builder = thread::Builder::new()
                     .name(format!("I {} -> CFTI", id).into());
@@ -282,7 +297,7 @@ impl Interface {
                     for line in BufReader::new(stdout2).lines() {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
-                            Ok(l) => Interface::text_read(l, &id, &mut controller_clone.lock().unwrap()),
+                            Ok(l) => Interface::text_read(l, &id, &control),
                         }
                     }
                 }).unwrap();

@@ -1,3 +1,5 @@
+extern crate bus;
+
 use super::types::Test;
 use super::types::Scenario;
 use super::types::Logger;
@@ -13,19 +15,18 @@ use super::controller;
 
 use std::collections::HashMap;
 use std::fs;
+use std::fmt;
 use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::ops::{DerefMut, Deref};
 
-use super::controller::{BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
+use super::controller::{BroadcastMessage, BroadcastMessageContents, ControlMessageContents, Controller};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
-#[derive(Debug)]
 pub struct TestSet {
-    controller: Arc<Mutex<controller::Controller>>,
     tests: HashMap<String, Arc<Mutex<Test>>>,
     scenarios: HashMap<String, Arc<Mutex<Scenario>>>,
     triggers: HashMap<String, Arc<Mutex<Trigger>>>,
@@ -44,14 +45,23 @@ pub struct TestSet {
     updaters: HashMap<String, Updater>,
     services: HashMap<String, Service>,
     */
+
+    /// A sender, used for sending Control messages.
+    control: mpsc::Sender<controller::ControlMessage>,
+
+    /// A broadcast bus, used for sending broadcast messages.
+    broadcast: Arc<Mutex<bus::Bus<controller::BroadcastMessage>>>,
+}
+
+impl fmt::Debug for TestSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[TestSet]")
+    }
 }
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str, controller: Arc<Mutex<controller::Controller>>) -> Result<Arc<Mutex<TestSet>>, Error> {
-
-        // Add a simple logger to show us debug data.
-        controller.lock().unwrap().add_logger(|msg| println!("DEBUG>> {:?}", msg));
+    pub fn new(dir: &str, controller: &mut controller::Controller) -> Result<Arc<Mutex<TestSet>>, Error> {
 
         let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
@@ -62,10 +72,14 @@ impl TestSet {
             jig: None,
             scenario: None,
             interfaces: HashMap::new(),
-            controller: controller.clone(),
+            control: controller.new_control(),
+            broadcast: controller.new_broadcast(),
         }));
 
-        controller.lock().unwrap().set_testset(test_set.clone());
+        // Add a simple logger to show us debug data.
+        Controller::add_logger(&test_set.lock().unwrap().broadcast, |msg| println!("DEBUG>> {:?}", msg));
+
+        controller.set_testset(test_set.clone());
 
         /* TestSet ordering:
          * When a TestSet is loaded off the disk, the order of unit files is
@@ -129,10 +143,11 @@ impl TestSet {
     }
 
     pub fn debug(&self, unit_type: &str, unit_id: &str, msg: &str) {
-        self.controller.lock().unwrap().send_control_class("debug",
-                                                           unit_id,
-                                                           unit_type,
-                                                           &ControlMessageContents::Log(msg.to_string()));
+        Controller::control_class(&self.control,
+                                  "debug",
+                                  unit_id,
+                                  unit_type,
+                                  &ControlMessageContents::Log(msg.to_string()));
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -140,7 +155,7 @@ impl TestSet {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(&self, item_name, path_str, self.controller.clone()) {
+            let new_jig = match Jig::new(&self, item_name, path_str, &self.control, &self.broadcast) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,
@@ -188,19 +203,19 @@ impl TestSet {
 
     pub fn monitor_logs<F>(&self, logger_func: F)
         where F: Send + 'static + Fn(BroadcastMessage) {
-        self.controller.lock().unwrap().deref_mut().add_logger(logger_func);
+        Controller::add_logger(&self.broadcast, logger_func);
     }
 
     pub fn monitor_broadcasts<F>(&self, broadcast_func: F)
         where F: Send + 'static + Fn(BroadcastMessage) {
-        self.controller.lock().unwrap().deref_mut().add_broadcast(broadcast_func);
+        Controller::add_broadcast(&self.broadcast, broadcast_func);
     }
 
     fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
         for interface_path in interface_paths {
             let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
-            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs, self.controller.clone()) {
+            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs, &self.control, &self.broadcast) {
                 // In this case, it just means the interface is incompatible.
                 None => continue,
                 Some(s) => {
@@ -231,7 +246,8 @@ impl TestSet {
                                            item_name,
                                            path_str,
                                            &self.jigs,
-                                           self.controller.clone()) {
+                                           &self.control,
+                                           &self.broadcast) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
                 Some(s) => {
@@ -257,7 +273,8 @@ impl TestSet {
                                                    path_str,
                                                    &self.jigs,
                                                    &self.tests,
-                                                   self.controller.clone()) {
+                                                   &self.control,
+                                                   &self.broadcast) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
                 Some(s) => {
@@ -328,10 +345,6 @@ impl TestSet {
         }
     }
 
-    pub fn get_controller(&self) -> Arc<Mutex<controller::Controller>> {
-        return self.controller.clone();
-    }
-
     pub fn advance_scenario(&self) {
         // Unwrap, because if it is None then things are very broken.
         match self.scenario {
@@ -375,10 +388,10 @@ impl TestSet {
     pub fn send_scenarios(&self) {
         let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
 
-        let ref cx = *(self.controller.lock().unwrap());
-        cx.send_broadcast(self.unit_name(),
-                          self.unit_type(),
-                          BroadcastMessageContents::Scenarios(scenario_list));
+        Controller::broadcast(&self.broadcast,
+                              self.unit_name(),
+                              self.unit_type(),
+                              &BroadcastMessageContents::Scenarios(scenario_list));
     }
 
     pub fn send_tests(&self, scenario_id: Option<String>) {
@@ -409,12 +422,10 @@ impl TestSet {
         };
         self.scenario = Some(scenario.clone());
 
-        {
-            let ref cx = *(self.controller.lock().unwrap());
-            cx.send_broadcast(self.unit_name(),
-                            self.unit_type(),
-                            BroadcastMessageContents::Scenario(scenario_name.clone()));
-        }
+        Controller::broadcast(&self.broadcast,
+                              self.unit_name(),
+                              self.unit_type(),
+                              &BroadcastMessageContents::Scenario(scenario_name.clone()));
         scenario.lock().unwrap().deref_mut().describe();
     }
 

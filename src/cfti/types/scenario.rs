@@ -1,22 +1,25 @@
 extern crate ini;
 extern crate daggy;
+extern crate bus;
 
 use self::ini::Ini;
 use self::daggy::{Dag, Walker, NodeIndex};
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::thread;
 use std::time;
+use std::fmt;
+
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
-use super::super::testset::TestSet;
-use super::super::controller::{self, BroadcastMessageContents, ControlMessageContents};
+use cfti::testset::TestSet;
+use cfti::controller::{Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
 
 const DEFAULT_TIMEOUT: u32 = (60 * 60 * 24);
 
@@ -82,7 +85,6 @@ enum TestEdge {
     Follows,
 }
 
-#[derive(Debug)]
 pub struct Scenario {
     /// id: The string that other units refer to this file as.
     id: String,
@@ -108,8 +110,11 @@ pub struct Scenario {
     /// exec_stop_failure: A command to run if this scenario fails.
     exec_stop_failure: Option<String>,
 
-    /// The controller where messages go.
-    controller: Arc<Mutex<controller::Controller>>,
+    /// The control channel where control messages go to.
+    control: mpsc::Sender<ControlMessage>,
+
+    /// The broadcast bus where broadcast messages come from.
+    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
 
     /// What the current state of the scenario is.
     state: Arc<Mutex<ScenarioState>>,
@@ -133,13 +138,20 @@ pub struct Scenario {
     start_time: Arc<Mutex<time::Instant>>,
 }
 
+impl fmt::Debug for Scenario {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[Scenario]")
+    }
+}
+
 impl Scenario {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
                loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
-               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Scenario, ScenarioError>> {
+               control: &mpsc::Sender<ControlMessage>,
+               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -248,7 +260,8 @@ impl Scenario {
             exec_start: exec_start,
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
-            controller: controller,
+            control: control.clone(),
+            broadcast: broadcast.clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
             results: test_results,
@@ -542,10 +555,10 @@ impl Scenario {
                 *(self.failures.lock().unwrap()) = 0;
                 self.results.lock().unwrap().clear();
 
-                let controller = self.controller.lock().unwrap();
-                controller.send_broadcast(self.id(),
-                                        self.kind(),
-                                        BroadcastMessageContents::Start(self.id().to_string()));
+                Controller::broadcast(&self.broadcast,
+                                      self.id(),
+                                      self.kind(),
+                                      &BroadcastMessageContents::Start(self.id().to_string()));
                 ScenarioState::PreStart
             },
 
@@ -575,10 +588,11 @@ impl Scenario {
 
     fn run_support_cmd(&self, cmd: String, testname: String) {
         // unwrap is safe because we know a PreStart command exists.
-        let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let tn = testname.clone();
+        let broadcast = self.broadcast.clone();
+        let control = self.control.clone();
         let res = process::try_command_completion(cmd.as_str(),
                                         self.working_directory.lock().unwrap().deref(),
                                         Duration::new(100, 0),
@@ -589,9 +603,9 @@ impl Scenario {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            let lk = controller.lock().unwrap();
-            lk.send_broadcast_class("support", id.as_str(), kind.as_str(), msg);
-            lk.send_control_class(
+            Controller::broadcast_class(&broadcast, "support", id.as_str(), kind.as_str(), &msg);
+            Controller::control_class(
+                &control,
                 "support",
                 id.as_str(),
                 kind.as_str(),
@@ -606,7 +620,7 @@ impl Scenario {
             Ok(s) => s,
         };
 
-        let controller = self.controller.clone();
+        let broadcast = self.broadcast.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         thread::spawn(move || {
@@ -617,8 +631,12 @@ impl Scenario {
                         return;
                     },
                     Ok(l) => {
-                        let lk = controller.lock().unwrap();
-                        lk.send_broadcast_class("support", id.as_str(), kind.as_str(), BroadcastMessageContents::Log(format!("{}: {}", testname, l)));
+                        Controller::broadcast_class(
+                            &broadcast,
+                            "support",
+                            id.as_str(),
+                            kind.as_str(),
+                            &BroadcastMessageContents::Log(format!("{}: {}", testname, l)));
                     },
                 }
             }
@@ -715,8 +733,7 @@ impl Scenario {
     }
 
     fn broadcast(&self, msg: BroadcastMessageContents) {
-        let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id(), self.kind(), msg);
+        Controller::broadcast(&self.broadcast, self.id(), self.kind(), &msg);
     }
 
     /*

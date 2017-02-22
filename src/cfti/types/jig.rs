@@ -1,11 +1,16 @@
 extern crate ini;
+extern crate bus;
+
 use self::ini::Ini;
+
 use std::path::Path;
-use super::super::process;
-use super::super::config;
-use super::super::testset::TestSet;
-use std::sync::{Arc, Mutex};
-use super::super::controller::{self, BroadcastMessageContents};
+use std::sync::{Arc, Mutex, mpsc};
+use std::fmt;
+
+use cfti::process;
+use cfti::config;
+use cfti::testset::TestSet;
+use cfti::controller::{self, Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents};
 
 #[derive(Debug)]
 pub enum JigError {
@@ -13,7 +18,6 @@ pub enum JigError {
     MissingJigSection,
 }
 
-#[derive(Debug)]
 pub struct Jig {
 
     /// Id: File name on disk, what other units refer to this one as.
@@ -32,14 +36,21 @@ pub struct Jig {
     working_directory: Option<String>,
 
     /// The controller where messages go.
-    controller: Arc<Mutex<controller::Controller>>,
+    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+}
+
+impl fmt::Debug for Jig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[Jig]")
+    }
 }
 
 impl Jig {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               controller: Arc<Mutex<controller::Controller>>) -> Option<Result<Jig, JigError>> {
+               _: &mpsc::Sender<ControlMessage>,
+               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -115,24 +126,25 @@ impl Jig {
 
             default_scenario: default_scenario,
             working_directory: working_directory,
-            controller: controller,
+            broadcast: broadcast.clone(),
         }))
     }
 
     pub fn describe(&self) {
-        let controller = self.controller.lock().unwrap();
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                     "name".to_string(),
-                                                                     self.id().to_string(),
-                                                                     self.name().to_string()));
-        controller.send_broadcast(self.id(),
-                                  self.kind(),
-                                  BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                     "description".to_string(),
-                                                                     self.id().to_string(),
-                                                                     self.description().to_string()));
+        Controller::broadcast(&self.broadcast,
+                              self.id(),
+                              self.kind(),
+                              &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                  "name".to_string(),
+                                                                  self.id().to_string(),
+                                                                  self.name().to_string()));
+        Controller::broadcast(&self.broadcast,
+                              self.id(),
+                              self.kind(),
+                              &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                  "description".to_string(),
+                                                                  self.id().to_string(),
+                                                                  self.description().to_string()));
     }
 
     pub fn kind(&self) -> &str {
