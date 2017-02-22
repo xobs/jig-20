@@ -288,7 +288,7 @@ impl Controller {
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: contents.clone(),
-        });
+        }).unwrap();
     }
 
     pub fn control(control: &mpsc::Sender<ControlMessage>,

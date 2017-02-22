@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader};
 
 use cfti::types::Jig;
 use cfti::testset::TestSet;
-use cfti::controller::{self, Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::{Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 
 #[derive(Debug)]

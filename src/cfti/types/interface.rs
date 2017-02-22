@@ -283,7 +283,7 @@ impl Interface {
         match self.format {
             InterfaceFormat::Text => {
                 // Send all broadcasts to the stdin of the child process.
-                ts.monitor_broadcasts(move |msg| Interface::text_write(stdin.clone(), msg));
+                Controller::add_broadcast(&self.broadcast, move |msg| Interface::text_write(stdin.clone(), msg));
 
                 // Monitor the child process' stdout, and pass values to the controller.
                 let control = self.control.clone();
@@ -303,7 +303,7 @@ impl Interface {
                 }).unwrap();
             },
             InterfaceFormat::JSON => {
-                ts.monitor_broadcasts(move |msg| {Interface::json_write(stdin.clone(), msg);});
+                Controller::add_broadcast(&self.broadcast, move |msg| {Interface::json_write(stdin.clone(), msg);});
             },
         };
         Ok(())
