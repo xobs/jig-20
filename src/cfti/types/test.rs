@@ -278,6 +278,7 @@ impl Test {
                         return;
                     },
                     Ok(l) => {
+                        *(last_line.lock().unwrap()) = l.clone();
                         Controller::broadcast(
                             &broadcast,
                             id.as_str(),
