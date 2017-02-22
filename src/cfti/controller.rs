@@ -149,7 +149,7 @@ impl Controller {
         // The controller runs in its own thread.
         let controller_clone = controller.clone();
         let builder = thread::Builder::new()
-                .name("Controller Receiver".into());
+                .name("C-Rx".into());
         builder.spawn(move || Controller::controller_thread(rx, bus, controller_clone)).unwrap();
 
         Ok(controller)
@@ -272,7 +272,7 @@ impl Controller {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
         let builder = thread::Builder::new()
-                    .name("Broadcast Processor".into());
+                    .name("B-Hook".into());
         builder.spawn(move ||
             loop {
                 match console_rx_channel.recv() {

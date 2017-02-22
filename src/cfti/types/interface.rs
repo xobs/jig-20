@@ -274,7 +274,7 @@ impl Interface {
                 let controller_clone = ts.get_controller();
                 let id = self.id.clone();
                 let builder = thread::Builder::new()
-                    .name(format!("Interface {} -> CFTI", id).into());
+                    .name(format!("I {} -> CFTI", id).into());
 
                 builder.spawn(move || {
                     let mut var = stdout.lock().unwrap();
