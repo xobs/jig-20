@@ -196,7 +196,6 @@ impl Controller {
                         }
                     },
                 };
-                let ref mut testset = testset.lock().unwrap();
 
                 match msg.message {
                     /// Log messages: simply rebroadcast them onto the broadcast bus.
@@ -214,26 +213,26 @@ impl Controller {
 
                     // Get the current jig information and broadcast it on the bus.
                     ControlMessageContents::GetJig => {
-                        let jig_name = testset.get_jig_name();
+                        let jig_name = testset.lock().unwrap().get_jig_name();
                         Self::broadcast_internal(&bus, BroadcastMessageContents::Jig(jig_name));
                     },
 
                     // Set the current scenario to the specified one.
                     ControlMessageContents::Scenario(s) => {
-                        testset.set_scenario(&s);
+                        testset.lock().unwrap().set_scenario(&s);
                     },
 
                     ControlMessageContents::Hello(s) => {
-                        testset.set_interface_hello(msg.unit_id, s);
+                        testset.lock().unwrap().set_interface_hello(msg.unit_id, s);
                         process::exit(0);
                     },
 
                     ControlMessageContents::Shutdown(s) => {
-                        let me = myself.lock().unwrap();
                         match s {
                             Some(s) => println!("Shutdown called: {}", s),
                             None => println!("Shutdown called (no reason)"),
                         }
+                        let me = myself.lock().unwrap();
                         let mut should_exit = (*me).should_exit.lock().unwrap();
                         *(should_exit.deref_mut()) = true;
                     },
@@ -242,12 +241,12 @@ impl Controller {
                     ControlMessageContents::Pong(s) => (),
 
                     // Start running tests.
-                    ControlMessageContents::StartScenario(s) => testset.start_scenario(s),
+                    ControlMessageContents::StartScenario(s) => testset.lock().unwrap().start_scenario(s),
                     ControlMessageContents::AbortTests => (),
-                    ControlMessageContents::AdvanceScenario => testset.advance_scenario(),
+                    ControlMessageContents::AdvanceScenario => testset.lock().unwrap().advance_scenario(),
 
-                    ControlMessageContents::GetScenarios => testset.send_scenarios(),
-                    ControlMessageContents::GetTests(s) => testset.send_tests(s),
+                    ControlMessageContents::GetScenarios => testset.lock().unwrap().send_scenarios(),
+                    ControlMessageContents::GetTests(s) => testset.lock().unwrap().send_tests(s),
 
                     //_ => println!("Unhandled message: {:?}", msg),
                 };
