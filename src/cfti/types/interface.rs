@@ -273,7 +273,10 @@ impl Interface {
                 // Monitor the child process' stdout, and pass values to the controller.
                 let controller_clone = ts.get_controller();
                 let id = self.id.clone();
-                thread::spawn(move || {
+                let builder = thread::Builder::new()
+                    .name(format!("Interface {} -> CFTI", id).into());
+
+                builder.spawn(move || {
                     let mut var = stdout.lock().unwrap();
                     let ref mut stdout2 = var.deref_mut();
                     for line in BufReader::new(stdout2).lines() {

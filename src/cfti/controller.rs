@@ -148,7 +148,9 @@ impl Controller {
 
         // The controller runs in its own thread.
         let controller_clone = controller.clone();
-        thread::spawn(move || Controller::controller_thread(rx, bus, controller_clone));
+        let builder = thread::Builder::new()
+                .name("Controller Receiver".into());
+        builder.spawn(move || Controller::controller_thread(rx, bus, controller_clone));
 
         Ok(controller)
     }
@@ -269,7 +271,9 @@ impl Controller {
         where F: Send + 'static + Fn(BroadcastMessage) {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
-        thread::spawn(move ||
+        let builder = thread::Builder::new()
+                    .name("Broadcast Processor".into());
+        builder.spawn(move ||
             loop {
                 match console_rx_channel.recv() {
                     Err(e) => { println!("DEBUG!! Channel closed, probably quitting.  Err: {:?}", e); return; },
