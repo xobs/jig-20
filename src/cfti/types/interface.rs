@@ -285,7 +285,7 @@ impl Interface {
                             Ok(l) => Interface::text_read(l, &id, &mut controller_clone.lock().unwrap()),
                         }
                     }
-                });
+                }).unwrap();
             },
             InterfaceFormat::JSON => {
                 ts.monitor_broadcasts(move |msg| {Interface::json_write(stdin.clone(), msg);});

@@ -150,7 +150,7 @@ impl Controller {
         let controller_clone = controller.clone();
         let builder = thread::Builder::new()
                 .name("Controller Receiver".into());
-        builder.spawn(move || Controller::controller_thread(rx, bus, controller_clone));
+        builder.spawn(move || Controller::controller_thread(rx, bus, controller_clone)).unwrap();
 
         Ok(controller)
     }
@@ -280,7 +280,7 @@ impl Controller {
                     Ok(msg) => broadcast_func(msg),
                 };
             }
-        );
+        ).unwrap();
     }
 
     pub fn control_message(&self, message: &ControlMessage) {

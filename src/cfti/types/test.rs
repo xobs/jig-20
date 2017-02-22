@@ -251,9 +251,10 @@ impl Test {
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let last_line = self.last_line.clone();
-        thread::spawn(move || {
+        let builder = thread::Builder::new()
+                .name(format!("Running test: {}", id).into());
+        builder.spawn(move || {
             for line in BufReader::new(stdout).lines() {
-                let lk = controller.lock().unwrap();
                 match line {
                     Err(e) => {
                         println!("Error in interface: {}", e);
@@ -261,6 +262,7 @@ impl Test {
                     },
                     Ok(l) => {
                         *(last_line.lock().unwrap().deref_mut()) = l.clone();
+                        let lk = controller.lock().unwrap();
                         lk.send_broadcast(
                             id.as_str(),
                             kind.as_str(),
@@ -269,7 +271,7 @@ impl Test {
                     },
                 }
             }
-        });
+        }).unwrap();
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
