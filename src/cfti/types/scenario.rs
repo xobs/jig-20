@@ -681,10 +681,10 @@ impl Scenario {
         {
             let current_state = self.state.lock().unwrap().clone();
             if current_state != ScenarioState::Idle {
-                self.log(format!("State is {:?}, not Idle", current_state));
+                self.log(format!("NOT starting new scenario run because ScenarioState is {:?}, not Idle", current_state));
                 return;
             }
-            self.log("Starting new test".to_string());
+            self.log("Starting new scenario run".to_string());
         }
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.advance();

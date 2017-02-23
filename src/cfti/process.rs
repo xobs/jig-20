@@ -7,7 +7,6 @@ use std::time::Duration;
 use std::thread;
 use std::process::{Stdio, ChildStdin, ChildStdout};
 use self::wait_timeout::ChildExt;
-use super::testset::TestSet;
 use cfti::controller::Controller;
 
 #[derive(Debug)]

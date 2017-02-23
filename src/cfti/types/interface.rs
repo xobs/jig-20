@@ -217,7 +217,7 @@ impl Interface {
     }
 
     fn text_read(line: String, id: &String, controller: &Controller) {
-        println!("Got line: {}", line);
+        controller.debug(id, "interface", format!("CFTI interface input: {}", line));
         let mut words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
         let verb = words[0].to_lowercase();
         words.remove(0);

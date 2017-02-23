@@ -6,6 +6,7 @@ use cfti::types::Jig;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
 
+use std;
 use std::process::Stdio;
 use std::collections::HashMap;
 use std::io::Write;
@@ -182,19 +183,22 @@ impl Logger {
             },
             Ok(s) => s,
         };
-        let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
+        let mut stdin = child.stdin.unwrap();
         let format = self.format.clone();
         match format {
             LoggerFormat::TabSeparatedValue => self.controller.listen_logs(move |msg| {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
-                        writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
+                        if let Err(e) = writeln!(&mut stdin, "{}\t{}\t{}\t{}\t{}\t{}\t",
                                         msg.message_class,
                                         msg.unit_id,
                                         msg.unit_type,
                                         msg.unix_time,
                                         msg.unix_time_nsecs,
-                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")).unwrap(),
+                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")) {
+                            writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
+                            return;
+                        },
                     _ => return,
                 };
             }),
@@ -208,7 +212,10 @@ impl Logger {
                         object["unix_time"] = msg.unix_time.into();
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
                         object["message"] = log.into();
-                        writeln!(stdin.lock().unwrap(), "{}", json::stringify(object)).unwrap();
+                        if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
+                            writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
+                            return;
+                        };
                     },
                     _ => return,
                 }

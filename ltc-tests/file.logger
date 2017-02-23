@@ -1,6 +1,7 @@
 [Logger]
 Name=File Logger
 Description=Write log messages out to a file
-ExecStart=C:\\Users\\smcro\\Documents\\Code\\jig-20-file-logger\\target\\debug\\jig-20-file-logger.exe C:\\Users\\smcro\\Documents\\Code\\jig-20\\file-log.json
+ExecStart=cargo run -- file-log.json
 Format=json
+WorkingDirectory=../jig-20-file-logger
 Jigs=windows
