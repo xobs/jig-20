@@ -110,11 +110,8 @@ pub struct Scenario {
     /// exec_stop_failure: A command to run if this scenario fails.
     exec_stop_failure: Option<String>,
 
-    /// The control channel where control messages go to.
-    control: mpsc::Sender<ControlMessage>,
-
-    /// The broadcast bus where broadcast messages come from.
-    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+    /// The controller where all messages come and go.
+    controller: Controller,
 
     /// What the current state of the scenario is.
     state: Arc<Mutex<ScenarioState>>,
@@ -150,8 +147,7 @@ impl Scenario {
                path: &str,
                loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
-               control: &mpsc::Sender<ControlMessage>,
-               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Scenario, ScenarioError>> {
+               controller: &Controller) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -236,7 +232,7 @@ impl Scenario {
         let thr_failures = failures.clone();
 
         // Monitor broadcast states to determine when tests finish.
-        ts.monitor_broadcasts(move |msg| {
+        controller.listen(move |msg| {
             let mut results = thr_results.lock().unwrap();
             match msg.message {
                 BroadcastMessageContents::Skip(test, _) => results.insert(test, TestResult::Skipped),
@@ -260,8 +256,7 @@ impl Scenario {
             exec_start: exec_start,
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
-            control: control.clone(),
-            broadcast: broadcast.clone(),
+            controller: controller.clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
             results: test_results,
@@ -555,7 +550,7 @@ impl Scenario {
                 *(self.failures.lock().unwrap()) = 0;
                 self.results.lock().unwrap().clear();
 
-                Controller::broadcast(&self.broadcast,
+                self.controller.do_broadcast(
                                       self.id(),
                                       self.kind(),
                                       &BroadcastMessageContents::Start(self.id().to_string()));
@@ -591,8 +586,7 @@ impl Scenario {
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let tn = testname.clone();
-        let broadcast = self.broadcast.clone();
-        let control = self.control.clone();
+        let controller = self.controller.clone();
         let res = process::try_command_completion(cmd.as_str(),
                                         self.working_directory.lock().unwrap().deref(),
                                         Duration::new(100, 0),
@@ -603,9 +597,8 @@ impl Scenario {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            Controller::broadcast_class(&broadcast, "support", id.as_str(), kind.as_str(), &msg);
-            Controller::control_class(
-                &control,
+            controller.do_broadcast_class("support", id.as_str(), kind.as_str(), &msg);
+            controller.do_control_class(
                 "support",
                 id.as_str(),
                 kind.as_str(),
@@ -620,7 +613,7 @@ impl Scenario {
             Ok(s) => s,
         };
 
-        let broadcast = self.broadcast.clone();
+        let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         thread::spawn(move || {
@@ -631,8 +624,7 @@ impl Scenario {
                         return;
                     },
                     Ok(l) => {
-                        Controller::broadcast_class(
-                            &broadcast,
+                        controller.do_broadcast_class(
                             "support",
                             id.as_str(),
                             kind.as_str(),
@@ -733,7 +725,7 @@ impl Scenario {
     }
 
     fn broadcast(&self, msg: BroadcastMessageContents) {
-        Controller::broadcast(&self.broadcast, self.id(), self.kind(), &msg);
+        self.controller.do_broadcast(self.id(), self.kind(), &msg);
     }
 
     /*

@@ -275,8 +275,7 @@ impl TestSet {
                                                    path_str,
                                                    &self.jigs,
                                                    &self.tests,
-                                                   &self.control,
-                                                   &self.broadcast) {
+                                                   &self.controller) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
                 Some(s) => {
