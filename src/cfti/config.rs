@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std::collections::HashMap;
 
 pub struct Config {
     locale: Option<String>,

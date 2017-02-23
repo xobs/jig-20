@@ -1,14 +1,13 @@
-extern crate ini;
 extern crate bus;
 
-use self::ini::Ini;
-
-use std::collections::HashMap;
 use cfti::types::Jig;
 use cfti::testset::TestSet;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
+use cfti::unitfile;
+use cfti::config;
 
+use std::collections::HashMap;
 use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -75,21 +74,20 @@ impl Interface {
     pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Interface, InterfaceError>> {
 
-        // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Some(Err(InterfaceError::FileLoadError)),
-            Ok(s) => s,
+        let unit_file = match unitfile::UnitFile::new(path) {
+            Err(e) => return Some(Err(InterfaceError::FileLoadError)),
+            Ok(f) => f,
         };
 
-        let interface_section = match ini_file.section(Some("Interface")) {
-            None => return Some(Err(InterfaceError::MissingInterfaceSection)),
-            Some(s) => s,
-        };
+        if ! unit_file.has_section("Interface") {
+            return Some(Err(InterfaceError::MissingInterfaceSection));
+        }
 
         // Check to see if this interface is compatible with this jig.
-        match interface_section.get("Jigs") {
+        match unit_file.get("Interface", "Jigs") {
             None => (),
             Some(s) => {
                 let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
@@ -107,27 +105,27 @@ impl Interface {
             }
         }
 
-        let description = match interface_section.get("Description") {
+        let description = match unit_file.get("Interface", "Description") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let name = match interface_section.get("Name") {
+        let name = match unit_file.get("Interface", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let exec_start = match interface_section.get("ExecStart") {
+        let exec_start = match unit_file.get("Interface", "ExecStart") {
             None => return Some(Err(InterfaceError::MissingExecSection)),
             Some(s) => s.to_string(),
         };
 
-        let working_directory = match interface_section.get("WorkingDirectory") {
+        let working_directory = match unit_file.get("Interface", "WorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let format = match interface_section.get("Format") {
+        let format = match unit_file.get("Interface", "Format") {
             None => InterfaceFormat::Text,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
                 "text" => InterfaceFormat::Text,
