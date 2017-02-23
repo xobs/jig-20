@@ -46,6 +46,8 @@ pub struct TestSet {
     services: HashMap<String, Service>,
     */
 
+    controller: controller::Controller,
+
     /// A sender, used for sending Control messages.
     control: mpsc::Sender<controller::ControlMessage>,
 
@@ -72,6 +74,7 @@ impl TestSet {
             jig: None,
             scenario: None,
             interfaces: HashMap::new(),
+            controller: controller.clone(),
             control: controller.new_control(),
             broadcast: controller.new_broadcast(),
         }));

@@ -121,6 +121,7 @@ pub struct ControlMessage {
 pub enum ControllerError {
 }
 
+#[derive(Clone)]
 pub struct Controller {
     broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
     control: mpsc::Sender<ControlMessage>,
@@ -298,6 +299,21 @@ impl Controller {
         Self::control_class(control, "standard", unit_name, unit_type, contents)
     }
 
+    pub fn do_control_class(&self,
+                            message_class: &str,
+                            unit_name: &str,
+                            unit_type: &str,
+                            contents: &ControlMessageContents) {
+        Self::control_class(&self.control, message_class, unit_name, unit_type, contents)
+    }
+
+    pub fn do_control(&self,
+                      unit_name: &str,
+                      unit_type: &str,
+                      contents: &ControlMessageContents) {
+        Self::control_class(&self.control, "standard", unit_name, unit_type, contents)
+    }
+
     /// Create a new control channel.
     pub fn new_control(&self) -> mpsc::Sender<ControlMessage> {
         self.control.clone()
@@ -327,6 +343,21 @@ impl Controller {
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: contents.clone(),
         });
+    }
+
+    pub fn do_broadcast_class(&self,
+                              message_class: &str,
+                              unit_name: &str,
+                              unit_type: &str,
+                              contents: &BroadcastMessageContents) {
+        Self::broadcast_class(&self.broadcast, message_class, unit_name, unit_type, contents)
+    }
+
+    pub fn do_broadcast(&self,
+                        unit_name: &str,
+                        unit_type: &str,
+                        contents: &BroadcastMessageContents) {
+        Self::broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
     }
 
     pub fn broadcast(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
