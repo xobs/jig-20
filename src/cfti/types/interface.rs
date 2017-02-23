@@ -64,11 +64,8 @@ pub struct Interface {
     /// working_directory: The path where the program will be run from.
     working_directory: Option<String>,
 
-    /// The channel where control messages go.
-    control: mpsc::Sender<ControlMessage>,
-
-    /// The bus where broadcast messages come from.
-    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+    /// The controller where messages come and go.
+    controller: Controller,
 
     /// The value set by the "HELLO" command
     hello: String,
@@ -85,8 +82,7 @@ impl Interface {
                id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               control: &mpsc::Sender<ControlMessage>,
-               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Interface, InterfaceError>> {
+               controller: &Controller) -> Option<Result<Interface, InterfaceError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -154,8 +150,7 @@ impl Interface {
             exec_start: exec_start,
             working_directory: working_directory,
             format: format,
-            control: control.clone(),
-            broadcast: broadcast.clone(),
+            controller: controller.clone(),
             hello: "".to_string(),
        }))
     }
@@ -215,7 +210,7 @@ impl Interface {
     fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
     }
 
-    fn text_read(line: String, id: &String, control: &mpsc::Sender<ControlMessage>) {
+    fn text_read(line: String, id: &String, controller: &Controller) {
         println!("Got line: {}", line);
         let mut words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
         let verb = words[0].to_lowercase();
@@ -250,7 +245,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        Controller::control(control, id, "interface", &response);
+        controller.do_control(id, "interface", &response);
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
@@ -283,10 +278,10 @@ impl Interface {
         match self.format {
             InterfaceFormat::Text => {
                 // Send all broadcasts to the stdin of the child process.
-                Controller::add_broadcast(&self.broadcast, move |msg| Interface::text_write(stdin.clone(), msg));
+                self.controller.listen(move |msg| Interface::text_write(stdin.clone(), msg));
 
                 // Monitor the child process' stdout, and pass values to the controller.
-                let control = self.control.clone();
+                let controller = self.controller.clone();
                 let id = self.id.clone();
                 let builder = thread::Builder::new()
                     .name(format!("I {} -> CFTI", id).into());
@@ -297,13 +292,13 @@ impl Interface {
                     for line in BufReader::new(stdout2).lines() {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
-                            Ok(l) => Interface::text_read(l, &id, &control),
+                            Ok(l) => Interface::text_read(l, &id, &controller),
                         }
                     }
                 }).unwrap();
             },
             InterfaceFormat::JSON => {
-                Controller::add_broadcast(&self.broadcast, move |msg| {Interface::json_write(stdin.clone(), msg);});
+                self.controller.listen(move |msg| {Interface::json_write(stdin.clone(), msg);});
             },
         };
         Ok(())
