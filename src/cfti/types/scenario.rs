@@ -630,10 +630,7 @@ impl Scenario {
 
     // Given the current state, figure out the next test to run (if any)
     pub fn advance(&self) {
-        let current_state = {
-            let state = self.state.lock().unwrap().clone();
-            state
-        };
+        let current_state = self.state.lock().unwrap().clone();
         let new_state = self.find_next_state(current_state);
 
         let failures = *(self.failures.lock().unwrap());
@@ -681,6 +678,14 @@ impl Scenario {
     /// Start running a scenario.  If `working_directory` is specified,
     /// then use that for all tests that don't specify one.
     pub fn start(&self, working_directory: &Option<String>) {
+        {
+            let current_state = self.state.lock().unwrap().clone();
+            if current_state != ScenarioState::Idle {
+                self.log(format!("State is {:?}, not Idle", current_state));
+                return;
+            }
+            self.log("Starting new test".to_string());
+        }
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.advance();
     }
@@ -721,9 +726,7 @@ impl Scenario {
         self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
-    /*
-    fn log(&self, msg: &str) {
-        self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
+    fn log(&self, msg: String) {
+        self.broadcast(BroadcastMessageContents::Log(msg));
     }
-    */
 }
