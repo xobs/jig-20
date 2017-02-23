@@ -60,11 +60,8 @@ pub struct Test {
     /// ExecStopSuccess: When stopping tests, if the test succeeded, then this stop command will be run.
     exec_stop_success: Option<String>,
 
-    /// The control channel where control messages go to.
-    control: mpsc::Sender<ControlMessage>,
-
-    /// The broadcast bus where broadcast messages come from.
-    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+    /// The controller where messages come and go.
+    controller: Controller,
 
     /// The last line outputted by a test, which is the result.
     last_line: Arc<Mutex<String>>,
@@ -82,8 +79,7 @@ impl Test {
                id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               control: &mpsc::Sender<ControlMessage>,
-               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Test, TestError>> {
+               controller: &Controller) -> Option<Result<Test, TestError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -200,22 +196,21 @@ impl Test {
             exec_stop_success: exec_stop_success,
             exec_stop_failure: exec_stop_failure,
 
-            control: control.clone(),
-            broadcast: broadcast.clone(),
+            controller: controller.clone(),
 
             last_line: Arc::new(Mutex::new("".to_string())),
         }))
     }
 
     pub fn describe(&self) {
-        Controller::broadcast(&self.broadcast,
+        self.controller.do_broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "name".to_string(),
                                                                   self.id().to_string(),
                                                                   self.name().to_string()));
-        Controller::broadcast(&self.broadcast,
+        self.controller.do_broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
@@ -233,8 +228,7 @@ impl Test {
 
         // Try to create a command.  If this fails, then the command completion will be called,
         // so we can just ignore the error.
-        let control = self.control.clone();
-        let broadcast = self.broadcast.clone();
+        let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let cmd = self.exec_start.clone();
@@ -250,9 +244,8 @@ impl Test {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            Controller::broadcast_class(&broadcast, "support", id.as_str(), kind.as_str(), &msg);
-            Controller::control_class(
-                &control,
+            controller.do_broadcast_class("support", id.as_str(), kind.as_str(), &msg);
+            controller.do_control_class(
                 "support",
                 id.as_str(),
                 kind.as_str(),
@@ -263,8 +256,7 @@ impl Test {
         };
 
         // Now that the child process is running, hook up the logger.
-        let control = self.control.clone();
-        let broadcast = self.broadcast.clone();
+        let controller = self.controller.clone();
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let last_line = self.last_line.clone();
@@ -279,8 +271,7 @@ impl Test {
                     },
                     Ok(l) => {
                         *(last_line.lock().unwrap()) = l.clone();
-                        Controller::broadcast(
-                            &broadcast,
+                        controller.do_broadcast(
                             id.as_str(),
                             kind.as_str(),
                             &BroadcastMessageContents::Log(l)
@@ -292,7 +283,7 @@ impl Test {
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        Controller::broadcast(&self.broadcast, self.id(), self.kind(), &msg);
+        self.controller.do_broadcast(self.id(), self.kind(), &msg);
     }
 
     /*

@@ -249,8 +249,7 @@ impl TestSet {
                                            item_name,
                                            path_str,
                                            &self.jigs,
-                                           &self.control,
-                                           &self.broadcast) {
+                                           &self.controller) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
                 Some(s) => {
