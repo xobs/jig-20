@@ -8,7 +8,7 @@ use std::path::Path;
 use cfti::process;
 use cfti::config;
 use cfti::testset::TestSet;
-use cfti::controller::{Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents};
+use cfti::controller::{Controller, BroadcastMessageContents};
 
 #[derive(Debug)]
 pub enum JigError {

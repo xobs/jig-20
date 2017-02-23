@@ -1,4 +1,4 @@
-extern crate bus;
+extern crate termcolor;
 
 use super::types::Test;
 use super::types::Scenario;
@@ -15,7 +15,6 @@ use super::controller;
 
 use std::collections::HashMap;
 use std::fs;
-use std::fmt;
 use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
@@ -26,6 +25,7 @@ use super::controller::{BroadcastMessageContents, ControlMessageContents, Contro
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
+#[derive(Debug)]
 pub struct TestSet {
     tests: HashMap<String, Arc<Mutex<Test>>>,
     scenarios: HashMap<String, Arc<Mutex<Scenario>>>,
@@ -48,12 +48,6 @@ pub struct TestSet {
 
     /// The controller object, where messages come and go.
     controller: Controller,
-}
-
-impl fmt::Debug for TestSet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[TestSet]")
-    }
 }
 
 impl TestSet {

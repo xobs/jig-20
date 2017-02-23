@@ -2,16 +2,15 @@ extern crate ini;
 extern crate bus;
 
 use self::ini::Ini;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time;
-use std::fmt;
 use std::thread;
 use std::io::{BufRead, BufReader};
 
 use cfti::types::Jig;
 use cfti::testset::TestSet;
-use cfti::controller::{Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 
 #[derive(Debug)]
@@ -28,6 +27,7 @@ enum TestType {
     Daemon,
 }
 
+#[derive(Debug)]
 pub struct Test {
 
     /// Id: File name on disk, what other units refer to this one as.
@@ -66,13 +66,6 @@ pub struct Test {
     /// The last line outputted by a test, which is the result.
     last_line: Arc<Mutex<String>>,
 }
-
-impl fmt::Debug for Test {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[Test]")
-    }
-}
-
 
 impl Test {
     pub fn new(ts: &TestSet,

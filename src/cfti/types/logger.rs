@@ -3,7 +3,6 @@ extern crate json;
 use self::ini::Ini;
 
 use cfti::types::Jig;
-use cfti::testset::TestSet;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
 

@@ -6,20 +6,19 @@ use self::ini::Ini;
 use self::daggy::{Dag, Walker, NodeIndex};
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::thread;
 use std::time;
-use std::fmt;
 
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
 use cfti::testset::TestSet;
-use cfti::controller::{Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 
 const DEFAULT_TIMEOUT: u32 = (60 * 60 * 24);
 
@@ -85,6 +84,7 @@ enum TestEdge {
     Follows,
 }
 
+#[derive(Debug)]
 pub struct Scenario {
     /// id: The string that other units refer to this file as.
     id: String,
@@ -133,12 +133,6 @@ pub struct Scenario {
 
     /// The timestamp when the test started, used to calculate timeouts.
     start_time: Arc<Mutex<time::Instant>>,
-}
-
-impl fmt::Debug for Scenario {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[Scenario]")
-    }
 }
 
 impl Scenario {
