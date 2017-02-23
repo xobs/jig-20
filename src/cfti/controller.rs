@@ -245,8 +245,8 @@ impl Controller {
         };
     }
 
-    pub fn listen_logs<F>(&self, logger_func: F)
-        where F: Send + 'static + Fn(BroadcastMessage) {
+    pub fn listen_logs<F>(&self, mut logger_func: F)
+        where F: Send + 'static + FnMut(BroadcastMessage) {
 
         self.listen(move |msg| match msg {
             BroadcastMessage { message: BroadcastMessageContents::Log(_), .. } => logger_func(msg),
@@ -254,8 +254,8 @@ impl Controller {
         });
     }
 
-    pub fn listen<F>(&self, broadcast_func: F)
-        where F: Send + 'static + Fn(BroadcastMessage) {
+    pub fn listen<F>(&self, mut broadcast_func: F)
+        where F: Send + 'static + FnMut(BroadcastMessage) {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
         let builder = thread::Builder::new()
