@@ -270,6 +270,22 @@ impl Controller {
         ).unwrap();
     }
 
+    pub fn listen<F>(&self, broadcast_func: F)
+        where F: Send + 'static + Fn(BroadcastMessage) {
+
+        let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
+        let builder = thread::Builder::new()
+                    .name("B-Hook".into());
+        builder.spawn(move ||
+            loop {
+                match console_rx_channel.recv() {
+                    Err(e) => { println!("DEBUG!! Channel closed, probably quitting.  Err: {:?}", e); return; },
+                    Ok(msg) => broadcast_func(msg),
+                };
+            }
+        ).unwrap();
+    }
+
     pub fn control_class(control: &mpsc::Sender<ControlMessage>,
                          message_class: &str,
                          unit_name: &str,
