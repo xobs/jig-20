@@ -4,8 +4,6 @@ extern crate bus;
 use self::ini::Ini;
 
 use std::path::Path;
-use std::sync::{Arc, Mutex, mpsc};
-use std::fmt;
 
 use cfti::process;
 use cfti::config;
@@ -18,6 +16,7 @@ pub enum JigError {
     MissingJigSection,
 }
 
+#[derive(Debug)]
 pub struct Jig {
 
     /// Id: File name on disk, what other units refer to this one as.
@@ -37,12 +36,6 @@ pub struct Jig {
 
     /// The controller where messages go.
     controller: Controller,
-}
-
-impl fmt::Debug for Jig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[Jig]")
-    }
 }
 
 impl Jig {

@@ -6,15 +6,15 @@ use self::ini::Ini;
 use std::collections::HashMap;
 use cfti::types::Jig;
 use cfti::testset::TestSet;
-use cfti::controller::{self, Controller, ControlMessage, BroadcastMessage, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 
 use std::process::{Stdio, ChildStdin};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
 use std::thread;
 use std::io::{BufRead, BufReader, Write};
-use std::fmt::{Formatter, Display, Error, self};
+use std::fmt::{Formatter, Display, Error};
 
 #[derive(Debug)]
 enum InterfaceFormat {
@@ -45,6 +45,7 @@ impl Display for InterfaceError {
     }
 }
 
+#[derive(Debug)]
 pub struct Interface {
     /// id: The string that other units refer to this file as.
     id: String,
@@ -69,12 +70,6 @@ pub struct Interface {
 
     /// The value set by the "HELLO" command
     hello: String,
-}
-
-impl fmt::Debug for Interface {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[Interface]")
-    }
 }
 
 impl Interface {

@@ -67,8 +67,7 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(ts: &TestSet,
-               id: &str,
+    pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                controller: &Controller) -> Option<Result<Logger, LoggerError>> {
@@ -163,7 +162,7 @@ impl Logger {
                                   &ControlMessageContents::Log(msg));
     }
 
-    pub fn start(&self, ts: &TestSet) -> Result<(), LoggerError> {
+    pub fn start(&self) -> Result<(), LoggerError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
             Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); self.debug(format!("Unable to run logger: {:?}", e)); return Err(LoggerError::MakeCommandFailed) },

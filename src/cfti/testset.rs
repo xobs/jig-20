@@ -19,10 +19,10 @@ use std::fmt;
 use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::ops::{DerefMut, Deref};
 
-use super::controller::{BroadcastMessage, BroadcastMessageContents, ControlMessageContents, Controller};
+use super::controller::{BroadcastMessageContents, ControlMessageContents, Controller};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
@@ -47,7 +47,7 @@ pub struct TestSet {
     */
 
     /// The controller object, where messages come and go.
-    controller: controller::Controller,
+    controller: Controller,
 }
 
 impl fmt::Debug for TestSet {
@@ -176,7 +176,7 @@ impl TestSet {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger = Logger::new(&self, item_name, path_str, &self.jigs, &self.controller);
+            let new_logger = Logger::new(item_name, path_str, &self.jigs, &self.controller);
 
             // In this case, it just means the logger is incompatible.
             if new_logger.is_none() {
@@ -189,7 +189,7 @@ impl TestSet {
                 continue;
             }
             let new_logger = new_logger.unwrap();
-            match new_logger.start(&self) {
+            match new_logger.start() {
                 Err(e) => {println!("Unable to start logger: {}", e);},
                 Ok(_) => (),
             }
