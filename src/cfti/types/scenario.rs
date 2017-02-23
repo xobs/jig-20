@@ -638,11 +638,13 @@ impl Scenario {
             // running some tests.  Broadcast the result.
             ScenarioState::Idle => {
                 if failures > 0 {
+                    self.log(format!("{} tests failed", failures));
                     self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
                                                                     failures + 500,
                                                                     "At least one test failed".to_string()));
                 }
                 else {
+                    self.log(format!("All tests passed successfully"));
                     self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
                                                                     200,
                                                                     "Finished tests".to_string()));
