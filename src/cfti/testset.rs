@@ -176,7 +176,7 @@ impl TestSet {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger = Logger::new(&self, item_name, path_str, &self.jigs);
+            let new_logger = Logger::new(&self, item_name, path_str, &self.jigs, &self.controller);
 
             // In this case, it just means the logger is incompatible.
             if new_logger.is_none() {
@@ -195,16 +195,6 @@ impl TestSet {
             }
             self.loggers.insert(new_logger.id().to_string(), Arc::new(Mutex::new(new_logger)));
         }
-    }
-
-    pub fn monitor_logs<F>(&self, logger_func: F)
-        where F: Send + 'static + Fn(BroadcastMessage) {
-        self.controller.listen_logs(logger_func);
-    }
-
-    pub fn monitor_broadcasts<F>(&self, broadcast_func: F)
-        where F: Send + 'static + Fn(BroadcastMessage) {
-        self.controller.listen(broadcast_func);
     }
 
     fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {

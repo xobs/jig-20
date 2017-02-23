@@ -285,16 +285,6 @@ impl Controller {
         Self::do_control_class(&self.control, "standard", unit_name, unit_type, contents)
     }
 
-    /// Create a new control channel.
-    pub fn new_control(&self) -> mpsc::Sender<ControlMessage> {
-        self.control.clone()
-    }
-
-    /// Creates a clone of the Broadcast channel.
-    pub fn new_broadcast(&self) -> Arc<Mutex<bus::Bus<BroadcastMessage>>> {
-        self.broadcast.clone()
-    }
-
     pub fn broadcast_class(&self,
                            message_class: &str,
                            unit_name: &str,

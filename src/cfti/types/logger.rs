@@ -1,14 +1,16 @@
 extern crate ini;
+extern crate json;
 use self::ini::Ini;
-use std::collections::HashMap;
+
 use cfti::types::Jig;
-use super::super::testset::TestSet;
-use super::super::controller::{BroadcastMessage, BroadcastMessageContents};
-use super::super::process;
+use cfti::testset::TestSet;
+use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
+use cfti::process;
+
 use std::process::Stdio;
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-extern crate json;
 use std::fmt::{Formatter, Display, Error};
 
 #[derive(Debug, Clone)]
@@ -59,13 +61,17 @@ pub struct Logger {
 
     /// working_directory: The path where exec_start will be run from.
     working_directory: Option<String>,
+
+    /// The master controller, where bus messages come and go.
+    controller: Controller,
 }
 
 impl Logger {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               jigs: &HashMap<String, Arc<Mutex<Jig>>>) -> Option<Result<Logger, LoggerError>> {
+               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               controller: &Controller) -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -91,7 +97,11 @@ impl Logger {
                     }
                 }
                 if found_it == false {
-                    ts.debug("logger", id, format!("The logger '{}' is not compatible with this jig", id).as_str());
+                    controller.control_class(
+                                  "debug",
+                                  id,
+                                  "logger",
+                                  &ControlMessageContents::Log(format!("The logger '{}' is not compatible with this jig", id)));
                     return None;
                 }
             }
@@ -133,6 +143,7 @@ impl Logger {
             exec_start: exec_start,
             working_directory: working_directory,
             format: format,
+            controller: controller.clone(),
        }))
     }
 
@@ -140,10 +151,22 @@ impl Logger {
         return self.id.as_str();
     }
 
+    pub fn kind(&self) -> &str {
+        return "logger"
+    }
+
+    fn debug(&self, msg: String) {
+        self.controller.control_class(
+                                  "debug",
+                                  self.id(),
+                                  self.kind(),
+                                  &ControlMessageContents::Log(msg));
+    }
+
     pub fn start(&self, ts: &TestSet) -> Result<(), LoggerError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
-            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); ts.debug("logger", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(LoggerError::MakeCommandFailed) },
+            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); self.debug(format!("Unable to run logger: {:?}", e)); return Err(LoggerError::MakeCommandFailed) },
         };
         cmd.stdout(Stdio::null());
         cmd.stdin(Stdio::piped());
@@ -161,7 +184,7 @@ impl Logger {
         let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
         let format = self.format.clone();
         match format {
-            LoggerFormat::TabSeparatedValue => ts.monitor_logs(move |msg| {
+            LoggerFormat::TabSeparatedValue => self.controller.listen_logs(move |msg| {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
                         writeln!(stdin.lock().unwrap(), "{}\t{}\t{}\t{}\t{}\t{}\t",
@@ -174,7 +197,7 @@ impl Logger {
                     _ => return,
                 };
             }),
-            LoggerFormat::JSON => ts.monitor_logs(move |msg| {
+            LoggerFormat::JSON => self.controller.listen_logs(move |msg| {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
                         let mut object = json::JsonValue::new_object();
