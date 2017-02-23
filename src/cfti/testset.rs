@@ -158,7 +158,7 @@ impl TestSet {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(&self, item_name, path_str, &self.control, &self.broadcast) {
+            let new_jig = match Jig::new(&self, item_name, path_str, &self.controller) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,

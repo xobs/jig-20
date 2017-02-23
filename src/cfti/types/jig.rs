@@ -36,7 +36,7 @@ pub struct Jig {
     working_directory: Option<String>,
 
     /// The controller where messages go.
-    broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+    controller: Controller,
 }
 
 impl fmt::Debug for Jig {
@@ -49,8 +49,7 @@ impl Jig {
     pub fn new(ts: &TestSet,
                id: &str,
                path: &str,
-               _: &mpsc::Sender<ControlMessage>,
-               broadcast: &Arc<Mutex<bus::Bus<BroadcastMessage>>>) -> Option<Result<Jig, JigError>> {
+               controller: &Controller) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
         let ini_file = match Ini::load_from_file(&path) {
@@ -126,19 +125,19 @@ impl Jig {
 
             default_scenario: default_scenario,
             working_directory: working_directory,
-            broadcast: broadcast.clone(),
+            controller: controller.clone(),
         }))
     }
 
     pub fn describe(&self) {
-        Controller::broadcast(&self.broadcast,
+        self.controller.do_broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "name".to_string(),
                                                                   self.id().to_string(),
                                                                   self.name().to_string()));
-        Controller::broadcast(&self.broadcast,
+        self.controller.do_broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
