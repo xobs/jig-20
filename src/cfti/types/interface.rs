@@ -154,12 +154,24 @@ impl Interface {
         return &self.id.as_ref();
     }
 
+    pub fn kind(&self) -> &str {
+        return "interface"
+    }
+
     pub fn set_hello(&mut self, hello: String) {
         self.hello = hello;
     }
 
+    pub fn log(&self, msg: String) {
+        self.broadcast(BroadcastMessageContents::Log(msg));
+    }
+
+    pub fn broadcast(&self, msg: BroadcastMessageContents) {
+        self.controller.broadcast(self.id(), self.kind(), &msg);
+    }
+
     fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
-        println!("Sending data to interface: {:?}", msg);
+        //println!("Sending data to interface: {:?}", msg);
         match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}",
@@ -246,21 +258,30 @@ impl Interface {
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
-            Err(e) => { println!(">>> UNABLE TO RUN INTERFACE: {:?}", e); ts.debug("interface", self.id.as_str(), format!("Unable to run logger: {:?}", e).as_str()); return Err(InterfaceError::MakeCommandFailed) },
+            Err(e) => {
+                self.log(format!("Unable to run logger: {:?}", e));
+                return Err(InterfaceError::MakeCommandFailed)
+            },
         };
+
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
         cmd.stderr(Stdio::inherit());
-        match self.working_directory {
-            None => (),
-            Some(ref s) => {cmd.current_dir(s); },
+        if let Some(ref s) = self.working_directory {
+            cmd.current_dir(s);
         }
 
+        self.log(format!("About to run command: {:?}", cmd));
+
         let child = match cmd.spawn() {
-            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(InterfaceError::ExecCommandFailed) },
+            Err(e) => {
+                self.log(format!("Unable to spawn {:?}: {}", cmd, e));
+                return Err(InterfaceError::ExecCommandFailed);
+            },
             Ok(s) => s,
         };
-        println!("Launched an interface: {}", self.id());
+
+        self.log(format!("Launched an interface: {}", self.id()));
         let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
         let stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
 

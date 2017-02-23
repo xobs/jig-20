@@ -1,5 +1,4 @@
 extern crate ini;
-extern crate bus;
 
 use self::ini::Ini;
 

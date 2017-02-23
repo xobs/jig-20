@@ -66,9 +66,6 @@ impl TestSet {
             controller: controller.clone(),
         }));
 
-        // Add a simple logger to show us debug data.
-        controller.listen_logs(|msg| println!("DEBUG>> {:?}", msg));
-
         controller.set_testset(test_set.clone());
 
         /* TestSet ordering:
