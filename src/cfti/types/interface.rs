@@ -11,7 +11,6 @@ use cfti::process;
 
 use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
-use std::ops::DerefMut;
 use std::thread;
 use std::io::{BufRead, BufReader, Write};
 use std::fmt::{Formatter, Display, Error};
@@ -170,10 +169,10 @@ impl Interface {
         self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
-    fn text_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
+    fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) {
         //println!("Sending data to interface: {:?}", msg);
         match msg.message {
-            BroadcastMessageContents::Log(l) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Log(l) => writeln!(stdin,
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}",
                                                 msg.message_class,
                                                 msg.unit_id,
@@ -181,40 +180,40 @@ impl Interface {
                                                 msg.unix_time,
                                                 msg.unix_time_nsecs,
                                                 l.to_string().replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")).unwrap(),
-            BroadcastMessageContents::Jig(j) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Jig(j) => writeln!(stdin,
                                                 "JIG {}", j.to_string()).unwrap(),
             BroadcastMessageContents::Describe(class, field, name, value) =>
-                                        writeln!(&mut stdin.lock().unwrap(),
+                                        writeln!(stdin,
                                         "DESCRIBE {} {} {} {}",
                                         class, field, name, value).unwrap(),
-            BroadcastMessageContents::Scenario(name) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Scenario(name) => writeln!(stdin,
                                                 "SCENARIO {}", name).unwrap(),
-            BroadcastMessageContents::Scenarios(list) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Scenarios(list) => writeln!(stdin,
                                                 "SCENARIOS {}", list.join(" ")).unwrap(),
-            BroadcastMessageContents::Hello(name) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Hello(name) => writeln!(stdin,
                                                 "HELLO {}", name).unwrap(),
-            BroadcastMessageContents::Ping(val) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Ping(val) => writeln!(stdin,
                                                 "PING {}", val).unwrap(),
-            BroadcastMessageContents::Shutdown(reason) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Shutdown(reason) => writeln!(stdin,
                                                 "SHUTDOWN {}", reason).unwrap(),
-            BroadcastMessageContents::Tests(scenario, tests) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Tests(scenario, tests) => writeln!(stdin,
                                                 "TESTS {} {}", scenario, tests.join(" ")).unwrap(),
-            BroadcastMessageContents::Running(test) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Running(test) => writeln!(stdin,
                                                 "RUNNING {}", test).unwrap(),
-            BroadcastMessageContents::Skip(test, reason) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Skip(test, reason) => writeln!(stdin,
                                                 "SKIP {} {}", test, reason).unwrap(),
-            BroadcastMessageContents::Fail(test, reason) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Fail(test, reason) => writeln!(stdin,
                                                 "FAIL {} {}", test, reason).unwrap(),
-            BroadcastMessageContents::Pass(test, reason) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Pass(test, reason) => writeln!(stdin,
                                                 "PASS {} {}", test, reason).unwrap(),
-            BroadcastMessageContents::Start(scenario) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Start(scenario) => writeln!(stdin,
                                                 "START {}", scenario).unwrap(),
-            BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(&mut stdin.lock().unwrap(),
+            BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(stdin,
                                                 "FINISH {} {} {}", scenario, result, reason).unwrap(),
         }
     }
 
-    fn json_write(stdin: Arc<Mutex<ChildStdin>>, msg: controller::BroadcastMessage) {
+    fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) {
     }
 
     fn text_read(line: String, id: &String, controller: &Controller) {
@@ -282,19 +281,19 @@ impl Interface {
         };
 
         self.log(format!("Launched an interface: {}", self.id()));
-        let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
-        let stdout = Arc::new(Mutex::new(child.stdout.unwrap()));
+        let mut stdin = child.stdin.unwrap();
+        let stdout = child.stdout.unwrap();
 
         // Send some initial information to the client.
-        writeln!(stdin.lock().unwrap(), "HELLO Jig/20 1.0").unwrap();
-        writeln!(stdin.lock().unwrap(), "JIG {}", ts.get_jig_id()).unwrap();
-        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG NAME {}", ts.get_jig_name()).unwrap();
-        writeln!(stdin.lock().unwrap(), "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description()).unwrap();
+        writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
+        writeln!(stdin, "JIG {}", ts.get_jig_id()).unwrap();
+        writeln!(stdin, "DESCRIBE JIG NAME {}", ts.get_jig_name()).unwrap();
+        writeln!(stdin, "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description()).unwrap();
 
         match self.format {
             InterfaceFormat::Text => {
                 // Send all broadcasts to the stdin of the child process.
-                self.controller.listen(move |msg| Interface::text_write(stdin.clone(), msg));
+                self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
 
                 // Monitor the child process' stdout, and pass values to the controller.
                 let controller = self.controller.clone();
@@ -303,9 +302,7 @@ impl Interface {
                     .name(format!("I {} -> CFTI", id).into());
 
                 builder.spawn(move || {
-                    let mut var = stdout.lock().unwrap();
-                    let ref mut stdout2 = var.deref_mut();
-                    for line in BufReader::new(stdout2).lines() {
+                    for line in BufReader::new(stdout).lines() {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
                             Ok(l) => Interface::text_read(l, &id, &controller),
@@ -314,7 +311,7 @@ impl Interface {
                 }).unwrap();
             },
             InterfaceFormat::JSON => {
-                self.controller.listen(move |msg| {Interface::json_write(stdin.clone(), msg);});
+                self.controller.listen(move |msg| {Interface::json_write(&mut stdin, msg);});
             },
         };
         Ok(())
