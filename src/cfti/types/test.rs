@@ -9,7 +9,6 @@ use std::thread;
 use std::io::{BufRead, BufReader};
 
 use cfti::types::Jig;
-use cfti::testset::TestSet;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 

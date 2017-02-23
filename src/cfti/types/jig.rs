@@ -6,7 +6,6 @@ use std::path::Path;
 
 use cfti::process;
 use cfti::config;
-use cfti::testset::TestSet;
 use cfti::controller::{Controller, BroadcastMessageContents};
 
 #[derive(Debug)]
@@ -38,8 +37,7 @@ pub struct Jig {
 }
 
 impl Jig {
-    pub fn new(ts: &TestSet,
-               id: &str,
+    pub fn new(id: &str,
                path: &str,
                controller: &Controller) -> Option<Result<Jig, JigError>> {
 

@@ -17,7 +17,6 @@ use std::time;
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
-use cfti::testset::TestSet;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 
 const DEFAULT_TIMEOUT: u32 = (60 * 60 * 24);
@@ -685,6 +684,9 @@ impl Scenario {
                 return;
             }
             self.log("Starting new scenario run".to_string());
+
+            // Save the current instant, so we can timeout as needed.
+            *(self.start_time.lock().unwrap()) = time::Instant::now();
         }
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.advance();

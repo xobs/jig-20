@@ -138,7 +138,7 @@ impl TestSet {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(&self, item_name, path_str, &self.controller) {
+            let new_jig = match Jig::new(item_name, path_str, &self.controller) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,
@@ -194,7 +194,7 @@ impl TestSet {
         for interface_path in interface_paths {
             let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
-            let new_interface = match Interface::new(&self, item_name, path_str, &self.jigs, &self.controller) {
+            let new_interface = match Interface::new(item_name, path_str, &self.jigs, &self.controller) {
                 // In this case, it just means the interface is incompatible.
                 None => continue,
                 Some(s) => {

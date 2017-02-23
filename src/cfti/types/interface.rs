@@ -72,8 +72,7 @@ pub struct Interface {
 }
 
 impl Interface {
-    pub fn new(ts: &TestSet,
-               id: &str,
+    pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                controller: &Controller) -> Option<Result<Interface, InterfaceError>> {
