@@ -550,7 +550,7 @@ impl Scenario {
                 *(self.failures.lock().unwrap()) = 0;
                 self.results.lock().unwrap().clear();
 
-                self.controller.do_broadcast(
+                self.controller.broadcast(
                                       self.id(),
                                       self.kind(),
                                       &BroadcastMessageContents::Start(self.id().to_string()));
@@ -597,8 +597,8 @@ impl Scenario {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            controller.do_broadcast_class("support", id.as_str(), kind.as_str(), &msg);
-            controller.do_control_class(
+            controller.broadcast_class("support", id.as_str(), kind.as_str(), &msg);
+            controller.control_class(
                 "support",
                 id.as_str(),
                 kind.as_str(),
@@ -624,7 +624,7 @@ impl Scenario {
                         return;
                     },
                     Ok(l) => {
-                        controller.do_broadcast_class(
+                        controller.broadcast_class(
                             "support",
                             id.as_str(),
                             kind.as_str(),
@@ -725,7 +725,7 @@ impl Scenario {
     }
 
     fn broadcast(&self, msg: BroadcastMessageContents) {
-        self.controller.do_broadcast(self.id(), self.kind(), &msg);
+        self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
     /*

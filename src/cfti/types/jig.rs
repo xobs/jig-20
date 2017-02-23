@@ -130,14 +130,14 @@ impl Jig {
     }
 
     pub fn describe(&self) {
-        self.controller.do_broadcast(
+        self.controller.broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "name".to_string(),
                                                                   self.id().to_string(),
                                                                   self.name().to_string()));
-        self.controller.do_broadcast(
+        self.controller.broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),

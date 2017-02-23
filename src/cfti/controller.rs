@@ -245,29 +245,13 @@ impl Controller {
         };
     }
 
-    pub fn add_logger<F>(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>, logger_func: F)
+    pub fn listen_logs<F>(&self, logger_func: F)
         where F: Send + 'static + Fn(BroadcastMessage) {
 
-        Self::add_broadcast(bus, move |msg| match msg {
+        self.listen(move |msg| match msg {
             BroadcastMessage { message: BroadcastMessageContents::Log(_), .. } => logger_func(msg),
             _ => (),
         });
-    }
-
-    pub fn add_broadcast<F>(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>, broadcast_func: F)
-        where F: Send + 'static + Fn(BroadcastMessage) {
-
-        let mut console_rx_channel = bus.lock().unwrap().deref_mut().add_rx();
-        let builder = thread::Builder::new()
-                    .name("B-Hook".into());
-        builder.spawn(move ||
-            loop {
-                match console_rx_channel.recv() {
-                    Err(e) => { println!("DEBUG!! Channel closed, probably quitting.  Err: {:?}", e); return; },
-                    Ok(msg) => broadcast_func(msg),
-                };
-            }
-        ).unwrap();
     }
 
     pub fn listen<F>(&self, broadcast_func: F)
@@ -286,48 +270,19 @@ impl Controller {
         ).unwrap();
     }
 
-    pub fn control_class(control: &mpsc::Sender<ControlMessage>,
+    pub fn control_class(&self,
                          message_class: &str,
                          unit_name: &str,
                          unit_type: &str,
                          contents: &ControlMessageContents) {
-
-        let now = time::SystemTime::now();
-        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => time::Duration::new(0, 0),
-        };
-
-        control.send(ControlMessage {
-            message_class: message_class.to_string(),
-            unit_id: unit_name.to_string(),
-            unit_type: unit_type.to_string(),
-            unix_time: elapsed.as_secs(),
-            unix_time_nsecs: elapsed.subsec_nanos(),
-            message: contents.clone(),
-        }).unwrap();
+        Self::do_control_class(&self.control, message_class, unit_name, unit_type, contents)
     }
 
-    pub fn control(control: &mpsc::Sender<ControlMessage>,
+    pub fn control(&self,
                    unit_name: &str,
                    unit_type: &str,
                    contents: &ControlMessageContents) {
-        Self::control_class(control, "standard", unit_name, unit_type, contents)
-    }
-
-    pub fn do_control_class(&self,
-                            message_class: &str,
-                            unit_name: &str,
-                            unit_type: &str,
-                            contents: &ControlMessageContents) {
-        Self::control_class(&self.control, message_class, unit_name, unit_type, contents)
-    }
-
-    pub fn do_control(&self,
-                      unit_name: &str,
-                      unit_type: &str,
-                      contents: &ControlMessageContents) {
-        Self::control_class(&self.control, "standard", unit_name, unit_type, contents)
+        Self::do_control_class(&self.control, "standard", unit_name, unit_type, contents)
     }
 
     /// Create a new control channel.
@@ -340,7 +295,22 @@ impl Controller {
         self.broadcast.clone()
     }
 
-    pub fn broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
+    pub fn broadcast_class(&self,
+                           message_class: &str,
+                           unit_name: &str,
+                           unit_type: &str,
+                           contents: &BroadcastMessageContents) {
+        Self::do_broadcast_class(&self.broadcast, message_class, unit_name, unit_type, contents)
+    }
+
+    pub fn broadcast(&self,
+                     unit_name: &str,
+                     unit_type: &str,
+                     contents: &BroadcastMessageContents) {
+        Self::do_broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
+    }
+
+    fn do_broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
                            message_class: &str,
                            unit_name: &str,
                            unit_type: &str,
@@ -361,28 +331,6 @@ impl Controller {
         });
     }
 
-    pub fn do_broadcast_class(&self,
-                              message_class: &str,
-                              unit_name: &str,
-                              unit_type: &str,
-                              contents: &BroadcastMessageContents) {
-        Self::broadcast_class(&self.broadcast, message_class, unit_name, unit_type, contents)
-    }
-
-    pub fn do_broadcast(&self,
-                        unit_name: &str,
-                        unit_type: &str,
-                        contents: &BroadcastMessageContents) {
-        Self::broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
-    }
-
-    pub fn broadcast(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
-                     unit_name: &str,
-                     unit_type: &str,
-                     contents: &BroadcastMessageContents) {
-        Self::broadcast_class(bus, "standard", unit_name, unit_type, contents)
-    }
-
     fn broadcast_internal(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
                           msg: BroadcastMessageContents) {
         let now = time::SystemTime::now();
@@ -399,5 +347,27 @@ impl Controller {
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: msg,
         });
+    }
+
+    fn do_control_class(control: &mpsc::Sender<ControlMessage>,
+                        message_class: &str,
+                        unit_name: &str,
+                        unit_type: &str,
+                        contents: &ControlMessageContents) {
+
+        let now = time::SystemTime::now();
+        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
+            Ok(d) => d,
+            Err(_) => time::Duration::new(0, 0),
+        };
+
+        control.send(ControlMessage {
+            message_class: message_class.to_string(),
+            unit_id: unit_name.to_string(),
+            unit_type: unit_type.to_string(),
+            unix_time: elapsed.as_secs(),
+            unix_time_nsecs: elapsed.subsec_nanos(),
+            message: contents.clone(),
+        }).unwrap();
     }
 }

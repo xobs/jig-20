@@ -203,14 +203,14 @@ impl Test {
     }
 
     pub fn describe(&self) {
-        self.controller.do_broadcast(
+        self.controller.broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "name".to_string(),
                                                                   self.id().to_string(),
                                                                   self.name().to_string()));
-        self.controller.do_broadcast(
+        self.controller.broadcast(
                               self.id(),
                               self.kind(),
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
@@ -244,8 +244,8 @@ impl Test {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            controller.do_broadcast_class("support", id.as_str(), kind.as_str(), &msg);
-            controller.do_control_class(
+            controller.broadcast_class("support", id.as_str(), kind.as_str(), &msg);
+            controller.control_class(
                 "support",
                 id.as_str(),
                 kind.as_str(),
@@ -271,7 +271,7 @@ impl Test {
                     },
                     Ok(l) => {
                         *(last_line.lock().unwrap()) = l.clone();
-                        controller.do_broadcast(
+                        controller.broadcast(
                             id.as_str(),
                             kind.as_str(),
                             &BroadcastMessageContents::Log(l)
@@ -283,7 +283,7 @@ impl Test {
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        self.controller.do_broadcast(self.id(), self.kind(), &msg);
+        self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
     /*

@@ -46,13 +46,8 @@ pub struct TestSet {
     services: HashMap<String, Service>,
     */
 
+    /// The controller object, where messages come and go.
     controller: controller::Controller,
-
-    /// A sender, used for sending Control messages.
-    control: mpsc::Sender<controller::ControlMessage>,
-
-    /// A broadcast bus, used for sending broadcast messages.
-    broadcast: Arc<Mutex<bus::Bus<controller::BroadcastMessage>>>,
 }
 
 impl fmt::Debug for TestSet {
@@ -75,12 +70,10 @@ impl TestSet {
             scenario: None,
             interfaces: HashMap::new(),
             controller: controller.clone(),
-            control: controller.new_control(),
-            broadcast: controller.new_broadcast(),
         }));
 
         // Add a simple logger to show us debug data.
-        Controller::add_logger(&test_set.lock().unwrap().broadcast, |msg| println!("DEBUG>> {:?}", msg));
+        controller.listen_logs(|msg| println!("DEBUG>> {:?}", msg));
 
         controller.set_testset(test_set.clone());
 
@@ -146,7 +139,7 @@ impl TestSet {
     }
 
     pub fn debug(&self, unit_type: &str, unit_id: &str, msg: &str) {
-        Controller::control_class(&self.control,
+        self.controller.control_class(
                                   "debug",
                                   unit_id,
                                   unit_type,
@@ -206,12 +199,12 @@ impl TestSet {
 
     pub fn monitor_logs<F>(&self, logger_func: F)
         where F: Send + 'static + Fn(BroadcastMessage) {
-        Controller::add_logger(&self.broadcast, logger_func);
+        self.controller.listen_logs(logger_func);
     }
 
     pub fn monitor_broadcasts<F>(&self, broadcast_func: F)
         where F: Send + 'static + Fn(BroadcastMessage) {
-        Controller::add_broadcast(&self.broadcast, broadcast_func);
+        self.controller.listen(broadcast_func);
     }
 
     fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
@@ -389,7 +382,7 @@ impl TestSet {
     pub fn send_scenarios(&self) {
         let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
 
-        Controller::broadcast(&self.broadcast,
+        self.controller.broadcast(
                               self.unit_name(),
                               self.unit_type(),
                               &BroadcastMessageContents::Scenarios(scenario_list));
@@ -423,7 +416,7 @@ impl TestSet {
         };
         self.scenario = Some(scenario.clone());
 
-        Controller::broadcast(&self.broadcast,
+        self.controller.broadcast(
                               self.unit_name(),
                               self.unit_type(),
                               &BroadcastMessageContents::Scenario(scenario_name.clone()));

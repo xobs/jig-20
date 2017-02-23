@@ -245,7 +245,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        controller.do_control(id, "interface", &response);
+        controller.control(id, "interface", &response);
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
