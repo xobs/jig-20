@@ -39,6 +39,7 @@ pub struct Jig {
 impl Jig {
     pub fn new(id: &str,
                path: &str,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
@@ -67,7 +68,7 @@ impl Jig {
         };
 
         if let Some(s) = jig_section.get("TestProgram") {
-            if !process::try_command(&controller, s, &working_directory, config::default_timeout()) {
+            if !process::try_command(&controller, s, &working_directory, config.timeout()) {
                 controller.debug("jig", id, format!("Test program FAILED"));
                 return None;
             }

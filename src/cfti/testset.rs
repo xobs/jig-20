@@ -1,17 +1,12 @@
 extern crate termcolor;
 
-use super::types::Test;
-use super::types::Scenario;
-use super::types::Logger;
-use super::types::Trigger;
-use super::types::Jig;
-use super::types::Interface;
+use cfti::{config, controller};
+use cfti::types::{Test, Scenario, Logger, Trigger, Jig, Interface};
 /*
 use cfti::types::Coupon;
 use cfti::types::Updater;
 use cfti::types::Service;
 */
-use super::controller;
 
 use std::collections::HashMap;
 use std::fs;
@@ -52,7 +47,7 @@ pub struct TestSet {
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str, controller: &mut controller::Controller) -> Result<Arc<Mutex<TestSet>>, Error> {
+    pub fn new(dir: &str, config: &config::Config, controller: &mut controller::Controller) -> Result<Arc<Mutex<TestSet>>, Error> {
 
         let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
@@ -116,13 +111,13 @@ impl TestSet {
             }
         }
 
-        test_set.lock().unwrap().load_jigs(&jig_paths);
-        test_set.lock().unwrap().load_loggers(&logger_paths);
-        test_set.lock().unwrap().load_interfaces(&interface_paths);
+        test_set.lock().unwrap().load_jigs(&config, &jig_paths);
+        test_set.lock().unwrap().load_loggers(&config, &logger_paths);
+        test_set.lock().unwrap().load_interfaces(&config, &interface_paths);
         //test_set.load_services(&service_paths);
         //test_set.load_updaters(&updater_paths);
-        test_set.lock().unwrap().load_tests(&test_paths);
-        test_set.lock().unwrap().load_scenarios(&scenario_paths);
+        test_set.lock().unwrap().load_tests(&config, &test_paths);
+        test_set.lock().unwrap().load_scenarios(&config, &scenario_paths);
         //test_set.load_triggers(&trigger_paths);
         //test_set.load_coupons(&coupon_paths);
 
@@ -133,12 +128,12 @@ impl TestSet {
         self.controller.debug(self.id(), self.kind(), msg);
     }
 
-    fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
+    fn load_jigs(&mut self, config: &config::Config, jig_paths: &Vec<PathBuf>) {
         for jig_path in jig_paths {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(item_name, path_str, &self.controller) {
+            let new_jig = match Jig::new(item_name, path_str, config, &self.controller) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,
@@ -162,7 +157,7 @@ impl TestSet {
         }
     }
 
-    fn load_loggers(&mut self, logger_paths: &Vec<PathBuf>) {
+    fn load_loggers(&mut self, config: &config::Config, logger_paths: &Vec<PathBuf>) {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
@@ -190,7 +185,7 @@ impl TestSet {
         }
     }
 
-    fn load_interfaces(&mut self, interface_paths: &Vec<PathBuf>) {
+    fn load_interfaces(&mut self, config: &config::Config, interface_paths: &Vec<PathBuf>) {
         for interface_path in interface_paths {
             let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
@@ -223,7 +218,7 @@ impl TestSet {
         }
     }
 
-    fn load_tests(&mut self, test_paths: &Vec<PathBuf>) {
+    fn load_tests(&mut self, config: &config::Config, test_paths: &Vec<PathBuf>) {
         for test_path in test_paths {
             let item_name = test_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = test_path.to_str().unwrap_or("");
@@ -249,7 +244,7 @@ impl TestSet {
         }
     }
 
-    fn load_scenarios(&mut self, paths: &Vec<PathBuf>) {
+    fn load_scenarios(&mut self, config: &config::Config, paths: &Vec<PathBuf>) {
         let default_scenario_name = self.get_jig_default_scenario().clone();
         for path in paths {
             let item_name = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
