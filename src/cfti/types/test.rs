@@ -68,8 +68,7 @@ pub struct Test {
 }
 
 impl Test {
-    pub fn new(ts: &TestSet,
-               id: &str,
+    pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                controller: &Controller) -> Option<Result<Test, TestError>> {
@@ -98,7 +97,7 @@ impl Test {
                     }
                 }
                 if found_it == false {
-                    ts.debug("test", id, format!("The test '{}' is not compatible with this jig", id).as_str());
+                    controller.debug("test", id, format!("The test '{}' is not compatible with this jig", id));
                     return None;
                 }
             }

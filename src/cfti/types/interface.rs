@@ -102,7 +102,7 @@ impl Interface {
                     }
                 }
                 if found_it == false {
-                    ts.debug("interface", id, format!("The interface '{}' is not compatible with this jig", id).as_str());
+                    controller.debug("interface", id, format!("The interface '{}' is not compatible with this jig", id));
                     return None;
                 }
             }

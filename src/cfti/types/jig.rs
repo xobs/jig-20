@@ -55,19 +55,12 @@ impl Jig {
         };
 
         // Determine if this is the jig we're running on
-        match jig_section.get("TestFile") {
-            None => {
-                ts.debug("jig", id, "Test file not specified, skipping");
-                ()
-            },
-            Some(s) => {
-                if !Path::new(s).exists() {
-                    ts.debug("jig", id, format!("Test file {} DOES NOT EXIST", s).as_str());
-                    return None;
-                };
-                ts.debug("jig", id, "Test file exists");
-                ()
-            }
+        if let Some(s) = jig_section.get("TestFile") {
+            if !Path::new(s).exists() {
+                controller.debug("jig", id, format!("Test file {} DOES NOT EXIST", s));
+                return None;
+            };
+            controller.debug("jig", id, format!("Test file {} exists", s));
         };
 
         let working_directory = match jig_section.get("WorkingDirectory") {
@@ -75,19 +68,11 @@ impl Jig {
             Some(s) => Some(s.to_string()),
         };
 
-        match jig_section.get("TestProgram") {
-            None => {
-                ts.debug("jig", id, "No TestProgram specified");
-                ()
-            },
-            Some(s) => {
-                if !process::try_command(ts, s, &working_directory, config::default_timeout()) {
-                    ts.debug("jig", id, "Test program FAILED");
-                    return None;
-                }
-                ts.debug("jig", id, "Test program passed");
-                ()
-            },
+        if let Some(s) = jig_section.get("TestProgram") {
+            if !process::try_command(&controller, s, &working_directory, config::default_timeout()) {
+                controller.debug("jig", id, format!("Test program FAILED"));
+                return None;
+            }
         };
 
         let description = match jig_section.get("Description") {

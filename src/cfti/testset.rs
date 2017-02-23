@@ -21,7 +21,7 @@ use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
 use std::ops::{DerefMut, Deref};
 
-use super::controller::{BroadcastMessageContents, ControlMessageContents, Controller};
+use super::controller::{BroadcastMessageContents, Controller};
 
 /// A `TestSet` object holds every known test in an unordered fashion.
 /// To run, a `TestSet` must be converted into a `TestTarget`.
@@ -112,7 +112,7 @@ impl TestSet {
                 "scenario" => scenario_paths.push(path.clone()),
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
-                unknown => println!("Unrecognized unit type {}, path: {}", unknown, path.to_str().unwrap_or("")),
+                unknown => controller.debug("testset", "testset", format!("Unrecognized unit type {}, path: {}", unknown, path.to_str().unwrap_or(""))),
             }
         }
 
@@ -129,12 +129,8 @@ impl TestSet {
         Ok(test_set)
     }
 
-    pub fn debug(&self, unit_type: &str, unit_id: &str, msg: &str) {
-        self.controller.control_class(
-                                  "debug",
-                                  unit_id,
-                                  unit_type,
-                                  &ControlMessageContents::Log(msg.to_string()));
+    pub fn debug(&self, msg: String) {
+        self.controller.debug(self.id(), self.kind(), msg);
     }
 
     fn load_jigs(&mut self, jig_paths: &Vec<PathBuf>) {
@@ -149,7 +145,10 @@ impl TestSet {
             };
 
             let new_jig = match new_jig {
-                Err(e) => {println!("Unable to load jig file: {:?}", e); continue;},
+                Err(e) => {
+                    self.debug(format!("Unable to load jig file {}: {:?}", item_name, e));
+                    continue;
+                },
                 Ok(s) => Arc::new(Mutex::new(s)),
             };
 
@@ -167,23 +166,26 @@ impl TestSet {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger = Logger::new(item_name, path_str, &self.jigs, &self.controller);
+            let new_logger_res = Logger::new(item_name, path_str, &self.jigs, &self.controller);
 
             // In this case, it just means the logger is incompatible.
-            if new_logger.is_none() {
-                continue;
-            }
-            let new_logger = new_logger.unwrap();
+            let new_logger = match new_logger_res {
+                None => continue,
+                // If there was an error loading the logger, note it and continue.
+                Some(s) => match s {
+                    Err(e) => {
+                        self.debug(format!("Unable to load logger {}: {:?}", item_name, e));
+                        continue;
+                    },
+                    Ok(t) => t,
+                },
+            };
 
-            if new_logger.is_err() {
-                println!("Unable to load logger: {:?}", new_logger.unwrap_err());
+            // If the new logger fails to start, ignore it and move on.
+            if let Err(e) = new_logger.start() {
+                self.debug(format!("Unable to start logger {}: {:?}", new_logger.id(), e));
                 continue;
-            }
-            let new_logger = new_logger.unwrap();
-            match new_logger.start() {
-                Err(e) => {println!("Unable to start logger: {}", e);},
-                Ok(_) => (),
-            }
+            };
             self.loggers.insert(new_logger.id().to_string(), Arc::new(Mutex::new(new_logger)));
         }
     }
@@ -197,14 +199,20 @@ impl TestSet {
                 None => continue,
                 Some(s) => {
                     match s {
-                        Err(e) => { self.debug("interface", item_name, format!("Unable to load interface: {:?}", e).as_str()); continue; },
+                        Err(e) => {
+                            self.debug(format!("Unable to load interface {}: {:?}", item_name, e));
+                            continue;
+                        },
                         Ok(s) => s,
                     }
                 },
             };
 
             match new_interface.start(&self) {
-                Err(e) => {println!("Unable to start interface: {}", e);},
+                Err(e) => {
+                    self.debug(format!("Unable to start interface {}: {:?}", new_interface.id(), e));
+                    continue;
+                },
                 Ok(_) => (),
             }
 
@@ -219,8 +227,7 @@ impl TestSet {
         for test_path in test_paths {
             let item_name = test_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = test_path.to_str().unwrap_or("");
-            let new_test = match Test::new(&self,
-                                           item_name,
+            let new_test = match Test::new(item_name,
                                            path_str,
                                            &self.jigs,
                                            &self.controller) {
@@ -228,7 +235,10 @@ impl TestSet {
                 None => continue,
                 Some(s) => {
                     match s {
-                        Err(e) => { self.debug("test", item_name, format!("Unable to load test: {:?}", e).as_str()); continue; },
+                        Err(e) => {
+                            self.debug(format!("Unable to load test {}: {:?}", item_name, e));
+                            continue;
+                        },
                         Ok(s) => s,
                     }
                 },
@@ -244,8 +254,7 @@ impl TestSet {
         for path in paths {
             let item_name = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = path.to_str().unwrap_or("");
-            let new_scenario = match Scenario::new(&self,
-                                                   item_name,
+            let new_scenario = match Scenario::new(item_name,
                                                    path_str,
                                                    &self.jigs,
                                                    &self.tests,
@@ -254,7 +263,10 @@ impl TestSet {
                 None => continue,
                 Some(s) => {
                     match s {
-                        Err(e) => { self.debug("scenario", item_name, format!("Unable to load scenario: {:?}", e).as_str()); continue; },
+                        Err(e) => {
+                            self.debug(format!("Unable to load scenario {}: {:?}", item_name, e));
+                            continue;
+                        },
                         Ok(s) => s,
                     }
                 },
@@ -337,7 +349,7 @@ impl TestSet {
         let scenario: Arc<Mutex<Scenario>> = match scenario_id {
             None => match self.scenario {
                 None => {
-                    self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str());
+                    self.debug(format!("No default scenario selected"));
                     return;
                 },
                 Some(ref t) => t.clone(),
@@ -362,17 +374,16 @@ impl TestSet {
 
     pub fn send_scenarios(&self) {
         let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
-
-        self.controller.broadcast(
-                              self.unit_name(),
-                              self.unit_type(),
-                              &BroadcastMessageContents::Scenarios(scenario_list));
+        self.broadcast(&BroadcastMessageContents::Scenarios(scenario_list));
     }
 
     pub fn send_tests(&self, scenario_id: Option<String>) {
         let ref scenario = match scenario_id {
             None => match self.scenario {
-                None => {self.debug(self.unit_type(), self.unit_name(), format!("No default scenario selected").as_str()); return;},
+                None => {
+                    self.debug(format!("No default scenario selected"));
+                    return;
+                },
                 Some(ref t) => t.lock().unwrap(),
             },
             Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
@@ -390,25 +401,30 @@ impl TestSet {
     pub fn set_scenario(&mut self, scenario_name: &String) {
         let scenario = match self.scenarios.get(scenario_name) {
             None => {
-                self.debug(self.unit_type(), self.unit_name(), format!("Unable to find scenario: {}", scenario_name).as_str());
+                self.debug(format!("Unable to find scenario: {}", scenario_name));
                 return;
             },
             Some(s) => s,
         };
         self.scenario = Some(scenario.clone());
 
-        self.controller.broadcast(
-                              self.unit_name(),
-                              self.unit_type(),
-                              &BroadcastMessageContents::Scenario(scenario_name.clone()));
+        self.broadcast(&BroadcastMessageContents::Scenario(scenario_name.clone()));
         scenario.lock().unwrap().deref_mut().describe();
     }
 
-    pub fn unit_type(&self) -> &'static str {
-        "internal"
+    fn broadcast(&self, msg: &BroadcastMessageContents) {
+        self.controller.broadcast(self.id(), self.kind(), msg);
     }
 
-    pub fn unit_name(&self) -> &'static str {
+    pub fn kind(&self) -> &'static str {
+        "testset"
+    }
+
+    pub fn name(&self) -> &'static str {
+        "testset"
+    }
+
+    pub fn id(&self) -> &str {
         "testset"
     }
 }

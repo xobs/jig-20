@@ -8,6 +8,7 @@ use std::thread;
 use std::process::{Stdio, ChildStdin, ChildStdout};
 use self::wait_timeout::ChildExt;
 use super::testset::TestSet;
+use cfti::controller::Controller;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -33,10 +34,10 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     Ok(cmd)
 }
 
-pub fn try_command(ts: &TestSet, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
+pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
-        Err(_) => {
-            ts.debug("internal", "unknown", "Unable to make command");
+        Err(e) => {
+            controller.debug("internal", "unknown", format!("Unable to make command: {:?}", e));
             return false;
         },
         Ok(val) => val,

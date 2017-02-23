@@ -136,8 +136,7 @@ pub struct Scenario {
 }
 
 impl Scenario {
-    pub fn new(ts: &TestSet,
-               id: &str,
+    pub fn new(id: &str,
                path: &str,
                loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
@@ -167,7 +166,7 @@ impl Scenario {
                     }
                 }
                 if found_it == false {
-                    ts.debug("scenario", id, format!("The scenario '{}' is not compatible with this jig", id).as_str());
+                    controller.debug("scenario", id, format!("The scenario '{}' is not compatible with this jig", id));
                     return None;
                 }
             }
@@ -214,7 +213,7 @@ impl Scenario {
             Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
         };
 
-        let graph_result = match Self::build_graph(ts, id, &test_names, &loaded_tests) {
+        let graph_result = match Self::build_graph(controller, id, &test_names, &loaded_tests) {
             Err(e) => return Some(Err(e)),
             Ok(v) => v,
         };
@@ -303,7 +302,7 @@ impl Scenario {
         }
     }
 
-    fn build_graph(ts: &TestSet,
+    fn build_graph(controller: &Controller,
                    id: &str,
                    test_names: &Vec<String>,
                    loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
@@ -331,10 +330,10 @@ impl Scenario {
                 if let Err(_) = test_graph.add_edge(*(node_bucket.get(&previous_test).unwrap()),
                                                     *(node_bucket.get(&this_test).unwrap()),
                                                     TestEdge::Follows) {
-                    ts.debug("scenario",
+                    controller.debug("scenario",
                             id,
                             format!("Test {} has a circular requirement on {}",
-                                    test_names[i - 1], test_names[i]).as_str());
+                                    test_names[i - 1], test_names[i]));
                     return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(), test_names[i].clone()));
                 }
             }
@@ -356,7 +355,7 @@ impl Scenario {
 
             let ref mut test = match loaded_tests.get(&test_name) {
                 None => {
-                    ts.debug("scenario", id, format!("Test {} not found when loading scenario", test_name).as_str());
+                    controller.debug("scenario", id, format!("Test {} not found when loading scenario", test_name));
                     return Err(ScenarioError::TestNotFound(test_name.clone()));
                 },
                 Some(s) => s.lock().unwrap(),
@@ -367,10 +366,10 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 let edge = match node_bucket.get(requirement) {
                     None => {
-                        ts.debug("scenario",
+                        controller.debug("scenario",
                                 id,
                                 format!("Test {} has a requirement that doesn't exist: {}",
-                                        test_name, requirement).as_str());
+                                        test_name, requirement));
                         return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
                     },
                     Some(e) => e,
@@ -378,10 +377,10 @@ impl Scenario {
                 if let Err(_) = test_graph.add_edge(*edge,
                                                     node_bucket[&test_name],
                                                     TestEdge::Requires) {
-                    ts.debug("scenario",
+                    controller.debug("scenario",
                             id,
                             format!("Test {} has a circular requirement on {}",
-                                    test_name, requirement).as_str());
+                                    test_name, requirement));
                     return Err(ScenarioError::CircularDependency(test_name.clone(), requirement.clone()));
                 }
             }
@@ -391,10 +390,10 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 let edge = match node_bucket.get(requirement) {
                     None => {
-                        ts.debug("scenario",
+                        controller.debug("scenario",
                                 id,
                                 format!("Test {} has a dependency that doesn't exist: {}",
-                                        test_name, requirement).as_str());
+                                        test_name, requirement));
                         return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
                     },
                     Some(e) => e,
@@ -402,10 +401,10 @@ impl Scenario {
                 if let Err(_) = test_graph.add_edge(*edge,
                                                     node_bucket[&test_name],
                                                     TestEdge::Suggests) {
-                    ts.debug("scenario",
+                    controller.debug("scenario",
                             id,
                             format!("Warning: test {} has a circular suggestion for {}",
-                                    test_name, requirement).as_str());
+                                    test_name, requirement));
                 }
             }
         }
@@ -424,7 +423,7 @@ impl Scenario {
                             &mut test_order);
         }
         let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
-        ts.debug("scenario", id, format!("Vector order: {:?}", vec_names).as_str());
+        controller.debug("scenario", id, format!("Vector order: {:?}", vec_names));
         Ok(GraphResult {
             tests: test_order,
             graph: test_graph,

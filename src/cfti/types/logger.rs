@@ -176,7 +176,10 @@ impl Logger {
         }
 
         let child = match cmd.spawn() {
-            Err(e) => { println!("Unable to spawn {:?}: {}", cmd, e); return Err(LoggerError::ExecCommandFailed) },
+            Err(e) => {
+                self.debug(format!("Unable to spawn {:?}: {}", cmd, e));
+                return Err(LoggerError::ExecCommandFailed);
+            },
             Ok(s) => s,
         };
         let stdin = Arc::new(Mutex::new(child.stdin.unwrap()));
