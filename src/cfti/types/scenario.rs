@@ -475,10 +475,7 @@ impl Scenario {
             ScenarioState::Idle => true,
 
             // Run an exec_start command before we run the first test.
-            ScenarioState::PreStart => {
-                // If there's a preroll script, run that.
-                self.exec_start.is_some()
-            },
+            ScenarioState::PreStart => self.exec_start.is_some(),
 
             // Run a given test.
             ScenarioState::Running(i) => {
@@ -501,14 +498,10 @@ impl Scenario {
             },
 
             // Run a script on scenario success.
-            ScenarioState::PostSuccess => {
-                self.exec_stop_success.is_some()
-            },
+            ScenarioState::PostSuccess => self.exec_stop_success.is_some(),
 
             // Run a script on scenario failure.
-            ScenarioState::PostFailure => {
-                self.exec_stop_failure.is_some()
-            },
+            ScenarioState::PostFailure => self.exec_stop_failure.is_some(),
         }
     }
 
@@ -520,9 +513,7 @@ impl Scenario {
     fn find_next_state(&self, current_state: ScenarioState) -> ScenarioState {
         
         let test_count = self.tests.len();
-        let failure_count = {
-            *(self.failures.lock().unwrap())
-        };
+        let failure_count = *(self.failures.lock().unwrap());
 
         let new_state = match current_state {
             ScenarioState::Idle => {
