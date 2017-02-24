@@ -5,7 +5,7 @@ extern crate shlex;
 use std::process::Command;
 use std::time::Duration;
 use std::thread;
-use std::process::{Stdio, ChildStdin, ChildStdout};
+use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr};
 use self::wait_timeout::ChildExt;
 use cfti::controller::Controller;
 
@@ -92,7 +92,7 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
 /// `CommandError::ChildTimeout` - Child timed out and was successfully terminated.
 
 pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Duration, completion: F)
-        -> Result<(ChildStdout, ChildStdin), CommandError>
+        -> Result<(ChildStdin, ChildStdout, ChildStderr), CommandError>
         where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
 
@@ -106,7 +106,7 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
 
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
-    cmd.stderr(Stdio::inherit());
+    cmd.stderr(Stdio::piped());
 
     if let Some(ref s) = *wd {
         cmd.current_dir(s);
@@ -126,6 +126,8 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
     child.stdout = None;
     let stdin = child.stdin.unwrap();
     child.stdin = None;
+    let stderr = child.stderr.unwrap();
+    child.stderr = None;
 
     thread::spawn(move || {
         let status_code = match child.wait_timeout(max).unwrap() {
@@ -160,5 +162,5 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
     });
 
     // Return the stdout so that the 
-    Ok((stdout, stdin))
+    Ok((stdin, stdout, stderr))
  }

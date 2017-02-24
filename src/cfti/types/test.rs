@@ -47,7 +47,9 @@ pub struct Test {
     /// Timeout: The maximum number of seconds that this test may be run for.
     timeout: u64,
 
-    /// Type: One of "simple" or "daemon".  For "simple" tests, the return code will indicate pass or fail, and each line printed will be considered progress.  For "daemon", the process will be forked and left to run in the background.  See "daemons" below.
+    /// Type: One of "simple" or "daemon".  For "simple" tests, the return code will indicate pass or fail,
+    /// and each line printed will be considered progress.  For "daemon", the process will be forked
+    /// and left to run in the background.  See "daemons" in the documentation.
     test_type: TestType,
 
     /// ExecStart: The command to run as part of this test.
@@ -64,6 +66,9 @@ pub struct Test {
 
     /// The last line outputted by a test, which is the result.
     last_line: Arc<Mutex<String>>,
+
+    /// Whether the last run of this test succeeded or not.
+    last_result: Arc<Mutex<bool>>,
 }
 
 impl Test {
@@ -190,6 +195,7 @@ impl Test {
             controller: controller.clone(),
 
             last_line: Arc::new(Mutex::new("".to_string())),
+            last_result: Arc::new(Mutex::new(false)),
         }))
     }
 
@@ -228,14 +234,21 @@ impl Test {
         let kind = self.kind().to_string();
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
-        let (stdout, _) = match process::try_command_completion(
+        let result = self.last_result.clone();
+        let (_, stdout, stderr) = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         max_duration,
                         move |res: Result<(), process::CommandError>| {
             let msg = match res {
-                Ok(_) => BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().to_string()),
-                Err(e) => BroadcastMessageContents::Fail(id.clone(), format!("{:?}", e)),
+                Ok(_) => {
+                    *(result.lock().unwrap()) = true;
+                    BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().to_string())
+                },
+                Err(e) => {
+                    *(result.lock().unwrap()) = false;
+                    BroadcastMessageContents::Fail(id.clone(), format!("{:?}", e))
+                },
             };
 
             // Send a message indicating what the test did, and advance the scenario.
@@ -256,7 +269,7 @@ impl Test {
         let kind = self.kind().to_string();
         let last_line = self.last_line.clone();
         let builder = thread::Builder::new()
-                .name(format!("Test: {}", id).into());
+                .name(format!("T-O: {}", id).into());
         builder.spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
@@ -276,10 +289,51 @@ impl Test {
                 }
             }
         }).unwrap();
+
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let last_line = self.last_line.clone();
+        let builder = thread::Builder::new()
+                .name(format!("T-E: {}", id).into());
+        builder.spawn(move || {
+            for line in BufReader::new(stderr).lines() {
+                match line {
+                    Err(e) => {
+                        println!("Error in interface: {}", e);
+                        return;
+                    },
+                    Ok(l) => {
+                        *(last_line.lock().unwrap()) = l.clone();
+                        controller.broadcast_class(
+                            "stderr",
+                            id.as_str(),
+                            kind.as_str(),
+                            &BroadcastMessageContents::Log(l)
+                        );
+                    },
+                }
+            }
+        }).unwrap();
+    }
+
+    pub fn stop(&self) {
+        match *self.last_result.lock().unwrap() {
+            true => if let Some(ref cmd) = self.exec_stop_success {
+                self.log(format!("Running success: {}", cmd));
+            },
+            false => if let Some(ref cmd) = self.exec_stop_failure {
+                self.log(format!("Running failure: {}", cmd));
+            },
+        };
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
         self.controller.broadcast(self.id(), self.kind(), &msg);
+    }
+
+    pub fn log(&self, msg: String) {
+        self.broadcast(BroadcastMessageContents::Log(msg));
     }
 
     /*

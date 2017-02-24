@@ -111,15 +111,16 @@ Implementation Progress
     * Dependency resolution
     * Dependency ordering
     * Test start/stop
-    * _Scenario duration_
+    * Scenario duration
     * _Hung ExecStart/ExecStop_
   * Tests
     * Simple tests
     * Test logging
+    * Test timeout
     * _Daemon tests_
-    * _Test timeout_
     * _Hung tests_
     * _ExecStop_
+    * _Extra Pipes_
   * Interfaces
     * Basic interface interaction
     * _Ping/Pong keepalive_

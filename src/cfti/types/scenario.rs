@@ -579,7 +579,7 @@ impl Scenario {
         // The command will either return an error, or a tuple containing (stdout,stdin).
         // If it's an error, then the completion above will be called and the test state
         // will be advanced there.  Avoid advancing it here.
-        let (stdout, _) = match res {
+        let (_, stdout, stderr) = match res {
             Err(_) => return,
             Ok(s) => s,
         };
@@ -597,7 +597,29 @@ impl Scenario {
                     },
                     Ok(l) => {
                         controller.broadcast_class(
-                            "support",
+                            "stdout",
+                            id.as_str(),
+                            kind.as_str(),
+                            &BroadcastMessageContents::Log(format!("{}: {}", tn, l)));
+                    },
+                }
+            }
+        });
+
+        let controller = self.controller.clone();
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let tn = testname.to_string();
+        thread::spawn(move || {
+            for line in BufReader::new(stderr).lines() {
+                match line {
+                    Err(_) => {
+                        /* Support command ended */
+                        return;
+                    },
+                    Ok(l) => {
+                        controller.broadcast_class(
+                            "stderr",
                             id.as_str(),
                             kind.as_str(),
                             &BroadcastMessageContents::Log(format!("{}: {}", tn, l)));
@@ -610,6 +632,13 @@ impl Scenario {
     // Given the current state, figure out the next test to run (if any)
     pub fn advance(&self) {
         let current_state = self.state.lock().unwrap().clone();
+
+        // Run the test's stop() command if we just ran a test.
+        match current_state {
+            ScenarioState::Running(step) => self.tests[step].lock().unwrap().stop(),
+            _ => (),
+        }
+
         let new_state = self.find_next_state(current_state);
 
         let failures = *(self.failures.lock().unwrap());
