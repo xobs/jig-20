@@ -235,9 +235,9 @@ impl Test {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            controller.broadcast_class("support", id.as_str(), kind.as_str(), &msg);
+            controller.broadcast_class("result", id.as_str(), kind.as_str(), &msg);
             controller.control_class(
-                "support",
+                "result",
                 id.as_str(),
                 kind.as_str(),
                 &ControlMessageContents::AdvanceScenario);
@@ -252,7 +252,7 @@ impl Test {
         let kind = self.kind().to_string();
         let last_line = self.last_line.clone();
         let builder = thread::Builder::new()
-                .name(format!("Running test: {}", id).into());
+                .name(format!("Test: {}", id).into());
         builder.spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
@@ -262,7 +262,8 @@ impl Test {
                     },
                     Ok(l) => {
                         *(last_line.lock().unwrap()) = l.clone();
-                        controller.broadcast(
+                        controller.broadcast_class(
+                            "stdout",
                             id.as_str(),
                             kind.as_str(),
                             &BroadcastMessageContents::Log(l)
