@@ -45,7 +45,7 @@ pub struct Test {
     suggests: Vec<String>,
 
     /// Timeout: The maximum number of seconds that this test may be run for.
-    timeout: u32,
+    timeout: u64,
 
     /// Type: One of "simple" or "daemon".  For "simple" tests, the return code will indicate pass or fail, and each line printed will be considered progress.  For "daemon", the process will be forked and left to run in the background.  See "daemons" below.
     test_type: TestType,
@@ -210,11 +210,15 @@ impl Test {
                                                                   self.description().to_string()));
     }
 
+    pub fn timeout(&self) -> u64 {
+        self.timeout
+    }
+
     /// Start running a test
     ///
     /// Start running a test.  If `working_directory` is specified and
     /// there is no WorkingDirectory in this test, use the provided one.
-    pub fn start(&self, working_directory: &Option<String>) {
+    pub fn start(&self, working_directory: &Option<String>, max_duration: time::Duration) {
         self.broadcast(BroadcastMessageContents::Running(self.id().to_string()));
 
         // Try to create a command.  If this fails, then the command completion will be called,
@@ -227,7 +231,7 @@ impl Test {
         let (stdout, _) = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
-                        time::Duration::new(100, 0),
+                        max_duration,
                         move |res: Result<(), process::CommandError>| {
             let msg = match res {
                 Ok(_) => BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().to_string()),

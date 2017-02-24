@@ -660,7 +660,9 @@ impl Scenario {
             },
             ScenarioState::Running(next_step) => {
                 let ref test = self.tests[next_step].lock().unwrap();
-                test.start(self.working_directory.lock().unwrap().deref());
+                let test_timeout = test.timeout();
+                let test_max_time = self.make_timeout(test_timeout);
+                test.start(self.working_directory.lock().unwrap().deref(), test_max_time);
             },
             ScenarioState::PostSuccess => {
                 let ref cmd = self.exec_stop_success;
@@ -673,6 +675,18 @@ impl Scenario {
                 self.run_support_cmd(cmd.as_str(), "execstopfailure");
             },
         }
+    }
+
+    fn make_timeout(&self, test_timeout: u64) -> time::Duration {
+        let test_max_time = time::Duration::from_secs(test_timeout);
+        let now = time::Instant::now();
+        let scenario_time_remaining = now.duration_since(self.start_time.lock().unwrap().clone());
+
+        // If the test would take longer than the scenario has left, limit the test time.
+        if test_max_time > scenario_time_remaining {
+            return scenario_time_remaining;
+        }
+        test_max_time
     }
 
     /// Start running a scenario
