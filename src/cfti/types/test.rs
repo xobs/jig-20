@@ -44,6 +44,9 @@ pub struct Test {
     /// Suggests: The name of a test that should be run first, but is not catastrophic if it fails
     suggests: Vec<String>,
 
+    /// Provides is a list of tests that this can be referred to when "Requiring" or "Suggesting" tests.
+    provides: Vec<String>,
+
     /// Timeout: The maximum number of seconds that this test may be run for.
     timeout: u64,
 
@@ -155,26 +158,26 @@ impl Test {
         // Get a list of all the requirements, or make a blank list
         let requires = match test_section.get("Requires") {
             None => Vec::new(),
-            Some(s) => {
-                let vals = s.split(",");
-                let mut tmp = Vec::new();
-                for val in vals {
-                    tmp.push(val.to_string().trim().to_string());
-                };
-                tmp
-            }
+            // Split by "," and also whitespace, and combine back into an array.
+            Some(s) => s.split(",").map(|x|
+                        x.to_string().split_whitespace().map(|y|
+                        y.to_string().trim().to_string()).collect()).collect()
         };
 
         let suggests = match test_section.get("Suggests") {
             None => Vec::new(),
-            Some(s) => {
-                let vals = s.split(",");
-                let mut tmp = Vec::new();
-                for val in vals {
-                    tmp.push(val.to_string().trim().to_string());
-                };
-                tmp
-            }
+            // Split by "," and also whitespace, and combine back into an array.
+            Some(s) => s.split(",").map(|x|
+                        x.to_string().split_whitespace().map(|y|
+                        y.to_string().trim().to_string()).collect()).collect()
+        };
+
+        let provides = match test_section.get("Provides") {
+            None => vec![],
+            Some(s) =>
+                s.split(",").map(|x|
+                        x.to_string().split_whitespace().map(|y|
+                y.to_string().trim().to_string()).collect()).collect()
         };
 
         Some(Ok(Test {
@@ -184,6 +187,7 @@ impl Test {
 
             requires: requires,
             suggests: suggests,
+            provides: provides,
 
             test_type: test_type,
 
@@ -359,6 +363,10 @@ impl Test {
 
     pub fn suggestions(&self) -> &Vec<String> {
         &self.suggests
+    }
+
+    pub fn provides(&self) -> &Vec<String> {
+        &self.provides
     }
 
     pub fn kind(&self) -> &str {
