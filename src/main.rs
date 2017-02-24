@@ -65,7 +65,7 @@ fn main() {
 
     let test_set = cfti::TestSet::new("ltc-tests", &config, &mut controller).unwrap();
 
-    println!("Test set: {:?}", test_set);
+    //println!("Test set: {:?}", test_set);
     loop {
         if controller.should_exit() {
             break;

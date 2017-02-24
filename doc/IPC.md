@@ -24,9 +24,11 @@ Logger units that accept JSON will receive a stream of line-delimited JSON recor
     {"message_type":2,"unit":"<internal>","unit_type":"<internal>","unix_time":1485942257,"unix_time_nsecs":149052500,"message":"I loop: 0"}
 
 Interface - Text
----------------
+----------------
 
 A simple interface may request a text protocol, in which case it is similar to most other line-oriented protocols such as HTTP or SMTP.  Verbs are a single word, followed by a space, followed by one or more arguments.  If there are no arguments, then the space may be omitted.
+
+Anything printed to stderr will be entered as a log message.
 
 Verbs are case-insensitive, however they are presented here in all caps due to tradition.
 
@@ -61,3 +63,11 @@ Verbs that may be sent by the CFTI client:
  * PONG [id] - Respond to a PING command, to indicate the program is still active.  Must respond withing five seconds.
  * LOG [message] - Log a message to the log bus.  Note that it will be echoed back, so be careful not to create an infinite loop.
  * SHUTDOWN [message] - Tell the test infrastructure to shut down.
+
+
+ Test -- Simple
+ --------------
+
+ Simple tests are text-based.  Any text that they print will get turned into a Log message.
+
+ Any text printed to stderr will also be entered as a log message.

@@ -213,9 +213,13 @@ impl Interface {
     fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) {
     }
 
+    fn cfti_unescape(msg: String) -> String {
+        msg.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\\\", "\\")
+    }
+
     fn text_read(line: String, id: &String, controller: &Controller) {
         controller.debug(id, "interface", format!("CFTI interface input: {}", line));
-        let mut words: Vec<String> = line.split_whitespace().map(|x| x.to_string()).collect();
+        let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
         let verb = words[0].to_lowercase();
         words.remove(0);
 
@@ -262,7 +266,7 @@ impl Interface {
 
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
-        cmd.stderr(Stdio::inherit());
+        cmd.stderr(Stdio::piped());
         if let Some(ref s) = self.working_directory {
             cmd.current_dir(s);
         }
@@ -280,6 +284,7 @@ impl Interface {
         self.log(format!("Launched an interface: {}", self.id()));
         let mut stdin = child.stdin.unwrap();
         let stdout = child.stdout.unwrap();
+        let stderr = child.stderr.unwrap();
 
         // Send some initial information to the client.
         writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
@@ -296,13 +301,33 @@ impl Interface {
                 let controller = self.controller.clone();
                 let id = self.id.clone();
                 let builder = thread::Builder::new()
-                    .name(format!("I {} -> CFTI", id).into());
+                    .name(format!("I-O {} -> CFTI", id).into());
 
                 builder.spawn(move || {
                     for line in BufReader::new(stdout).lines() {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
                             Ok(l) => Interface::text_read(l, &id, &controller),
+                        }
+                    }
+                }).unwrap();
+
+                // Monitor the child process' stderr, and pass values to the controller.
+                let controller = self.controller.clone();
+                let id = self.id.clone();
+                let builder = thread::Builder::new()
+                    .name(format!("I-E {} -> CFTI", id).into());
+
+                builder.spawn(move || {
+                    for line in BufReader::new(stderr).lines() {
+                        match line {
+                            Err(e) => {println!("Error in interface: {}", e); return; },
+                            Ok(l) => controller.control_class(
+                                            "stderr",
+                                            id.as_str(),
+                                            "interface",
+                                            &ControlMessageContents::Log(l)),
+
                         }
                     }
                 }).unwrap();
