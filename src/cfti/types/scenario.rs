@@ -17,9 +17,8 @@ use std::time;
 use cfti::types::test::Test;
 use cfti::types::Jig;
 use cfti::process;
+use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
-
-const DEFAULT_TIMEOUT: u32 = (60 * 60 * 24);
 
 #[derive(Clone, Debug)]
 pub enum ScenarioError {
@@ -95,7 +94,7 @@ pub struct Scenario {
     description: String,
 
     /// timeout: Maximum number of seconds this scenario should take.
-    timeout: u32,
+    timeout: Duration,
 
     /// tests: A vector containing all the tests in this scenario.
     pub tests: Vec<Arc<Mutex<Test>>>,
@@ -139,6 +138,7 @@ impl Scenario {
                path: &str,
                loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
@@ -182,8 +182,8 @@ impl Scenario {
         };
 
         let timeout = match scenario_section.get("Timeout") {
-            None => DEFAULT_TIMEOUT,
-            Some(s) => s.parse().unwrap(),
+            None => config.scenario_timeout(),
+            Some(s) => time::Duration::from_secs(s.parse().unwrap()),
         };
 
         let exec_start = match scenario_section.get("ExecStart") {
@@ -477,18 +477,16 @@ impl Scenario {
             // Run an exec_start command before we run the first test.
             ScenarioState::PreStart => {
                 // If there's a preroll script, run that.
-                if self.exec_start.is_some() {
-                    true
-                }
-                else {
-                    false
-                }
+                self.exec_start.is_some()
             },
 
             // Run a given test.
             ScenarioState::Running(i) => {
                 let test_name = self.tests[i].lock().unwrap().id().to_string();
-                if i >= self.tests.len() {
+                if self.scenario_timed_out() {
+                    false
+                }
+                else if i >= self.tests.len() {
                     false
                 }
                 // Make sure all required dependencies succeeded.
@@ -504,22 +502,12 @@ impl Scenario {
 
             // Run a script on scenario success.
             ScenarioState::PostSuccess => {
-                if self.exec_stop_success.is_some() {
-                    true
-                }
-                else {
-                    false
-                }
+                self.exec_stop_success.is_some()
             },
 
             // Run a script on scenario failure.
             ScenarioState::PostFailure => {
-                if self.exec_stop_failure.is_some() {
-                    true
-                }
-                else {
-                    false
-                }
+                self.exec_stop_failure.is_some()
             },
         }
     }
@@ -677,14 +665,20 @@ impl Scenario {
         }
     }
 
+    fn scenario_timed_out(&self) -> bool {
+        let now = time::Instant::now();
+        let scenario_elapsed_time = now.duration_since(self.start_time.lock().unwrap().clone());
+        scenario_elapsed_time >= self.timeout
+    }
+
     fn make_timeout(&self, test_timeout: u64) -> time::Duration {
         let test_max_time = time::Duration::from_secs(test_timeout);
         let now = time::Instant::now();
-        let scenario_time_remaining = now.duration_since(self.start_time.lock().unwrap().clone());
+        let scenario_elapsed_time = now.duration_since(self.start_time.lock().unwrap().clone());
 
         // If the test would take longer than the scenario has left, limit the test time.
-        if test_max_time > scenario_time_remaining {
-            return scenario_time_remaining;
+        if (test_max_time + scenario_elapsed_time) > self.timeout {
+            return self.timeout - scenario_elapsed_time;
         }
         test_max_time
     }

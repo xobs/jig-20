@@ -3,13 +3,15 @@ use std::time::Duration;
 pub struct Config {
     locale: Option<String>,
     timeout: Duration,
+    scenario_timeout: Duration,
 }
 
 impl Config {
     pub fn new() -> Config {
         Config {
             locale: None,
-            timeout: Duration::new(3600, 0),
+            timeout: Duration::from_secs(3600),
+            scenario_timeout: Duration::from_secs(7200),
         }
     }
 
@@ -30,5 +32,9 @@ impl Config {
 
     pub fn timeout(&self) -> Duration {
         self.timeout
+    }
+
+    pub fn scenario_timeout(&self) -> Duration {
+        self.scenario_timeout
     }
 }

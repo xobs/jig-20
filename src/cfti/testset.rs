@@ -253,6 +253,7 @@ impl TestSet {
                                                    path_str,
                                                    &self.jigs,
                                                    &self.tests,
+                                                   config,
                                                    &self.controller) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
