@@ -21,6 +21,7 @@ pub enum TestError {
     MissingTestSection,
     MissingExecSection,
     InvalidType(String),
+    DaemonReadyTextError,
 }
 
 #[derive(Debug)]
@@ -113,6 +114,17 @@ impl Test {
             }
         }
 
+        let test_daemon_ready = match test_section.get("DaemonReadyText") {
+            None => None,
+            Some(s) => match Regex::new(s) {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    controller.debug("test", id, format!("Unable to compile DaemonReadyText: {}", e));
+                    return Some(Err(TestError::DaemonReadyTextError));
+                },
+            },
+        };
+
         let test_type = match test_section.get("Type") {
             None => TestType::Simple,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
@@ -192,7 +204,7 @@ impl Test {
             suggests: suggests,
 
             test_type: test_type,
-            test_daemon_ready: None,
+            test_daemon_ready: test_daemon_ready,
 
             timeout: timeout,
             exec_start: exec_start,
