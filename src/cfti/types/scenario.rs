@@ -584,56 +584,13 @@ impl Scenario {
         // The command will either return an error, or a tuple containing (stdout,stdin).
         // If it's an error, then the completion above will be called and the test state
         // will be advanced there.  Avoid advancing it here.
-        let process = match res {
+        let child = match res {
             Err(_) => return,
             Ok(s) => s,
         };
 
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
-        let tn = testname.to_string();
-        let stdout = process.stdout;
-        thread::spawn(move || {
-            for line in BufReader::new(stdout).lines() {
-                match line {
-                    Err(_) => {
-                        /* Support command ended */
-                        return;
-                    },
-                    Ok(l) => {
-                        controller.broadcast_class(
-                            "stdout",
-                            id.as_str(),
-                            kind.as_str(),
-                            &BroadcastMessageContents::Log(format!("{}: {}", tn, l)));
-                    },
-                }
-            }
-        });
-
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
-        let tn = testname.to_string();
-        let stderr = process.stderr;
-        thread::spawn(move || {
-            for line in BufReader::new(stderr).lines() {
-                match line {
-                    Err(_) => {
-                        /* Support command ended */
-                        return;
-                    },
-                    Ok(l) => {
-                        controller.broadcast_class(
-                            "stderr",
-                            id.as_str(),
-                            kind.as_str(),
-                            &BroadcastMessageContents::Log(format!("{}: {}", tn, l)));
-                    },
-                }
-            }
-        });
+        process::log_output(child.stdout, &self.controller.clone(), self.id(), self.kind(), "stdout");
+        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
     }
 
     // Given the current state, figure out the next test to run (if any)
