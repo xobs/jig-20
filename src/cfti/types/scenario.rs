@@ -100,11 +100,20 @@ pub struct Scenario {
     /// exec_start: A command to run when starting tests.
     exec_start: Option<String>,
 
+    /// How long to wait for exec_start to run
+    exec_start_timeout: Duration,
+
     /// exec_stop_success: A command to run upon successful completion of this scenario.
     exec_stop_success: Option<String>,
 
+    /// How long to wait for exec_stop_success to run
+    exec_stop_success_timeout: Duration,
+
     /// exec_stop_failure: A command to run if this scenario fails.
     exec_stop_failure: Option<String>,
+
+    /// How long to wait for exec_stop_failure to run
+    exec_stop_failure_timeout: Duration,
 
     /// The controller where all messages come and go.
     controller: Controller,
@@ -249,8 +258,11 @@ impl Scenario {
             name: name,
             description: description,
             exec_start: exec_start,
+            exec_start_timeout: config.scenario_start_timeout(),
             exec_stop_success: exec_stop_success,
+            exec_stop_success_timeout: config.scenario_failure_timeout(),
             exec_stop_failure: exec_stop_failure,
+            exec_stop_failure_timeout: config.scenario_success_timeout(),
             controller: controller.clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
@@ -556,7 +568,7 @@ impl Scenario {
         }
     }
 
-    fn run_support_cmd(&self, cmd: &str, testname: &str) {
+    fn run_support_cmd(&self, cmd: &str, timeout: &Duration, testname: &str) {
         // unwrap is safe because we know a PreStart command exists.
         let id = self.id().to_string();
         let kind = self.kind().to_string();
@@ -633,7 +645,7 @@ impl Scenario {
             ScenarioState::PreStart => {
                 let ref cmd = self.exec_start;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), "execstart");
+                self.run_support_cmd(cmd.as_str(), &self.exec_start_timeout, "execstart");
             },
             ScenarioState::Running(next_step) => {
                 let ref test = self.tests[next_step].lock().unwrap();
@@ -644,12 +656,12 @@ impl Scenario {
             ScenarioState::PostSuccess => {
                 let ref cmd = self.exec_stop_success;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), "execstopsuccess");
+                self.run_support_cmd(cmd.as_str(), &self.exec_stop_success_timeout, "execstopsuccess");
             },
             ScenarioState::PostFailure => {
                 let ref cmd = self.exec_stop_failure;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), "execstopfailure");
+                self.run_support_cmd(cmd.as_str(), &self.exec_stop_failure_timeout, "execstopfailure");
             },
         }
     }

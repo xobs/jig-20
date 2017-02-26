@@ -4,6 +4,9 @@ pub struct Config {
     locale: Option<String>,
     timeout: Duration,
     scenario_timeout: Duration,
+    scenario_start_timeout: Duration,
+    scenario_success_timeout: Duration,
+    scenario_failure_timeout: Duration,
     test_success_timeout: Duration,
     test_failure_timeout: Duration,
 }
@@ -14,6 +17,9 @@ impl Config {
             locale: None,
             timeout: Duration::from_secs(3600),
             scenario_timeout: Duration::from_secs(7200),
+            scenario_start_timeout: Duration::from_secs(10),
+            scenario_success_timeout: Duration::from_secs(10),
+            scenario_failure_timeout: Duration::from_secs(10),
             test_success_timeout: Duration::from_secs(10),
             test_failure_timeout: Duration::from_secs(10),
         }
@@ -48,5 +54,17 @@ impl Config {
 
     pub fn scenario_timeout(&self) -> Duration {
         self.scenario_timeout
+    }
+
+    pub fn scenario_start_timeout(&self) -> Duration {
+        self.scenario_start_timeout
+    }
+
+    pub fn scenario_success_timeout(&self) -> Duration {
+        self.scenario_success_timeout
+    }
+
+    pub fn scenario_failure_timeout(&self) -> Duration {
+        self.scenario_failure_timeout
     }
 }
