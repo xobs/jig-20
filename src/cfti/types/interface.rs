@@ -167,7 +167,7 @@ impl Interface {
 
     fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
         //println!("Sending data to interface: {:?}", msg);
-        match msg.message {
+        let result = match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(stdin,
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}",
                                                 msg.message_class,
@@ -175,39 +175,42 @@ impl Interface {
                                                 msg.unit_type,
                                                 msg.unix_time,
                                                 msg.unix_time_nsecs,
-                                                l.to_string().replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")).unwrap(),
+                                                l.to_string().replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")),
             BroadcastMessageContents::Jig(j) => writeln!(stdin,
-                                                "JIG {}", j.to_string()).unwrap(),
+                                                "JIG {}", j.to_string()),
             BroadcastMessageContents::Describe(class, field, name, value) =>
                                         writeln!(stdin,
                                         "DESCRIBE {} {} {} {}",
-                                        class, field, name, value).unwrap(),
+                                        class, field, name, value),
             BroadcastMessageContents::Scenario(name) => writeln!(stdin,
-                                                "SCENARIO {}", name).unwrap(),
+                                                "SCENARIO {}", name),
             BroadcastMessageContents::Scenarios(list) => writeln!(stdin,
-                                                "SCENARIOS {}", list.join(" ")).unwrap(),
+                                                "SCENARIOS {}", list.join(" ")),
             BroadcastMessageContents::Hello(name) => writeln!(stdin,
-                                                "HELLO {}", name).unwrap(),
+                                                "HELLO {}", name),
             BroadcastMessageContents::Ping(val) => writeln!(stdin,
-                                                "PING {}", val).unwrap(),
+                                                "PING {}", val),
             BroadcastMessageContents::Shutdown(reason) => writeln!(stdin,
-                                                "SHUTDOWN {}", reason).unwrap(),
+                                                "SHUTDOWN {}", reason),
             BroadcastMessageContents::Tests(scenario, tests) => writeln!(stdin,
-                                                "TESTS {} {}", scenario, tests.join(" ")).unwrap(),
+                                                "TESTS {} {}", scenario, tests.join(" ")),
             BroadcastMessageContents::Running(test) => writeln!(stdin,
-                                                "RUNNING {}", test).unwrap(),
+                                                "RUNNING {}", test),
             BroadcastMessageContents::Skip(test, reason) => writeln!(stdin,
-                                                "SKIP {} {}", test, reason).unwrap(),
+                                                "SKIP {} {}", test, reason),
             BroadcastMessageContents::Fail(test, reason) => writeln!(stdin,
-                                                "FAIL {} {}", test, reason).unwrap(),
+                                                "FAIL {} {}", test, reason),
             BroadcastMessageContents::Pass(test, reason) => writeln!(stdin,
-                                                "PASS {} {}", test, reason).unwrap(),
+                                                "PASS {} {}", test, reason),
             BroadcastMessageContents::Start(scenario) => writeln!(stdin,
-                                                "START {}", scenario).unwrap(),
+                                                "START {}", scenario),
             BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(stdin,
-                                                "FINISH {} {} {}", scenario, result, reason).unwrap(),
+                                                "FINISH {} {} {}", scenario, result, reason),
+        };
+        match result {
+            Ok(_) => Ok(()),
+            Err(_) => Err(())
         }
-        Ok(())
     }
 
     fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
