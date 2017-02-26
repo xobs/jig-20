@@ -45,10 +45,9 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         Ok(val) => val,
     };
 
-    match *wd {
-        None => (),
-        Some(ref s) => {cmd.current_dir(s); },
-    };
+    if let Some(ref s) = *wd {
+        cmd.current_dir(s);
+    }
 
     let mut child = match cmd.spawn() {
         Err(e) => {
