@@ -65,9 +65,20 @@ Verbs that may be sent by the CFTI client:
  * SHUTDOWN [message] - Tell the test infrastructure to shut down.
 
 
- Test -- Simple
- --------------
+Test -- Simple
+--------------
 
- Simple tests are text-based.  Any text that they print will get turned into a Log message.
+Simple tests are text-based.  Any text that they print will get turned into a Log message.
 
- Any text printed to stderr will also be entered as a log message.
+Any text printed to stderr will also be entered as a log message, but with the "class" of "stderr".
+
+Tests complete when they exit.  If they exit(0), they are successful.  Any other exit code, or timing out, indicates an error.
+
+A future extension will support additional pipe types.
+
+Test -- Daemon
+--------------
+
+Test daemons are a bit of a misnomer.  The ExecStart command should not fork() like a normal daemon.  Rather, they should run in the foreground.  They will be logged like a Simple test.
+
+If the test exits at all, it will be considered to have "Failed".
