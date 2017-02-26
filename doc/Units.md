@@ -9,7 +9,7 @@ Unit files refer to other unit files by filename.  You may omit the suffix if it
 .test
 -----
 
-.test files describe Tests, which are atomic, Fundamental units of test.
+.test files describe Tests, which are atomic, fundamental units of test.
 
 Test objects have hard and soft dependencies.  For example, it could be that you want to run a color LCD test after running a sound test.  But if the sound test fails, you still want to run the color LCD test.  However, both depend on the firmware having been programmed.  Firmware programming is a hard depenency, and the sound test is a soft depenency.
 
@@ -20,7 +20,7 @@ Test specifications are defined under a "[Test]" section.
 * Description: Defines a detailed description of this test.  May be up to one paragraph.
 * Requires: A comma- or space-separated list of names of tests that must successfully complete in order to run this test
 * Suggests: A comma- or space-separated list of names of tests that should be run first, but is not catastrophic if they fail
-* Provides: A comma-separated list of tests that this test can act as.  For example, you may have a test on a Raspberry Pi called 'openocd-rpi' that can Provide "swd".  On a desktop system, you might use 'openocd-olimex' to Provide "swd".
+* Provides: A comma- or space-separated list of tests that this test can act as.  For example, you may have a test on a Raspberry Pi called 'openocd-rpi' that can Provide "swd".  On a desktop system, you might use 'openocd-olimex' to Provide "swd".
 * Timeout: The maximum number of seconds that this test may be run for before it times out, is killed, and marked failure.
 * Type: One of "simple" or "daemon".  For "simple" tests, the return code will indicate pass or fail, and each line printed will be considered progress.  For "daemon", the testing procedure will continue as soon as DaemonReadyText is read on stdout.  The daemon must not call fork()/exit(), and must remain in the foreground.
 * DaemonReadyText: A string to look for on the test's stdout to indicate the daemon is ready.
