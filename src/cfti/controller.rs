@@ -246,25 +246,34 @@ impl Controller {
     }
 
     pub fn listen_logs<F>(&self, mut logger_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) {
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()> {
 
         self.listen(move |msg| match msg {
             BroadcastMessage { message: BroadcastMessageContents::Log(_), .. } => logger_func(msg),
-            _ => (),
+            _ => Ok(()),
         });
     }
 
     pub fn listen<F>(&self, mut broadcast_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) {
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()> {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
+        let broadcaster = self.broadcast.clone();
         let builder = thread::Builder::new()
                     .name("B-Hook".into());
         builder.spawn(move ||
             loop {
                 match console_rx_channel.recv() {
                     Err(e) => { println!("DEBUG!! Channel closed, probably quitting.  Err: {:?}", e); return; },
-                    Ok(msg) => broadcast_func(msg),
+                    Ok(msg) => if let Err(e) = broadcast_func(msg) {
+                        Self::do_broadcast_class(&broadcaster,
+                                    "debug",
+                                    "controller",
+                                    "controller",
+                                    &BroadcastMessageContents::Log(format!("Broadcast watcher returned an error: {:?}", e)));
+
+                        return;
+                    },
                 };
             }
         ).unwrap();

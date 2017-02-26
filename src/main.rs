@@ -61,6 +61,7 @@ fn main() {
         writeln!(&mut buffer, "{:?}", msg).unwrap();
         buffer.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
         bufwtr.print(&buffer).unwrap();
+        Ok(())
     });
 
     let test_set = cfti::TestSet::new("ltc-tests", &config, &mut controller).unwrap();

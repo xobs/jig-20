@@ -241,6 +241,7 @@ impl Scenario {
                 },
                 _ => None,
             };
+            Ok(())
         });
 
         Some(Ok(Scenario {

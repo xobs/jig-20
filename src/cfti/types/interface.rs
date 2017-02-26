@@ -166,7 +166,7 @@ impl Interface {
         self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
-    fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) {
+    fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
         //println!("Sending data to interface: {:?}", msg);
         match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(stdin,
@@ -208,9 +208,11 @@ impl Interface {
             BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(stdin,
                                                 "FINISH {} {} {}", scenario, result, reason).unwrap(),
         }
+        Ok(())
     }
 
-    fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) {
+    fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
+        Ok(())
     }
 
     fn cfti_unescape(msg: String) -> String {
@@ -333,7 +335,7 @@ impl Interface {
                 }).unwrap();
             },
             InterfaceFormat::JSON => {
-                self.controller.listen(move |msg| {Interface::json_write(&mut stdin, msg);});
+                self.controller.listen(move |msg| Interface::json_write(&mut stdin, msg));
             },
         };
         Ok(())

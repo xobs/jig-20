@@ -197,10 +197,11 @@ impl Logger {
                                         msg.unix_time_nsecs,
                                         log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")) {
                             writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
-                            return;
+                            return Err(());
                         },
-                    _ => return,
+                    _ => (),
                 };
+                Ok(())
             }),
             LoggerFormat::JSON => self.controller.listen_logs(move |msg| {
                 match msg {
@@ -214,11 +215,12 @@ impl Logger {
                         object["message"] = log.into();
                         if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
                             writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
-                            return;
+                            return Err(());
                         };
                     },
-                    _ => return,
+                    _ => (),
                 }
+                Ok(())
             }),
         };
 
