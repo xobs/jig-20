@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time;
 use std::thread;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead};
 
 use cfti::types::Jig;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
@@ -202,7 +202,7 @@ impl Test {
         let timeout = match test_section.get("Timeout") {
             None => config.timeout(),
             Some(s) => match s.parse() {
-                Err(e) => return Some(Err(TestError::ParseTimeoutError)),
+                Err(_) => return Some(Err(TestError::ParseTimeoutError)),
                 Ok(n) => time::Duration::from_secs(n),
             },
         };
@@ -334,19 +334,17 @@ impl Test {
         if let Some(ref r) = self.test_daemon_ready {
             // Fire off a thread to kill the process if it takes too long to start.
             let thr_state = self.state.clone();
-            let pause_duration = self.timeout.clone();
             let thr_child = child.child.clone();
             let thr_id = self.id().to_string();
-            let thr_id2 = thr_id.clone();
             let thr_kind = self.kind().to_string();
             let thr_controller = self.controller.clone();
             let thr = thread::spawn(move || {
-                thread::park_timeout(pause_duration);
+                thread::park_timeout(max_duration);
                 if *(thr_state.lock().unwrap()) == TestState::Starting {
                     let msg = format!("Test daemon never came ready");
                     *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
                     thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(msg));
-                    thr_child.kill();
+                    thr_child.kill().ok();
                 }
             });
 
@@ -517,7 +515,7 @@ impl Test {
 
         // If the process is still running, make sure it's terminated.
         if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
-            pid.kill();
+            pid.kill().ok();
         }
 
         match *(self.state.lock().unwrap()) {

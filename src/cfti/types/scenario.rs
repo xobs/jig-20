@@ -576,7 +576,7 @@ impl Scenario {
         let controller = self.controller.clone();
         let res = process::try_command_completion(cmd,
                                         self.working_directory.lock().unwrap().deref(),
-                                        Duration::new(100, 0),
+                                        *timeout,
                                         move |res: Result<(), process::CommandError>| {
             let msg = match res {
                 Ok(_) => BroadcastMessageContents::Pass(tn, "".to_string()),
