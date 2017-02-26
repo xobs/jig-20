@@ -21,6 +21,7 @@ pub enum TestError {
     FileLoadError,
     MissingTestSection,
     MissingExecSection,
+    ParseTimeoutError,
     InvalidType(String),
     DaemonReadyTextError,
 }
@@ -72,7 +73,7 @@ pub struct Test {
     provides: Vec<String>,
 
     /// Timeout: The maximum number of seconds that this test may be run for.
-    timeout: u64,
+    timeout: time::Duration,
 
     /// The maximum amount of time to allow an ExecStopSuccess to run
     exec_stop_success_timeout: time::Duration,
@@ -199,8 +200,11 @@ impl Test {
         };
 
         let timeout = match test_section.get("Timeout") {
-            None => 2000,
-            Some(s) => s.parse().unwrap(),
+            None => config.timeout(),
+            Some(s) => match s.parse() {
+                Err(e) => return Some(Err(TestError::ParseTimeoutError)),
+                Ok(n) => time::Duration::from_secs(n),
+            },
         };
 
         // Get a list of all the requirements, or make a blank list
@@ -272,7 +276,7 @@ impl Test {
                                                                   self.description().to_string()));
     }
 
-    pub fn timeout(&self) -> u64 {
+    pub fn timeout(&self) -> time::Duration {
         self.timeout
     }
 
@@ -307,7 +311,9 @@ impl Test {
         }
 
         // Indicate the daemon is beginning it startup.
-        *(self.state.lock().unwrap()) = TestState::Starting;
+        {
+            *(self.state.lock().unwrap()) = TestState::Starting;
+        }
 
         // Try to launch the daemon.  If it fails, report the error immediately and return.
         let child = match process::spawn(cmd, self.id(), self.kind(), &self.controller.clone()) {
@@ -320,15 +326,76 @@ impl Test {
             Ok(o) => o,
         };
 
+        // Hook up stderr right away, because we'll be looking for the output on stdout.
+        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
+
         // Wait until the "match" string appears.
+        let mut buf_reader = io::BufReader::new(child.stdout);
         if let Some(ref r) = self.test_daemon_ready {
+            // Fire off a thread to kill the process if it takes too long to start.
+            let thr_state = self.state.clone();
+            let pause_duration = self.timeout.clone();
+            let thr_child = child.child.clone();
+            let thr_id = self.id().to_string();
+            let thr_id2 = thr_id.clone();
+            let thr_kind = self.kind().to_string();
+            let thr_controller = self.controller.clone();
+            let thr = thread::spawn(move || {
+                thread::park_timeout(pause_duration);
+                if *(thr_state.lock().unwrap()) == TestState::Starting {
+                    let msg = format!("Test daemon never came ready");
+                    *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
+                    thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(msg));
+                    thr_child.kill();
+                }
+            });
+
+            // Wait for the string to appear.
             self.log(format!("Waiting for string: {}", r));
+            loop {
+                let mut line = String::new();
+                match buf_reader.read_line(&mut line) {
+                    Err(e) => {
+                        let msg = format!("Error in interface: {:?}", e);
+                        self.log(msg.clone());
+                        *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
+                        self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
+                        thr.thread().unpark();
+                        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
+                        return;
+                    },
+                    Ok(0) => {
+                        let msg = format!("Test daemon exited");
+                        self.log(msg.clone());
+                        *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
+                        self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
+                        thr.thread().unpark();
+                        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
+                        return;
+                    },
+                    Ok(_) => {
+                        self.controller.broadcast_class("stdout",
+                                     self.id(),
+                                     self.kind(),
+                                     &BroadcastMessageContents::Log(line.clone()));
+                        self.log(format!("Comparing {} to {}", r, line));
+                        if r.is_match(line.as_str()) {
+                            self.log(format!("It's a match!"));
+                            *(self.state.lock().unwrap()) = TestState::Running;
+                            break;
+                        }
+                    },
+                }
+                line.clear();
+            }
+            // Now that the match string has been found (if any), mark the daemon as "Running".
+            thr.thread().unpark();
+        }
+        else {
+            *(self.state.lock().unwrap()) = TestState::Running;
         }
 
-        *(self.state.lock().unwrap()) = TestState::Running;
-
-        process::log_output(child.stdout, &self.controller.clone(), self.id(), self.kind(), "stdout");
-        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
+        process::log_output(buf_reader, &self.controller.clone(), self.id(), self.kind(), "stdout");
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
 
         // Move the child into its own thread and wait for it to terminate.

@@ -5,4 +5,4 @@ ExecStart=powershell .\\windows-test-daemon.ps1
 Type=daemon
 DaemonReadyText=daemon ready
 Jigs=windows
-Timeout=6
+Timeout=3

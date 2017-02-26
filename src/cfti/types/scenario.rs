@@ -456,7 +456,8 @@ impl Scenario {
 
             // If the dependent test did not succeed, then at least
             // one dependency failed.
-            if result != TestResult::Success {
+            // The test may also be Running, in case it's a Daemon.
+            if result != TestResult::Success && result != TestResult::Running {
                 return false;
             }
 
@@ -659,8 +660,7 @@ impl Scenario {
         scenario_elapsed_time >= self.timeout
     }
 
-    fn make_timeout(&self, test_timeout: u64) -> time::Duration {
-        let test_max_time = time::Duration::from_secs(test_timeout);
+    fn make_timeout(&self, test_max_time: Duration) -> time::Duration {
         let now = time::Instant::now();
         let scenario_elapsed_time = now.duration_since(self.start_time.lock().unwrap().clone());
 
@@ -683,6 +683,9 @@ impl Scenario {
                 return;
             }
             self.log("Starting new scenario run".to_string());
+
+            // Reset the results so we can start afresh.
+            self.results.lock().unwrap().clear();
 
             // Save the current instant, so we can timeout as needed.
             *(self.start_time.lock().unwrap()) = time::Instant::now();
