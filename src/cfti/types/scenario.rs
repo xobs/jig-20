@@ -608,6 +608,12 @@ impl Scenario {
             // If we're transitioning to the idle state, it means we just finished
             // running some tests.  Broadcast the result.
             ScenarioState::Idle => {
+                // I'm unsure of why I can't use an iter here.
+                let len = self.tests.len();
+                for i in 0..len {
+                    // Terminate all daemons.
+                    self.tests[i].lock().unwrap().terminate();
+                }
                 if failures > 0 {
                     self.log(format!("{} tests failed", failures));
                     self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),

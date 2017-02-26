@@ -427,16 +427,23 @@ impl Test {
     }
 
     pub fn stop(&self) {
-        /*
-        match *self.last_result.lock().unwrap() {
-            true => if let Some(ref cmd) = self.exec_stop_success {
-                self.log(format!("Running success: {}", cmd));
-            },
-            false => if let Some(ref cmd) = self.exec_stop_failure {
-                self.log(format!("Running failure: {}", cmd));
-            },
-        };
+        /* --- Need to implement ExecStopSuccess and ExecStopFailure
+        match self.test_type {
+            TestType::Simple => {
+                match *self.state.lock().unwrap() {
+                    true => if let Some(ref cmd) = self.exec_stop_success {
+                        self.log(format!("Running success: {}", cmd));
+                    },
+                    false => if let Some(ref cmd) = self.exec_stop_failure {
+                        self.log(format!("Running failure: {}", cmd));
+                    },
+                },
+            }
         */
+    }
+
+    /// If this is a daemon, stop it.
+    pub fn terminate(&self) {
         match self.test_type {
             TestType::Simple => (),
             TestType::Daemon => {
