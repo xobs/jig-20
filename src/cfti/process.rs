@@ -48,13 +48,13 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         Some(ref s) => {cmd.current_dir(s); },
     };
 
-    let child = cmd.spawn();
-    if child.is_err() {
-        let err = child.err().unwrap();
-        println!("Unable to spawn child: {}", err);
-        return false;
-    }
-    let mut child = child.unwrap();
+    let mut child = match cmd.spawn() {
+        Err(e) => {
+            controller.debug("process", "process", format!("Unable to spawn child {:?}: {:?}", cmd, e));
+            return false;
+        },
+        Ok(o) => o,
+    };
 
     let status_code = match child.wait_timeout(max).unwrap() {
         Some(status) => status.code(),
