@@ -121,6 +121,7 @@ Implementation Progress
     * _Hung tests_
     * _ExecStop_
     * _Extra Pipes_
+    * _Provides_
   * Interfaces
     * Basic interface interaction
     * _Ping/Pong keepalive_
