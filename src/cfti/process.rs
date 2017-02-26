@@ -175,8 +175,8 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
 
     let mut cmd = match make_command(cmd_str) {
         Err(e) => {
-            completion(Err(CommandError::MakeCommandError(format!("{:?}", e).to_string())));
-            return Err(CommandError::MakeCommandError(format!("{:?}", e).to_string()));
+            completion(Err(CommandError::MakeCommandError(format!("{:?}", e))));
+            return Err(CommandError::MakeCommandError(format!("{:?}", e)));
         },
         Ok(val) => val,
     };
