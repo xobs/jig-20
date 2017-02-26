@@ -80,6 +80,25 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
 }
 
 pub fn log_output<T: io::Read + Send + 'static>(stream: T, controller: &Controller, id: &str, kind: &str, stream_name: &str) {
+
+    let thr_controller = controller.clone();
+    let thr_id = id.to_string();
+    let thr_kind = kind.to_string();
+    let thr_stream_name = stream_name.to_string();
+
+    watch_output(stream, controller, id, kind, stream_name, move |msg| {
+        thr_controller.control_class(thr_stream_name.as_str(),
+                                     thr_id.as_str(),
+                                     thr_kind.as_str(),
+                                     &ControlMessageContents::Log(msg));
+        Ok(())
+    });
+}
+
+pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Controller,
+                                                     id: &str, kind: &str, stream_name: &str,
+                                                     mut msg_func: F)
+        where F: Send + 'static + FnMut(String) -> Result<(), ()> {
     // Monitor the child process' stderr, and pass values to the controller.
     let controller = controller.clone();
     let id = id.to_string();
@@ -95,15 +114,15 @@ pub fn log_output<T: io::Read + Send + 'static>(stream: T, controller: &Controll
                     controller.debug(id.as_str(), kind.as_str(),format!("Error in interface: {}", e));
                     return;
                 },
-                Ok(l) => controller.control_class(
-                                stream_name.as_str(),
-                                id.as_str(),
-                                kind.as_str(),
-                                &ControlMessageContents::Log(l)),
+                Ok(l) => if let Err(e) = msg_func(l) {
+                    controller.debug(id.as_str(), kind.as_str(), format!("Message func returned error: {:?}", e));
+                    return;
+                }
             }
         }
     }).unwrap();
 }
+
 pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
         -> Result<(Option<ChildStdin>, Option<ChildStdout>, Option<ChildStderr>), io::Error> {
     cmd.stdout(Stdio::piped());

@@ -219,7 +219,7 @@ impl Interface {
         msg.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\\\", "\\")
     }
 
-    fn text_read(line: String, id: &String, controller: &Controller) {
+    fn text_read(line: String, id: &String, controller: &Controller) -> Result<(), ()> {
         controller.debug(id, "interface", format!("CFTI interface input: {}", line));
         let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
         let verb = words[0].to_lowercase();
@@ -255,6 +255,7 @@ impl Interface {
         };
 
         controller.control(id, "interface", &response);
+        Ok(())
     }
 
     pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
@@ -297,23 +298,15 @@ impl Interface {
         match self.format {
             InterfaceFormat::Text => {
                 let controller = self.controller.clone();
+                let thr_controller = self.controller.clone();
+                let id_str = self.id().to_string();
+                let id = self.id().to_string();
+                let kind = self.kind().to_string();
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
                 process::log_output(stderr, &controller, self.id(), self.kind(), "stderr");
-
-                // Monitor the child process' stdout, and pass values to the controller.
-                let id = self.id.clone();
-                let builder = thread::Builder::new()
-                    .name(format!("I-O {} -> CFTI", id).into());
-
-                builder.spawn(move || {
-                    for line in BufReader::new(stdout).lines() {
-                        match line {
-                            Err(e) => {println!("Error in interface: {}", e); return; },
-                            Ok(l) => Interface::text_read(l, &id, &controller),
-                        }
-                    }
-                }).unwrap();
+                process::watch_output(stdout, &controller, id.as_str(), kind.as_str(), "stdout",
+                        move |line| Interface::text_read(line, &id_str, &thr_controller));
             },
             InterfaceFormat::JSON => {
                 self.controller.listen(move |msg| Interface::json_write(&mut stdin, msg));
