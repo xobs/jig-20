@@ -286,58 +286,38 @@ impl Test {
             Ok(o) => o,
         };
 
-        // Now that the child process is running, hook up the logger.
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
-        let last_line = self.last_line.clone();
-        let builder = thread::Builder::new()
-                .name(format!("T-O: {}", id).into());
-        builder.spawn(move || {
-            for line in BufReader::new(stdout).lines() {
-                match line {
-                    Err(e) => {
-                        println!("Error in interface: {}", e);
-                        return;
-                    },
-                    Ok(l) => {
-                        *(last_line.lock().unwrap()) = l.clone();
-                        controller.broadcast_class(
+        let thr_last_line = self.last_line.clone();
+        let thr_controller = self.controller.clone();
+        let thr_id = self.id().to_string();
+        let thr_kind = self.kind().to_string();
+        process::watch_output(stdout, &self.controller, self.id(), self.kind(), "stdout",
+            move |msg| {
+                *(thr_last_line.lock().unwrap()) = msg.clone();
+                thr_controller.broadcast_class(
                             "stdout",
-                            id.as_str(),
-                            kind.as_str(),
-                            &BroadcastMessageContents::Log(l)
-                        );
-                    },
-                }
-            }
-        }).unwrap();
+                            thr_id.as_str(),
+                            thr_kind.as_str(),
+                            &BroadcastMessageContents::Log(msg)
+                );
+                Ok(())
+            });
 
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
-        let last_line = self.last_line.clone();
-        let builder = thread::Builder::new()
-                .name(format!("T-E: {}", id).into());
-        builder.spawn(move || {
-            for line in BufReader::new(stderr).lines() {
-                match line {
-                    Err(e) => {
-                        println!("Error in interface: {}", e);
-                        return;
-                    },
-                    Ok(l) => {
-                        *(last_line.lock().unwrap()) = l.clone();
-                        controller.broadcast_class(
+        let thr_last_line = self.last_line.clone();
+        let thr_controller = self.controller.clone();
+        let thr_id = self.id().to_string();
+        let thr_kind = self.kind().to_string();
+        process::watch_output(stderr, &self.controller, self.id(), self.kind(), "stderr",
+            move |msg| {
+                *(thr_last_line.lock().unwrap()) = msg.clone();
+                thr_controller.broadcast_class(
                             "stderr",
-                            id.as_str(),
-                            kind.as_str(),
-                            &BroadcastMessageContents::Log(l)
-                        );
-                    },
-                }
-            }
-        }).unwrap();
+                            thr_id.as_str(),
+                            thr_kind.as_str(),
+                            &BroadcastMessageContents::Log(msg)
+                );
+                Ok(())
+            });
+
     }
 
     pub fn stop(&self) {
