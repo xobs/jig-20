@@ -8,6 +8,8 @@ use self::regex::Regex;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time;
+use std::thread;
+use std::io::{self, BufRead, BufReader};
 
 use cfti::types::Jig;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
@@ -28,11 +30,22 @@ enum TestType {
     Daemon,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TestState {
+
+    /// A test has yet to be run.
     Pending,
+
+    /// A daemon is waiting for its "match" text to appear.
+    Starting,
+
+    /// A test (or daemon) is in the process of running.
     Running,
+
+    /// A test (or daemon) passed successfully.
     Pass,
+
+    /// A test (or daemon) failed for some reason.
     Fail(String),
 }
 
@@ -283,6 +296,9 @@ impl Test {
             cmd.current_dir(dir);
         }
 
+        // Indicate the daemon is beginning it startup.
+        *(self.state.lock().unwrap()) = TestState::Starting;
+
         // Try to launch the daemon.  If it fails, report the error immediately and return.
         let child = match process::spawn(cmd, self.id(), self.kind(), &self.controller.clone()) {
             Err(e) => {
@@ -298,9 +314,37 @@ impl Test {
         if let Some(ref r) = self.test_daemon_ready {
             self.log(format!("Waiting for string: {}", r));
         }
+
+        *(self.state.lock().unwrap()) = TestState::Running;
+
         process::log_output(child.stdout, &self.controller.clone(), self.id(), self.kind(), "stdout");
         process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
+
+        // Move the child into its own thread and wait for it to terminate.
+        // If we're still in the "Running" state when it quits, then the daemon
+        // has failed.
+        let thr_child = child.child.clone();
+        let thr_controller = self.controller.clone();
+        let thr_id = self.id().to_string();
+        let thr_kind = self.kind().to_string();
+        let thr_state = self.state.clone();
+        thread::spawn(move || {
+            let result = thr_child.wait();
+            let thr_id2 = thr_id.clone();
+
+            // If we're still in the "Running" state, it's a failure.
+            if *(thr_state.lock().unwrap()) == TestState::Running {
+                let msg = format!("Daemon exited: {:?}", result);
+                *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
+                thr_controller.broadcast(thr_id2.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Fail(thr_id, msg));
+            }
+            else {
+                thr_controller.broadcast(thr_id2.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Pass(thr_id, "Okay".to_string()));
+            }
+        });
+
+        // Now that the test is running as a daemon, advance to the next scenario.
         self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
     }
 
@@ -313,7 +357,11 @@ impl Test {
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
         let result = self.state.clone();
-        let process = match process::try_command_completion(
+
+        // Mark the test as "Running"
+        *(self.state.lock().unwrap()) = TestState::Running;
+
+        let child = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         max_duration,
@@ -346,7 +394,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(process.stdout, &self.controller, self.id(), self.kind(),
+        process::watch_output(child.stdout, &self.controller, self.id(), self.kind(),
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -362,7 +410,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(process.stderr, &self.controller, self.id(), self.kind(),
+        process::watch_output(child.stderr, &self.controller, self.id(), self.kind(),
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -374,6 +422,8 @@ impl Test {
                 Ok(())
             });
 
+        // Save the child process so that we can terminate it early if necessary.
+        *(self.test_process.lock().unwrap()) = Some(child.child.clone());
     }
 
     pub fn stop(&self) {
@@ -387,6 +437,21 @@ impl Test {
             },
         };
         */
+        match self.test_type {
+            TestType::Simple => (),
+            TestType::Daemon => {
+                // If the daemon is still running, then good!  It passed.
+                if *(self.state.lock().unwrap()) == TestState::Running {
+                    *(self.state.lock().unwrap()) = TestState::Pass;
+                }
+
+                // Terminate the process, if it exists.
+                if let Some(ref p) = *(self.test_process.lock().unwrap()) {
+                    p.kill().ok();
+                }
+                *(self.test_process.lock().unwrap()) = None;
+            }
+        }
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {

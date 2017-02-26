@@ -9,7 +9,7 @@ use std::process::Command;
 use std::time::Duration;
 use std::thread;
 use std::fmt;
-use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr};
+use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr, ExitStatus};
 
 use cfti::controller::{Controller, ControlMessageContents};
 
@@ -264,5 +264,11 @@ impl fmt::Debug for ChildProcess {
 impl ChildProcess {
     pub fn id(&self) -> u32 {
         self.child.id()
+    }
+    pub fn wait(&self) -> io::Result<ExitStatus> {
+        self.child.wait()
+    }
+    pub fn kill(&self) -> io::Result<()> {
+        self.child.kill()
     }
 }
