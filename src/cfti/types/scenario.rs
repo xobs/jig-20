@@ -597,7 +597,7 @@ impl Scenario {
 
         // Run the test's stop() command if we just ran a test.
         match current_state {
-            ScenarioState::Running(step) => self.tests[step].lock().unwrap().stop(),
+            ScenarioState::Running(step) => self.tests[step].lock().unwrap().stop(self.working_directory.lock().unwrap().deref()),
             _ => (),
         }
 

@@ -4,5 +4,4 @@ while ($true) {
     Write-Output "Loop: $loop_count"
     $loop_count = $loop_count + 1
     Start-Sleep -Milliseconds 50
-    exit 1
 }

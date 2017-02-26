@@ -117,8 +117,8 @@ Implementation Progress
     * Simple tests
     * Test logging
     * Test timeout
-    * _Daemon tests_
-    * _Hung tests_
+    * Daemon tests
+    * Hung tests
     * _ExecStop_
     * _Extra Pipes_
     * _Provides_

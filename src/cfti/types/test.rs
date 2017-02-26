@@ -14,6 +14,7 @@ use std::io::{self, BufRead, BufReader};
 use cfti::types::Jig;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
+use cfti::config;
 
 #[derive(Debug)]
 pub enum TestError {
@@ -24,7 +25,7 @@ pub enum TestError {
     DaemonReadyTextError,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum TestType {
     Simple,
     Daemon,
@@ -73,6 +74,12 @@ pub struct Test {
     /// Timeout: The maximum number of seconds that this test may be run for.
     timeout: u64,
 
+    /// The maximum amount of time to allow an ExecStopSuccess to run
+    exec_stop_success_timeout: time::Duration,
+
+    /// The maximum amount of time to allow an ExecStopFailure to run
+    exec_stop_failure_timeout: time::Duration,
+
     /// Type: One of "simple" or "daemon".  For "simple" tests, the return code will indicate pass or fail,
     /// and each line printed will be considered progress.  For "daemon", the process will be forked
     /// and left to run in the background.  See "daemons" in the documentation.
@@ -107,6 +114,7 @@ impl Test {
     pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Test, TestError>> {
 
         // Load the .ini file
@@ -236,7 +244,9 @@ impl Test {
             timeout: timeout,
             exec_start: exec_start,
             exec_stop_success: exec_stop_success,
+            exec_stop_success_timeout: config.test_success_timeout(),
             exec_stop_failure: exec_stop_failure,
+            exec_stop_failure_timeout: config.test_failure_timeout(),
 
             controller: controller.clone(),
 
@@ -361,6 +371,7 @@ impl Test {
         // Mark the test as "Running"
         *(self.state.lock().unwrap()) = TestState::Running;
 
+        let thr_process = self.test_process.clone();
         let child = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
@@ -377,6 +388,10 @@ impl Test {
                     BroadcastMessageContents::Fail(id.clone(), msg)
                 },
             };
+
+            // Nullify the current process, since it ought to have exited.
+            // If it was an unclean exit this will have already happened.
+            *(thr_process.lock().unwrap()) = None;
 
             // Send a message indicating what the test did, and advance the scenario.
             controller.broadcast_class("result", id.as_str(), kind.as_str(), &msg);
@@ -426,20 +441,29 @@ impl Test {
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
     }
 
-    pub fn stop(&self) {
-        /* --- Need to implement ExecStopSuccess and ExecStopFailure
-        match self.test_type {
-            TestType::Simple => {
-                match *self.state.lock().unwrap() {
-                    true => if let Some(ref cmd) = self.exec_stop_success {
-                        self.log(format!("Running success: {}", cmd));
-                    },
-                    false => if let Some(ref cmd) = self.exec_stop_failure {
-                        self.log(format!("Running failure: {}", cmd));
-                    },
-                },
+    pub fn stop(&self, working_directory: &Option<String>) {
+
+        // Daemon tests don't respond to stop(), only to terminate().
+        if self.test_type == TestType::Daemon {
+            return;
+        }
+
+        // If the process is still running, make sure it's terminated.
+        if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
+            pid.kill();
+        }
+
+        match *(self.state.lock().unwrap()) {
+            TestState::Pending | TestState::Starting => (),
+            TestState::Running | TestState::Fail(_) => if let Some(ref cmd) = self.exec_stop_failure {
+                self.log(format!("Running ExecStopFailure: {}", cmd));
+                process::try_command(&self.controller, cmd, working_directory, self.exec_stop_failure_timeout);
+            },
+            TestState::Pass => if let Some(ref cmd) = self.exec_stop_success {
+                self.log(format!("Running ExecStopSuccess: {}", cmd));
+                process::try_command(&self.controller, cmd, working_directory, self.exec_stop_success_timeout);
             }
-        */
+        }
     }
 
     /// If this is a daemon, stop it.

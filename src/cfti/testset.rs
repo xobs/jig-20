@@ -229,6 +229,7 @@ impl TestSet {
             let new_test = match Test::new(item_name,
                                            path_str,
                                            &self.jigs,
+                                           config,
                                            &self.controller) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
