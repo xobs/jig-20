@@ -252,6 +252,17 @@ impl Test {
     pub fn start(&self, working_directory: &Option<String>, max_duration: time::Duration) {
         self.broadcast(BroadcastMessageContents::Running(self.id().to_string()));
 
+        match self.test_type {
+            TestType::Simple => self.start_simple(working_directory, max_duration),
+            TestType::Daemon => self.start_daemon(working_directory, max_duration),
+        }
+    }
+
+    fn start_daemon(&self, working_directory: &Option<String>, max_duration: time::Duration) {
+        ;
+    }
+
+    fn start_simple(&self, working_directory: &Option<String>, max_duration: time::Duration) {
         // Try to create a command.  If this fails, then the command completion will be called,
         // so we can just ignore the error.
         let controller = self.controller.clone();
