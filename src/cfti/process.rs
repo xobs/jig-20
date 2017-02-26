@@ -1,13 +1,15 @@
 // From http://stackoverflow.com/a/36870954
-extern crate wait_timeout;
+extern crate clonablechild;
 extern crate shlex;
+
+use self::clonablechild::{ChildExt, ClonableChild};
 
 use std::io::{self, BufRead};
 use std::process::Command;
 use std::time::Duration;
 use std::thread;
 use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr};
-use self::wait_timeout::ChildExt;
+
 use cfti::controller::{Controller, ControlMessageContents};
 
 #[derive(Debug)]
@@ -53,27 +55,19 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
             controller.debug("process", "process", format!("Unable to spawn child {:?}: {:?}", cmd, e));
             return false;
         },
-        Ok(o) => o,
+        Ok(o) => o.into_clonable(),
     };
 
-    let status_code = match child.wait_timeout(max).unwrap() {
-        Some(status) => status.code(),
-        None => {
-            // child hasn't exited yet
-            let res = child.kill();
-            if res.is_err() {
-                let err = res.err().unwrap();
-                println!("Unable to get result: {}", err);
-                return false;
-            }
-
-            let res = child.wait();
-            if res.is_err() {
-                let err = res.err().unwrap();
-                println!("Unable to wait for result: {}", err);
-                return false;
-            }
-            res.unwrap().code()
+    let thr_child = child.clone();
+    thread::spawn(move || {
+        thread::sleep(max);
+        thr_child.kill().unwrap();
+    });
+    let status_code = match child.wait() {
+        Ok(status) => status.code(),
+        Err(e) => {
+            controller.debug("process", "process", format!("Unable to wait() for child: {:?}", e));
+            return false;
         }
     };
     return status_code.unwrap() == 0
@@ -130,7 +124,7 @@ pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
     cmd.stderr(Stdio::piped());
 
     let controller = controller.clone();
-    let mut child = cmd.spawn();
+    let child = cmd.spawn();
     let id = id.to_string();
     let kind = kind.to_string();
 
@@ -191,50 +185,41 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
 
     let mut child = match cmd.spawn() {
         Err(err) => {
-            completion(Err(CommandError::SpawnError(format!("{}", err).to_string())));
-            return Err(CommandError::SpawnError(format!("{}", err).to_string()));
+            completion(Err(CommandError::SpawnError(format!("{}", err))));
+            return Err(CommandError::SpawnError(format!("{}", err)));
         },
-        Ok(s) => s,
+        Ok(s) => s.into_clonable(),
     };
 
     // Take the child's stdio handles and replace them with None.  This allows
     // us to have the thread take ownership of `child` and return the handles.
-    let stdout = child.stdout.unwrap();
-    child.stdout = None;
-    let stdin = child.stdin.unwrap();
-    child.stdin = None;
-    let stderr = child.stderr.unwrap();
-    child.stderr = None;
+    let stdout = child.stdout().unwrap();
+    let stdin = child.stdin().unwrap();
+    let stderr = child.stderr().unwrap();
+
+    let thr_child = child.clone();
+    let thr = thread::spawn(move || {
+        thread::park_timeout(max);
+        thr_child.kill().ok();
+    });
 
     thread::spawn(move || {
-        let status_code = match child.wait_timeout(max).unwrap() {
-            Some(status) => status.code().unwrap(),
-            None => {
-                // child hasn't exited yet, so terminate it.
-                if let Err(err) = child.kill() {
-                    completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", err).to_string())));
-                    return;
-                }
-
-                // Call wait() on child, which should return immediately
-                match child.wait() {
-                    Err(err) => {
-                        completion(Err(CommandError::ChildTimeoutWaitError(format!("{}", err).to_string())));
-                        return;
-                    },
-                    Ok(_) => {
-                        completion(Err(CommandError::ChildTimeout));
-                        return;
-                    }
-                }
-            }
+        let status_code = match child.wait() {
+            Ok(status) => status.code().unwrap(),
+            Err(e) => {
+                thr.thread().unpark();
+                completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", e))));
+                return;
+            },
         };
 
         // If it's a nonzero exit code, that counts as an error.
         if status_code != 0 {
+            thr.thread().unpark();
             completion(Err(CommandError::ReturnCodeError(status_code)));
             return;
         }
+        thr.thread().unpark();
         completion(Ok(()));
     });
 
