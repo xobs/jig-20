@@ -258,7 +258,7 @@ impl Test {
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
         let result = self.last_result.clone();
-        let (_, stdout, stderr) = match process::try_command_completion(
+        let mut process = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         max_duration,
@@ -290,7 +290,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(stdout, &self.controller, self.id(), self.kind(), "stdout",
+        process::watch_output(process.stdout, &self.controller, self.id(), self.kind(), "stdout",
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -306,7 +306,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(stderr, &self.controller, self.id(), self.kind(), "stderr",
+        process::watch_output(process.stderr, &self.controller, self.id(), self.kind(), "stderr",
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(

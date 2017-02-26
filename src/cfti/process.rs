@@ -23,6 +23,13 @@ pub enum CommandError {
     ReturnCodeError(i32),
 }
 
+pub struct Process {
+    pub stdin: ChildStdin,
+    pub stdout: ChildStdout,
+    pub stderr: ChildStderr,
+    child: ClonableChild,
+}
+
 pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     let cmd = cmd.to_string().replace("\\", "\\\\");
     let cmd = cmd.as_str();
@@ -58,17 +65,21 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
     };
 
     let thr_child = child.clone();
-    thread::spawn(move || {
-        thread::sleep(max);
-        thr_child.kill().unwrap();
+    let thr = thread::spawn(move || {
+        thread::park_timeout(max);
+        thr_child.kill().ok();
     });
+
     let status_code = match child.wait() {
         Ok(status) => status.code(),
         Err(e) => {
+            thr.thread().unpark();
             controller.debug("process", "process", format!("Unable to wait() for child: {:?}", e));
             return false;
         }
     };
+
+    thr.thread().unpark();
     return status_code.unwrap() == 0
 }
 
@@ -117,7 +128,7 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
 }
 
 pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
-        -> Result<(Option<ChildStdin>, Option<ChildStdout>, Option<ChildStderr>), io::Error> {
+        -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -127,25 +138,29 @@ pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
     let id = id.to_string();
     let kind = kind.to_string();
 
-    match child {
+    let mut child = match cmd.spawn() {
         Err(e) => return Err(e),
-        Ok(mut child) => {
-            let stdin = child.stdin;
-            child.stdin = None;
-            let stdout = child.stdout;
-            child.stdout = None;
-            let stderr = child.stderr;
-            child.stderr = None;
+        Ok(mut child) => child.into_clonable(),
+    };
+    
+    let stdin = child.stdin().unwrap();
+    let stdout = child.stdout().unwrap();
+    let stderr = child.stderr().unwrap();
+    let child_thr = child.clone();
 
-            thread::spawn(move || {
-                match child.wait() {
-                    Ok(status) => controller.debug(id.as_str(), kind.as_str(), format!("Child exited successfully with result: {:?}", status)),
-                    Err(e) => controller.debug(id.as_str(), kind.as_str(), format!("Child errored with exit: {:?}", e)),
-                };
-            });
-            Ok((stdin, stdout, stderr))
-        },
-    }
+    thread::spawn(move || {
+        match child_thr.wait() {
+            Ok(status) => controller.debug(id.as_str(), kind.as_str(), format!("Child exited successfully with result: {:?}", status)),
+            Err(e) => controller.debug(id.as_str(), kind.as_str(), format!("Child errored with exit: {:?}", e)),
+        };
+    });
+
+    Ok(Process {
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        child: child,
+    })
 }
 
 /// Tries to run `cmd`.
@@ -162,7 +177,7 @@ pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
 /// `CommandError::ChildTimeout` - Child timed out and was successfully terminated.
 
 pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Duration, completion: F)
-        -> Result<(ChildStdin, ChildStdout, ChildStderr), CommandError>
+        -> Result<Process, CommandError>
         where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
 
@@ -202,8 +217,9 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
         thr_child.kill().ok();
     });
 
+    let thr_child = child.clone();
     thread::spawn(move || {
-        let status_code = match child.wait() {
+        let status_code = match thr_child.wait() {
             Ok(status) => status.code().unwrap(),
             Err(e) => {
                 thr.thread().unpark();
@@ -222,6 +238,25 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
         completion(Ok(()));
     });
 
-    // Return the stdout so that the 
-    Ok((stdin, stdout, stderr))
+    // Return the file handles so that the calling process can monitor them.
+    Ok(Process {
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        child: child,
+    })
+ }
+
+ impl Process {
+     pub fn stdin(&self) -> &ChildStdin {
+         &self.stdin
+     }
+
+     pub fn stdout(&self) -> &ChildStdout {
+         &self.stdout
+     }
+
+     pub fn stderr(&self) -> &ChildStderr {
+         &self.stderr
+     }
  }

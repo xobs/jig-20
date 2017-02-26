@@ -174,7 +174,7 @@ impl Logger {
         }
 
         self.debug(format!("Starting logger..."));
-        let (mut stdin, _, _) = match process::spawn(cmd, self.id(), self.kind(), &self.controller) {
+        let mut process = match process::spawn(cmd, self.id(), self.kind(), &self.controller) {
             Err(e) => {
                 self.debug(format!("Unable to spawn {}: {}", self.exec_start, e));
                 return Err(LoggerError::ExecCommandFailed);
@@ -182,7 +182,7 @@ impl Logger {
             Ok(s) => s,
         };
 
-        let mut stdin = stdin.unwrap();
+        let mut stdin = process.stdin;
         let format = self.format.clone();
 
         let id = self.id().to_string();

@@ -584,7 +584,7 @@ impl Scenario {
         // The command will either return an error, or a tuple containing (stdout,stdin).
         // If it's an error, then the completion above will be called and the test state
         // will be advanced there.  Avoid advancing it here.
-        let (_, stdout, stderr) = match res {
+        let process = match res {
             Err(_) => return,
             Ok(s) => s,
         };
@@ -593,6 +593,7 @@ impl Scenario {
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let tn = testname.to_string();
+        let stdout = process.stdout;
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 match line {
@@ -615,6 +616,7 @@ impl Scenario {
         let id = self.id().to_string();
         let kind = self.kind().to_string();
         let tn = testname.to_string();
+        let stderr = process.stderr;
         thread::spawn(move || {
             for line in BufReader::new(stderr).lines() {
                 match line {
