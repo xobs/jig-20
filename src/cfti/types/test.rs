@@ -1,7 +1,10 @@
 extern crate ini;
 extern crate bus;
+extern crate regex;
 
 use self::ini::Ini;
+use self::regex::Regex;
+
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time;
@@ -18,6 +21,7 @@ pub enum TestError {
     MissingTestSection,
     MissingExecSection,
     InvalidType(String),
+    DaemonReadyTextError,
 }
 
 #[derive(Debug)]
@@ -54,6 +58,9 @@ pub struct Test {
     /// and each line printed will be considered progress.  For "daemon", the process will be forked
     /// and left to run in the background.  See "daemons" in the documentation.
     test_type: TestType,
+
+    /// A regex that can be used to determine if a test is ready.
+    test_daemon_ready: Option<Regex>,
 
     /// ExecStart: The command to run as part of this test.
     exec_start: String,
@@ -109,6 +116,17 @@ impl Test {
                 }
             }
         }
+
+        let test_daemon_ready = match test_section.get("DaemonReadyText") {
+            None => None,
+            Some(s) => match Regex::new(s) {
+                Ok(o) => Some(o),
+                Err(e) => {
+                    controller.debug("test", id, format!("Unable to compile DaemonReadyText: {}", e));
+                    return Some(Err(TestError::DaemonReadyTextError));
+                },
+            },
+        };
 
         let test_type = match test_section.get("Type") {
             None => TestType::Simple,
@@ -190,6 +208,7 @@ impl Test {
             provides: provides,
 
             test_type: test_type,
+            test_daemon_ready: test_daemon_ready,
 
             timeout: timeout,
             exec_start: exec_start,
