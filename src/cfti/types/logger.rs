@@ -165,15 +165,17 @@ impl Logger {
     pub fn start(&self) -> Result<(), LoggerError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
-            Err(e) => { println!(">>> UNABLE TO RUN LOGGER: {:?}", e); self.debug(format!("Unable to run logger: {:?}", e)); return Err(LoggerError::MakeCommandFailed) },
+            Err(e) => {
+                self.debug(format!("Unable to run logger: {:?}", e));
+                return Err(LoggerError::MakeCommandFailed)
+            },
         };
         cmd.stdout(Stdio::null());
         cmd.stdin(Stdio::piped());
         cmd.stderr(Stdio::inherit());
 
-        match self.working_directory {
-            None => (),
-            Some(ref s) => {cmd.current_dir(s); },
+        if let Some(ref s) = self.working_directory {
+            cmd.current_dir(s);
         }
 
         let child = match cmd.spawn() {
