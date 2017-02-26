@@ -22,11 +22,16 @@ pub enum CommandError {
     ReturnCodeError(i32),
 }
 
+#[derive(Clone)]
+pub struct ChildProcess {
+    child: ClonableChild,
+}
+
 pub struct Process {
     pub stdin: ChildStdin,
     pub stdout: ChildStdout,
     pub stderr: ChildStderr,
-    child: ClonableChild,
+    pub child: ChildProcess,
 }
 
 impl fmt::Debug for Process {
@@ -162,7 +167,7 @@ pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
         stdin: stdin,
         stdout: stdout,
         stderr: stderr,
-        child: child,
+        child: ChildProcess { child: child },
     })
 }
 
@@ -246,6 +251,18 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
         stdin: stdin,
         stdout: stdout,
         stderr: stderr,
-        child: child,
+        child: ChildProcess { child: child },
     })
- }
+}
+
+impl fmt::Debug for ChildProcess {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Process {}", self.child.id())
+    }
+}
+
+impl ChildProcess {
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
+}

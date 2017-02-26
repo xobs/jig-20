@@ -29,6 +29,14 @@ enum TestType {
 }
 
 #[derive(Debug)]
+pub enum TestState {
+    Pending,
+    Running,
+    Pass,
+    Fail(String),
+}
+
+#[derive(Debug)]
 pub struct Test {
 
     /// Id: File name on disk, what other units refer to this one as.
@@ -76,10 +84,10 @@ pub struct Test {
     last_line: Arc<Mutex<String>>,
 
     /// Whether the last run of this test succeeded or not.
-    last_result: Arc<Mutex<bool>>,
+    state: Arc<Mutex<TestState>>,
 
     /// The currently-running test process.  Particularly important for daemons.
-    test_process: Arc<Mutex<Option<process::Process>>>,
+    test_process: Arc<Mutex<Option<process::ChildProcess>>>,
 }
 
 impl Test {
@@ -220,7 +228,7 @@ impl Test {
             controller: controller.clone(),
 
             last_line: Arc::new(Mutex::new("".to_string())),
-            last_result: Arc::new(Mutex::new(false)),
+            state: Arc::new(Mutex::new(TestState::Pending)),
         }))
     }
 
@@ -259,7 +267,41 @@ impl Test {
     }
 
     fn start_daemon(&self, working_directory: &Option<String>, max_duration: time::Duration) {
-        ;
+        let result = self.state.clone();
+        let id = self.id().to_string();
+        let mut cmd = match process::make_command(self.exec_start.as_str()) {
+            Ok(c) => c,
+            Err(e) => {
+                let msg = format!("{:?}", e);
+                *(result.lock().unwrap()) = TestState::Fail(msg.clone());
+                BroadcastMessageContents::Fail(id, msg);
+                return;
+            },
+        };
+
+        if let Some(ref dir) = *working_directory {
+            cmd.current_dir(dir);
+        }
+
+        // Try to launch the daemon.  If it fails, report the error immediately and return.
+        let child = match process::spawn(cmd, self.id(), self.kind(), &self.controller.clone()) {
+            Err(e) => {
+                let msg = format!("{:?}", e);
+                *(result.lock().unwrap()) = TestState::Fail(msg.clone());
+                BroadcastMessageContents::Fail(id, msg);
+                return;
+            },
+            Ok(o) => o,
+        };
+
+        // Wait until the "match" string appears.
+        if let Some(ref r) = self.test_daemon_ready {
+            self.log(format!("Waiting for string: {}", r));
+        }
+        process::log_output(child.stdout, &self.controller.clone(), self.id(), self.kind(), "stdout");
+        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
+        *(self.test_process.lock().unwrap()) = Some(child.child.clone());
+        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
     }
 
     fn start_simple(&self, working_directory: &Option<String>, max_duration: time::Duration) {
@@ -270,7 +312,7 @@ impl Test {
         let kind = self.kind().to_string();
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
-        let result = self.last_result.clone();
+        let result = self.state.clone();
         let process = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
@@ -278,12 +320,13 @@ impl Test {
                         move |res: Result<(), process::CommandError>| {
             let msg = match res {
                 Ok(_) => {
-                    *(result.lock().unwrap()) = true;
+                    *(result.lock().unwrap()) = TestState::Pass;
                     BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().to_string())
                 },
                 Err(e) => {
-                    *(result.lock().unwrap()) = false;
-                    BroadcastMessageContents::Fail(id.clone(), format!("{:?}", e))
+                    let msg = format!("{:?}", e);
+                    *(result.lock().unwrap()) = TestState::Fail(msg.clone());
+                    BroadcastMessageContents::Fail(id.clone(), msg)
                 },
             };
 
@@ -334,6 +377,7 @@ impl Test {
     }
 
     pub fn stop(&self) {
+        /*
         match *self.last_result.lock().unwrap() {
             true => if let Some(ref cmd) = self.exec_stop_success {
                 self.log(format!("Running success: {}", cmd));
@@ -342,6 +386,7 @@ impl Test {
                 self.log(format!("Running failure: {}", cmd));
             },
         };
+        */
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
