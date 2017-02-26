@@ -10,8 +10,7 @@ use cfti::config;
 use std::collections::HashMap;
 use std::process::{Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::fmt::{Formatter, Display, Error};
 
 #[derive(Debug)]
@@ -78,7 +77,7 @@ impl Interface {
                controller: &Controller) -> Option<Result<Interface, InterfaceError>> {
 
         let unit_file = match unitfile::UnitFile::new(path) {
-            Err(e) => return Some(Err(InterfaceError::FileLoadError)),
+            Err(_) => return Some(Err(InterfaceError::FileLoadError)),
             Ok(f) => f,
         };
 
@@ -305,7 +304,7 @@ impl Interface {
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
                 process::log_output(stderr, &controller, self.id(), self.kind(), "stderr");
-                process::watch_output(stdout, &controller, id.as_str(), kind.as_str(), "stdout",
+                process::watch_output(stdout, &controller, id.as_str(), kind.as_str(),
                         move |line| Interface::text_read(line, &id_str, &thr_controller));
             },
             InterfaceFormat::JSON => {

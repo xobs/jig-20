@@ -8,8 +8,6 @@ use self::regex::Regex;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time;
-use std::thread;
-use std::io::{BufRead, BufReader};
 
 use cfti::types::Jig;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
@@ -79,6 +77,9 @@ pub struct Test {
 
     /// Whether the last run of this test succeeded or not.
     last_result: Arc<Mutex<bool>>,
+
+    /// The currently-running test process.  Particularly important for daemons.
+    test_process: Arc<Mutex<Option<process::Process>>>,
 }
 
 impl Test {
@@ -209,6 +210,7 @@ impl Test {
 
             test_type: test_type,
             test_daemon_ready: test_daemon_ready,
+            test_process: Arc::new(Mutex::new(None)),
 
             timeout: timeout,
             exec_start: exec_start,
@@ -258,7 +260,7 @@ impl Test {
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
         let result = self.last_result.clone();
-        let mut process = match process::try_command_completion(
+        let process = match process::try_command_completion(
                         cmd.as_str(),
                         working_directory,
                         max_duration,
@@ -290,7 +292,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(process.stdout, &self.controller, self.id(), self.kind(), "stdout",
+        process::watch_output(process.stdout, &self.controller, self.id(), self.kind(),
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -306,7 +308,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(process.stderr, &self.controller, self.id(), self.kind(), "stderr",
+        process::watch_output(process.stderr, &self.controller, self.id(), self.kind(),
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(

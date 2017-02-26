@@ -9,9 +9,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::io::{BufRead, BufReader};
 use std::time::Duration;
-use std::thread;
 use std::time;
 
 use cfti::types::test::Test;

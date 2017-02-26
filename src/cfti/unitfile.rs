@@ -3,7 +3,6 @@ extern crate ini;
 use self::ini::Ini;
 
 pub enum UnitFileError {
-    FileNotFound,
     FileLoadError,
 }
 

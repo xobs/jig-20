@@ -8,6 +8,7 @@ use std::io::{self, BufRead};
 use std::process::Command;
 use std::time::Duration;
 use std::thread;
+use std::fmt;
 use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr};
 
 use cfti::controller::{Controller, ControlMessageContents};
@@ -18,8 +19,6 @@ pub enum CommandError {
     MakeCommandError(String),
     SpawnError(String),
     ChildTimeoutTerminateError(String),
-    ChildTimeoutWaitError(String),
-    ChildTimeout,
     ReturnCodeError(i32),
 }
 
@@ -28,6 +27,12 @@ pub struct Process {
     pub stdout: ChildStdout,
     pub stderr: ChildStderr,
     child: ClonableChild,
+}
+
+impl fmt::Debug for Process {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Process {}", self.child.id())
+    }
 }
 
 pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
@@ -56,7 +61,7 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         cmd.current_dir(s);
     }
 
-    let mut child = match cmd.spawn() {
+    let child = match cmd.spawn() {
         Err(e) => {
             controller.debug("process", "process", format!("Unable to spawn child {:?}: {:?}", cmd, e));
             return false;
@@ -90,7 +95,7 @@ pub fn log_output<T: io::Read + Send + 'static>(stream: T, controller: &Controll
     let thr_kind = kind.to_string();
     let thr_stream_name = stream_name.to_string();
 
-    watch_output(stream, controller, id, kind, stream_name, move |msg| {
+    watch_output(stream, controller, id, kind, move |msg| {
         thr_controller.control_class(thr_stream_name.as_str(),
                                      thr_id.as_str(),
                                      thr_kind.as_str(),
@@ -100,14 +105,13 @@ pub fn log_output<T: io::Read + Send + 'static>(stream: T, controller: &Controll
 }
 
 pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Controller,
-                                                     id: &str, kind: &str, stream_name: &str,
+                                                     id: &str, kind: &str,
                                                      mut msg_func: F)
         where F: Send + 'static + FnMut(String) -> Result<(), ()> {
     // Monitor the child process' stderr, and pass values to the controller.
     let controller = controller.clone();
     let id = id.to_string();
     let kind = kind.to_string();
-    let stream_name = stream_name.to_string();
     let builder = thread::Builder::new()
         .name(format!("I-E {} -> CFTI", id).into());
 
@@ -115,7 +119,7 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
         for line in io::BufReader::new(stream).lines() {
             match line {
                 Err(e) => {
-                    controller.debug(id.as_str(), kind.as_str(),format!("Error in interface: {}", e));
+                    controller.debug(id.as_str(), kind.as_str(), format!("Error in interface: {}", e));
                     return;
                 },
                 Ok(l) => if let Err(e) = msg_func(l) {
@@ -134,13 +138,12 @@ pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
     cmd.stderr(Stdio::piped());
 
     let controller = controller.clone();
-    let child = cmd.spawn();
     let id = id.to_string();
     let kind = kind.to_string();
 
     let mut child = match cmd.spawn() {
         Err(e) => return Err(e),
-        Ok(mut child) => child.into_clonable(),
+        Ok(child) => child.into_clonable(),
     };
     
     let stdin = child.stdin().unwrap();
@@ -245,18 +248,4 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
         stderr: stderr,
         child: child,
     })
- }
-
- impl Process {
-     pub fn stdin(&self) -> &ChildStdin {
-         &self.stdin
-     }
-
-     pub fn stdout(&self) -> &ChildStdout {
-         &self.stdout
-     }
-
-     pub fn stderr(&self) -> &ChildStderr {
-         &self.stderr
-     }
  }

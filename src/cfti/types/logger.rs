@@ -6,8 +6,6 @@ use cfti::types::Jig;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
 
-use std;
-use std::process::Stdio;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
