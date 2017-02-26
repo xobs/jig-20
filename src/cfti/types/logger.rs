@@ -155,11 +155,9 @@ impl Logger {
     }
 
     fn debug(&self, msg: String) {
-        self.controller.control_class(
-                                  "debug",
-                                  self.id(),
-                                  self.kind(),
-                                  &ControlMessageContents::Log(msg));
+        self.controller.debug(self.id(),
+                              self.kind(),
+                              msg);
     }
 
     pub fn start(&self) -> Result<(), LoggerError> {
@@ -170,23 +168,27 @@ impl Logger {
                 return Err(LoggerError::MakeCommandFailed)
             },
         };
-        cmd.stdout(Stdio::null());
-        cmd.stdin(Stdio::piped());
-        cmd.stderr(Stdio::inherit());
 
         if let Some(ref s) = self.working_directory {
             cmd.current_dir(s);
         }
 
-        let child = match cmd.spawn() {
+        self.debug(format!("Starting logger..."));
+        let (mut stdin, _, _) = match process::spawn(cmd, self.id(), self.kind(), &self.controller) {
             Err(e) => {
-                self.debug(format!("Unable to spawn {:?}: {}", cmd, e));
+                self.debug(format!("Unable to spawn {}: {}", self.exec_start, e));
                 return Err(LoggerError::ExecCommandFailed);
             },
             Ok(s) => s,
         };
-        let mut stdin = child.stdin.unwrap();
+
+        let mut stdin = stdin.unwrap();
         let format = self.format.clone();
+
+        let id = self.id().to_string();
+        let kind = self.kind().to_string();
+        let controller = self.controller.clone();
+
         match format {
             LoggerFormat::TabSeparatedValue => self.controller.listen_logs(move |msg| {
                 match msg {
@@ -198,7 +200,9 @@ impl Logger {
                                         msg.unix_time,
                                         msg.unix_time_nsecs,
                                         log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")) {
-                            writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
+                            controller.debug(id.as_str(),
+                                             kind.as_str(),
+                                             format!("Unable to write to logfile: {:?}", e));
                             return Err(());
                         },
                     _ => (),
@@ -216,7 +220,9 @@ impl Logger {
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
                         object["message"] = log.into();
                         if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
-                            writeln!(&mut std::io::stderr(), "Unable to write to logfile: {:?}", e).unwrap();
+                            controller.debug(id.as_str(),
+                                             kind.as_str(),
+                                             format!("Unable to write to logfile: {:?}", e));
                             return Err(());
                         };
                     },
@@ -226,6 +232,7 @@ impl Logger {
             }),
         };
 
+        self.debug(format!("Logger is running"));
         Ok(())
     }
 }

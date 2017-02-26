@@ -296,11 +296,12 @@ impl Interface {
 
         match self.format {
             InterfaceFormat::Text => {
+                let controller = self.controller.clone();
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
+                process::log_output(stderr, &controller, self.id(), self.kind(), "stderr");
 
                 // Monitor the child process' stdout, and pass values to the controller.
-                let controller = self.controller.clone();
                 let id = self.id.clone();
                 let builder = thread::Builder::new()
                     .name(format!("I-O {} -> CFTI", id).into());
@@ -310,26 +311,6 @@ impl Interface {
                         match line {
                             Err(e) => {println!("Error in interface: {}", e); return; },
                             Ok(l) => Interface::text_read(l, &id, &controller),
-                        }
-                    }
-                }).unwrap();
-
-                // Monitor the child process' stderr, and pass values to the controller.
-                let controller = self.controller.clone();
-                let id = self.id.clone();
-                let builder = thread::Builder::new()
-                    .name(format!("I-E {} -> CFTI", id).into());
-
-                builder.spawn(move || {
-                    for line in BufReader::new(stderr).lines() {
-                        match line {
-                            Err(e) => {println!("Error in interface: {}", e); return; },
-                            Ok(l) => controller.control_class(
-                                            "stderr",
-                                            id.as_str(),
-                                            "interface",
-                                            &ControlMessageContents::Log(l)),
-
                         }
                     }
                 }).unwrap();

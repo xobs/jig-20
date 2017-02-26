@@ -359,23 +359,6 @@ impl Test {
         self.broadcast(BroadcastMessageContents::Log(msg));
     }
 
-    /*
-    fn log(&self, msg: &str) {
-        self.broadcast(BroadcastMessageContents::Log(msg.to_string()));
-    }
-    */
-
-    /*
-    pub fn control(&self, msg: ControlMessageContents) {
-        let controller = self.controller.lock().unwrap();
-        controller.send_control_class(
-                "support",
-                self.id(),
-                self.kind(),
-                &msg);
-    }
-    */
-
     pub fn requirements(&self) -> &Vec<String> {
         &self.requires
     }

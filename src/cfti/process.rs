@@ -2,12 +2,13 @@
 extern crate wait_timeout;
 extern crate shlex;
 
+use std::io::{self, BufRead};
 use std::process::Command;
 use std::time::Duration;
 use std::thread;
 use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr};
 use self::wait_timeout::ChildExt;
-use cfti::controller::Controller;
+use cfti::controller::{Controller, ControlMessageContents};
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -76,6 +77,63 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         }
     };
     return status_code.unwrap() == 0
+}
+
+pub fn log_output<T: io::Read + Send + 'static>(stream: T, controller: &Controller, id: &str, kind: &str, stream_name: &str) {
+    // Monitor the child process' stderr, and pass values to the controller.
+    let controller = controller.clone();
+    let id = id.to_string();
+    let kind = kind.to_string();
+    let stream_name = stream_name.to_string();
+    let builder = thread::Builder::new()
+        .name(format!("I-E {} -> CFTI", id).into());
+
+    builder.spawn(move || {
+        for line in io::BufReader::new(stream).lines() {
+            match line {
+                Err(e) => {
+                    controller.debug(id.as_str(), kind.as_str(),format!("Error in interface: {}", e));
+                    return;
+                },
+                Ok(l) => controller.control_class(
+                                stream_name.as_str(),
+                                id.as_str(),
+                                kind.as_str(),
+                                &ControlMessageContents::Log(l)),
+            }
+        }
+    }).unwrap();
+}
+pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
+        -> Result<(Option<ChildStdin>, Option<ChildStdout>, Option<ChildStderr>), io::Error> {
+    cmd.stdout(Stdio::piped());
+    cmd.stdin(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let controller = controller.clone();
+    let mut child = cmd.spawn();
+    let id = id.to_string();
+    let kind = kind.to_string();
+
+    match child {
+        Err(e) => return Err(e),
+        Ok(mut child) => {
+            let stdin = child.stdin;
+            child.stdin = None;
+            let stdout = child.stdout;
+            child.stdout = None;
+            let stderr = child.stderr;
+            child.stderr = None;
+
+            thread::spawn(move || {
+                match child.wait() {
+                    Ok(status) => controller.debug(id.as_str(), kind.as_str(), format!("Child exited successfully with result: {:?}", status)),
+                    Err(e) => controller.debug(id.as_str(), kind.as_str(), format!("Child errored with exit: {:?}", e)),
+                };
+            });
+            Ok((stdin, stdout, stderr))
+        },
+    }
 }
 
 /// Tries to run `cmd`.
