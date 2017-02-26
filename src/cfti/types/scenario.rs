@@ -138,6 +138,7 @@ impl Scenario {
                path: &str,
                loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
+               test_aliases: &HashMap<String, String>,
                config: &config::Config,
                controller: &Controller) -> Option<Result<Scenario, ScenarioError>> {
 
@@ -209,7 +210,10 @@ impl Scenario {
 
         let test_names = match scenario_section.get("Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
-            Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
+            // Split by "," and also whitespace, and combine back into an array.
+            Some(s) => s.split(",").map(|x|
+                        x.to_string().split_whitespace().map(|y|
+                        y.to_string().trim().to_string()).collect()).collect()
         };
 
         let graph_result = match Self::build_graph(controller, id, &test_names, &loaded_tests) {

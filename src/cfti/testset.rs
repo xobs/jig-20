@@ -35,6 +35,9 @@ pub struct TestSet {
     /// The id of the scenario that we're using.
     scenario: Option<Arc<Mutex<Scenario>>>,
 
+    /// Tests can "Provide" other tests.  This maps those.
+    test_aliases: HashMap<String, String>,
+
     /*
     coupons: HashMap<String, Coupon>,
     updaters: HashMap<String, Updater>,
@@ -51,6 +54,7 @@ impl TestSet {
 
         let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
+            test_aliases: HashMap::new(),
             scenarios: HashMap::new(),
             loggers: HashMap::new(),
             triggers: HashMap::new(),
@@ -239,6 +243,27 @@ impl TestSet {
                 },
             };
 
+            // If another test already Provides this one, complain.
+            if let Some(collision) = self.test_aliases.get(&new_test.id().to_string()) {
+                self.debug(format!("Error: Loaded test {}, but test {} already 'Provides'",
+                                    new_test.id(), collision));
+                continue;
+            }
+
+            for test_provides in new_test.provides() {
+                if let Some(collision) = self.test_aliases.get(test_provides) {
+                    self.debug(format!("Error: Loaded test {}, but both it and test {} 'Provides' {}",
+                                    new_test.id(), collision, test_provides));
+                    continue;
+                }
+            }
+
+            // Now that we know we're unique, add the alises.
+            self.test_aliases.insert(new_test.id().to_string(), new_test.id().to_string());
+            for test_provides in new_test.provides() {
+                self.test_aliases.insert(test_provides.clone(), new_test.id().to_string());
+            }
+
             new_test.describe();
             self.tests.insert(new_test.id().to_string(), Arc::new(Mutex::new(new_test)));
         }
@@ -253,6 +278,7 @@ impl TestSet {
                                                    path_str,
                                                    &self.jigs,
                                                    &self.tests,
+                                                   &self.test_aliases,
                                                    config,
                                                    &self.controller) {
                 // In this case, it just means the test is incompatible.
