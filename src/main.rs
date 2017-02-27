@@ -27,6 +27,13 @@ fn main() {
                             .default_value("10")
                             .help("The maximum number of seconds to allow individual test commands to run")
                         )
+                        .arg(Arg::with_name("CONFIG_DIR")
+                            .short("c")
+                            .long("config-dir")
+                            .value_name("CONFIG_DIR")
+                            .default_value("tests")
+                            .help("Directory where configuration unit files are stored")
+                        )
                         .arg(Arg::with_name("SCENARIO_TIMEOUT")
                             .short("s")
                             .long("scenario-timeout")
@@ -64,7 +71,7 @@ fn main() {
         Ok(())
     });
 
-    let test_set = cfti::TestSet::new("ltc-tests", &config, &mut controller).unwrap();
+    let test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(), &config, &mut controller).unwrap();
 
     //println!("Test set: {:?}", test_set);
     loop {
