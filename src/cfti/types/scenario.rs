@@ -26,6 +26,7 @@ pub enum ScenarioError {
     TestNotFound(String),
     TestDependencyNotFound(String, String),
     CircularDependency(String, String),
+    MissingDependency(String, String),
 }
 
 struct GraphResult {
@@ -341,11 +342,24 @@ impl Scenario {
             for i in 1 .. num_tests {
                 let previous_test = test_names[i - 1].clone();
                 let this_test = test_names[i].clone();
-                if let Err(_) = test_graph.add_edge(*(node_bucket.get(&previous_test).unwrap()),
-                                                    *(node_bucket.get(&this_test).unwrap()),
-                                                    TestEdge::Follows) {
-                    controller.debug("scenario",
-                            id,
+                let previous_edge = match node_bucket.get(&previous_test) {
+                    Some(s) => s,
+                    None => {
+                        controller.debug("scenario", id,
+                            format!("Previous test {} could not be found in the node bucket", previous_test));
+                        return Err(ScenarioError::MissingDependency(this_test, previous_test));
+                    },
+                };
+                let this_edge = match node_bucket.get(&this_test) {
+                    Some(s) => s,
+                    None => {
+                        controller.debug("scenario", id,
+                            format!("This test {} could not be found in the node bucket", this_test));
+                        return Err(ScenarioError::MissingDependency(this_test, previous_test));
+                    },
+                };
+                if let Err(_) = test_graph.add_edge(*previous_edge, *this_edge, TestEdge::Follows) {
+                    controller.debug("scenario", id,
                             format!("Test {} has a circular requirement on {}",
                                     test_names[i - 1], test_names[i]));
                     return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(), test_names[i].clone()));
