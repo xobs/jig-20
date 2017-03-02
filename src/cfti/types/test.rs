@@ -112,6 +112,9 @@ pub struct Test {
 
     /// The currently-running test process.  Particularly important for daemons.
     test_process: Arc<Mutex<Option<process::ChildProcess>>>,
+
+    /// The working directory for the current test.
+    test_working_directory: Arc<Mutex<Option<String>>>,
 }
 
 impl Test {
@@ -260,6 +263,7 @@ impl Test {
             exec_stop_failure: exec_stop_failure,
             exec_stop_failure_timeout: config.test_failure_timeout(),
             working_directory: working_directory,
+            test_working_directory: Arc::new(Mutex::new(None)),
 
             controller: controller.clone(),
 
@@ -303,6 +307,8 @@ impl Test {
             },
             Some(ref s) => Some(s.clone()),
         };
+
+        *(self.test_working_directory.lock().unwrap()) = test_working_directory.clone();
 
         match self.test_type {
             TestType::Simple => self.start_simple(&test_working_directory, max_duration),
@@ -554,16 +560,28 @@ impl Test {
             TestType::Simple => (),
             TestType::Daemon => {
                 // If the daemon is still running, then good!  It passed.
-                if *(self.state.lock().unwrap()) == TestState::Running {
+                let (cmd, timeout) = if *(self.state.lock().unwrap()) == TestState::Running {
                     *(self.state.lock().unwrap()) = TestState::Pass;
+                    (self.exec_stop_success.clone(), self.exec_stop_success_timeout)
                 }
+                else {
+                    (self.exec_stop_failure.clone(), self.exec_stop_failure_timeout)
+                };
 
                 // Terminate the process, if it exists.
                 if let Some(ref p) = *(self.test_process.lock().unwrap()) {
-                    p.kill().ok();
+                    if let Err(e) = p.kill() {
+                        self.log(format!("Error while killing daemon: {:?}", e));
+                    }
                 }
                 *(self.test_process.lock().unwrap()) = None;
-            }
+
+                if let Some(c) = cmd {
+                    self.log(format!("Running post-test command: {}", c));
+                    let ref dir = self.test_working_directory.lock().unwrap();
+                    process::try_command(&self.controller, c.as_str(), dir, timeout);
+                }
+            },
         }
     }
 
