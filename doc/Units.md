@@ -29,6 +29,7 @@ Test specifications are defined under a "[Test]" section.
 * ExecStopFail: When stopping tests, if the test failed, then this stop command will be run.
 * ExecStopSuccess: When stopping tests, if the test succeeded, then this stop command will be run.
 * ExecStop: When tests are completed, this command is run to clean things up.  If either ExecStopSuccess or ExecStopFail are present, then this command will be skipped.
+* WorkingDirectory: Directory to run the ExecStart program from.
 
 .jig
 ----

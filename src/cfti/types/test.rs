@@ -98,6 +98,9 @@ pub struct Test {
     /// ExecStopSuccess: When stopping tests, if the test succeeded, then this stop command will be run.
     exec_stop_success: Option<String>,
 
+    /// working_directory: Directory to run progrms from
+    working_directory: Option<String>,
+
     /// The controller where messages come and go.
     controller: Controller,
 
@@ -189,6 +192,11 @@ impl Test {
             Some(s) => Some(s.to_string()),
         };
 
+        let working_directory = match test_section.get("WorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         let description = match test_section.get("Description") {
             None => "".to_string(),
             Some(s) => s.to_string(),
@@ -251,6 +259,7 @@ impl Test {
             exec_stop_success_timeout: config.test_success_timeout(),
             exec_stop_failure: exec_stop_failure,
             exec_stop_failure_timeout: config.test_failure_timeout(),
+            working_directory: working_directory,
 
             controller: controller.clone(),
 
@@ -284,12 +293,20 @@ impl Test {
     ///
     /// Start running a test.  If `working_directory` is specified and
     /// there is no WorkingDirectory in this test, use the provided one.
-    pub fn start(&self, working_directory: &Option<String>, max_duration: time::Duration) {
+    pub fn start(&self, scenario_working_directory: &Option<String>, max_duration: time::Duration) {
         self.broadcast(BroadcastMessageContents::Running(self.id().to_string()));
 
+        let test_working_directory = match self.working_directory {
+            None => match scenario_working_directory {
+                &None => None,
+                &Some(ref s) => Some(s.clone()),
+            },
+            Some(ref s) => Some(s.clone()),
+        };
+
         match self.test_type {
-            TestType::Simple => self.start_simple(working_directory, max_duration),
-            TestType::Daemon => self.start_daemon(working_directory, max_duration),
+            TestType::Simple => self.start_simple(&test_working_directory, max_duration),
+            TestType::Daemon => self.start_daemon(&test_working_directory, max_duration),
         }
     }
 
