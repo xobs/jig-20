@@ -19,6 +19,7 @@ pub enum CommandError {
     MakeCommandError(String),
     SpawnError(String),
     ChildTimeoutTerminateError(String),
+    ChildTerminatedBySignal,
     ReturnCodeError(i32),
 }
 
@@ -228,7 +229,14 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
     let thr_child = child.clone();
     thread::spawn(move || {
         let status_code = match thr_child.wait() {
-            Ok(status) => status.code().unwrap(),
+            Ok(status) => match status.code() {
+                None => {
+                    thr.thread().unpark();
+                    completion(Err(CommandError::ChildTerminatedBySignal));
+                    return;
+                },
+                Some(s) => s,
+            },
             Err(e) => {
                 thr.thread().unpark();
                 completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", e))));
