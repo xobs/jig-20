@@ -361,13 +361,24 @@ impl Test {
             let thr_id = self.id().to_string();
             let thr_kind = self.kind().to_string();
             let thr_controller = self.controller.clone();
+            let thr_end = self.exec_stop_failure.clone();
+            let thr_end_timeout = self.exec_stop_failure_timeout.clone();
+            let thr_dir = self.test_working_directory.clone();
             let thr = thread::spawn(move || {
                 thread::park_timeout(max_duration);
                 if *(thr_state.lock().unwrap()) == TestState::Starting {
                     let msg = format!("Test daemon never came ready");
                     *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
                     thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(msg));
-                    thr_child.kill().ok();
+                    if let Err(e) = thr_child.kill() {
+                        thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
+                    }
+
+                    if let Some(cmd) = thr_end {
+                        thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
+                        let ref dir = thr_dir.lock().unwrap();
+                        process::try_command(&thr_controller, cmd.as_str(), dir, thr_end_timeout);
+                    }
                 }
             });
 
@@ -538,7 +549,9 @@ impl Test {
 
         // If the process is still running, make sure it's terminated.
         if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
-            pid.kill().ok();
+            if let Err(e) = pid.kill() {
+                self.log(format!("Error while killing test: {:?}", e));
+            }
         }
 
         match *(self.state.lock().unwrap()) {

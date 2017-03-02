@@ -2,7 +2,7 @@
 name = "jig2-0"
 version = "0.1.0"
 dependencies = [
- "bus 1.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bus 1.1.3 (git+https://github.com/xobs/bus.git)",
  "chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.20.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "clonablechild 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -40,7 +40,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "bus"
 version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/xobs/bus.git#c8bb287df261cf038ac431a71b416ae996325d1c"
 dependencies = [
  "atomic-option 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -292,7 +292,7 @@ dependencies = [
 "checksum ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "23ac7c30002a5accbf7e8987d0632fa6de155b7c3d39d0067317a391e00a2ef6"
 "checksum atomic-option 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0db678acb667b525ac40a324fc5f7d3390e29239b31c7327bb8157f5b4fff593"
 "checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
-"checksum bus 1.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "9e017b7cb446ef448c44e88006c497d71c6d4756d2d814a30d011b8b18251d45"
+"checksum bus 1.1.3 (git+https://github.com/xobs/bus.git)" = "<none>"
 "checksum chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)" = "f93bfe971116428a9066c1c3c69a09ae3ef69432f8418be28ab50f96783e6a50"
 "checksum clap 2.20.5 (registry+https://github.com/rust-lang/crates.io-index)" = "7db281b0520e97fbd15cd615dcd8f8bcad0c26f5f7d5effe705f090f39e9a758"
 "checksum clonablechild 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4a4946a850c1e921fbdd9a1f92bf1298c41a301c0f6e9bacbabf95ea7d6d0225"
