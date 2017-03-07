@@ -1,5 +1,16 @@
-extern crate ini;
-use self::ini::Ini;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use cfti::unitfile::UnitFile;
+use cfti::types::Jig;
+use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
+
+#[derive(Debug)]
+pub enum TriggerError {
+    FileLoadError(String),
+    MissingTriggerSection,
+    MissingExecStart,
+}
 
 #[derive(Debug)]
 pub struct Trigger {
@@ -12,57 +23,66 @@ pub struct Trigger {
     /// description: Paragraph describing this trigger.
     description: Option<String>,
 
-    /// jig_names: A list of jigs that this trigger is compatibie with.
-    jig_names: Vec<String>,
-
-    /// jigs: A collection of jig objects that this trigger is compatibie with.
-    //jigs: Vec<Jig>
-
     /// exec_start: A command to run to monitor for triggers.
     exec_start: String,
 }
 
 impl Trigger {
-    pub fn new(id: &str, path: &str) -> Result<Trigger, &'static str> {
+    pub fn new(id: &str,
+               path: &str,
+               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               controller: &Controller) -> Option<Result<Trigger, TriggerError>> {
 
         // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Err("Unable to load trigger file"),
+        let unitfile = match UnitFile::new(path) {
+            Err(e) => return Some(Err(TriggerError::FileLoadError(format!("{:?}", e)))),
             Ok(s) => s,
         };
 
-        let trigger_section = match ini_file.section(Some("Trigger")) {
-            None => return Err("Configuration is missing '[Trigger]' section"),
-            Some(s) => s,
-        };
+        if ! unitfile.has_section("Trigger") {
+            return Some(Err(TriggerError::MissingTriggerSection));
+        }
 
-        let description = match trigger_section.get("Description") {
+        let description = match unitfile.get("Trigger", "Description") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let name = match trigger_section.get("Name") {
+        let name = match unitfile.get("Trigger", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let exec_start = match trigger_section.get("ExecStart") {
-            None => return Err("Trigger is missing ExecStart"),
+        let exec_start = match unitfile.get("Trigger", "ExecStart") {
+            None => return Some(Err(TriggerError::MissingExecStart)),
             Some(s) => s.to_string(),
         };
 
-        let jig_names = match trigger_section.get("Jigs") {
-            None => Vec::new(),
-            Some(s) => s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect(),
-        };
+        // Check to see if this interface is compatible with this jig.
+        match unitfile.get("Trigger", "Jigs") {
+            None => (),
+            Some(s) => {
+                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let mut found_it = false;
+                for jig_name in jig_names {
+                    if jigs.get(&jig_name).is_some() {
+                        found_it = true;
+                        break
+                    }
+                }
+                if found_it == false {
+                    controller.debug("trigger", id, format!("The trigger '{}' is not compatible with this jig", id));
+                    return None;
+                }
+            }
+        }
 
-       Ok(Trigger {
+       Some(Ok(Trigger {
             id: id.to_string(),
             name: name,
             description: description,
             exec_start: exec_start,
-            jig_names: jig_names,
-        })
+       }))
     }
 
     pub fn id(&self) -> &String {
