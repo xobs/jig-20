@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use cfti::unitfile::UnitFile;
 use cfti::types::Jig;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
+use cfti::config;
 
 #[derive(Debug)]
 pub enum TriggerError {
@@ -31,6 +32,7 @@ impl Trigger {
     pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Trigger, TriggerError>> {
 
         // Load the .ini file
@@ -83,6 +85,10 @@ impl Trigger {
             description: description,
             exec_start: exec_start,
        }))
+    }
+
+    pub fn start(&self) ->  Result<(), TriggerError> {
+        Ok(())
     }
 
     pub fn id(&self) -> &String {
