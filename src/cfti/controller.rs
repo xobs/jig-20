@@ -11,7 +11,7 @@ use cfti::testset::TestSet;
 
 #[derive(Clone, Debug)]
 pub enum BroadcastMessageContents {
-    Hello(String),
+    //Hello(String),
     Log(String),
 
     /// DESCRIBE [type] [field] [item] [value]
@@ -30,7 +30,7 @@ pub enum BroadcastMessageContents {
     Shutdown(String),
 
     /// PING [string] -- Sends a challenge.  Must respond with PONG [string]
-    Ping(String),
+    //Ping(String),
 
     /// TESTS [list of tests] -- Report the tests associated with a scenario
     Tests(String, Vec<String>),
@@ -206,8 +206,7 @@ impl Controller {
 
                 // Get the current jig information and broadcast it on the bus.
                 ControlMessageContents::GetJig => {
-                    let jig_name = testset.lock().unwrap().get_jig_name();
-                    Self::broadcast_internal(&bus, BroadcastMessageContents::Jig(jig_name));
+                    testset.lock().unwrap().describe_jig();
                 },
 
                 // Set the current scenario to the specified one.
@@ -221,16 +220,26 @@ impl Controller {
                 },
 
                 ControlMessageContents::Shutdown(s) => {
-                    match s {
-                        Some(s) => println!("Shutdown called: {}", s),
-                        None => println!("Shutdown called (no reason)"),
-                    }
+                    let reason = match s {
+                        Some(s) => s,//println!("Shutdown called: {}", s),
+                        None => "(no reason)".to_string(),//println!("Shutdown called (no reason)"),
+                    };
+                    let bc_msg = BroadcastMessage {
+                        message_class: msg.message_class,
+                        unit_id: msg.unit_id,
+                        unit_type: msg.unit_type,
+                        unix_time: msg.unix_time,
+                        unix_time_nsecs: msg.unix_time_nsecs,
+                        message: BroadcastMessageContents::Shutdown(reason),
+                    };
+                    bus.lock().unwrap().deref_mut().broadcast(bc_msg);
+
                     let mut should_exit = should_exit.lock().unwrap();
                     *(should_exit.deref_mut()) = true;
                 },
 
                 // Respond to a PING command.  Unimplemented.
-                ControlMessageContents::Pong(s) => (),
+                ControlMessageContents::Pong(_) => (),
 
                 // Start running tests.
                 ControlMessageContents::StartScenario(s) => testset.lock().unwrap().start_scenario(s),

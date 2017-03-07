@@ -1,7 +1,6 @@
-extern crate bus;
+extern crate json;
 
 use cfti::types::Jig;
-use cfti::testset::TestSet;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::unitfile;
@@ -166,7 +165,6 @@ impl Interface {
     }
 
     fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
-        //println!("Sending data to interface: {:?}", msg);
         let result = match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(stdin,
                                                 "LOG {}\t{}\t{}\t{}\t{}\t{}",
@@ -186,10 +184,10 @@ impl Interface {
                                                 "SCENARIO {}", name),
             BroadcastMessageContents::Scenarios(list) => writeln!(stdin,
                                                 "SCENARIOS {}", list.join(" ")),
-            BroadcastMessageContents::Hello(name) => writeln!(stdin,
-                                                "HELLO {}", name),
-            BroadcastMessageContents::Ping(val) => writeln!(stdin,
-                                                "PING {}", val),
+//            BroadcastMessageContents::Hello(name) => writeln!(stdin,
+//                                                "HELLO {}", name),
+//            BroadcastMessageContents::Ping(val) => writeln!(stdin,
+//                                                "PING {}", val),
             BroadcastMessageContents::Shutdown(reason) => writeln!(stdin,
                                                 "SHUTDOWN {}", reason),
             BroadcastMessageContents::Tests(scenario, tests) => writeln!(stdin,
@@ -214,7 +212,95 @@ impl Interface {
     }
 
     fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
-        Ok(())
+        let mut object = json::JsonValue::new_object();
+        object["message_class"] = msg.message_class.into();
+        object["unit_id"] = msg.unit_id.into();
+        object["unit_type"] = msg.unit_type.into();
+        object["unix_time"] = msg.unix_time.into();
+        object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
+        match msg.message {
+            BroadcastMessageContents::Log(l) => {
+                object["type"] = "log".into();
+                object["message"] = l.into();
+            },
+            BroadcastMessageContents::Jig(j) => {
+                object["type"] = "jig".into();
+                object["id"] = j.into();
+            },
+            BroadcastMessageContents::Describe(class, field, name, value) => {
+                object["type"] = "describe".into();
+                object["class"] = class.into();
+                object["field"] = field.into();
+                object["name"] = name.into();
+                object["value"] = value.into();
+            },
+            BroadcastMessageContents::Scenario(name) => {
+                object["type"] = "scenario".into();
+                object["id"] = name.into();
+            },
+            BroadcastMessageContents::Scenarios(list) => {
+                object["type"] = "scenarios".into();
+                let mut scenarios: Vec<json::JsonValue> = vec![];
+                for scenario in list {
+                    scenarios.push(scenario.clone().into());
+                }
+                object["scenarios"] = scenarios.into();
+            },
+//            BroadcastMessageContents::Hello(name) => {
+//                object["type"] = "hello".into();
+//                object["id"] = name.into();
+//            },
+//            BroadcastMessageContents::Ping(val) => {
+//                object["type"] = "ping".into();
+//                object["val"] = val.into();
+//            },
+            BroadcastMessageContents::Shutdown(reason) => {
+                object["type"] = "shutdown".into();
+                object["reason"] = reason.into();
+            },
+            BroadcastMessageContents::Tests(scenario, list) => {
+                object["type"] = "tests".into();
+                object["scenario"] = scenario.into();
+                let mut tests: Vec<json::JsonValue> = vec![];
+                for test in list {
+                    tests.push(test.clone().into());
+                }
+                object["tests"] = tests.into();
+            },
+            BroadcastMessageContents::Running(test) => {
+                object["type"] = "running".into();
+                object["test"] = test.into();
+            },
+            BroadcastMessageContents::Skip(test, reason) => {
+                object["type"] = "skip".into();
+                object["test"] = test.into();
+                object["reason"] = reason.into();
+            },
+            BroadcastMessageContents::Fail(test, reason) => {
+                object["type"] = "fail".into();
+                object["test"] = test.into();
+                object["reason"] = reason.into();
+            },
+            BroadcastMessageContents::Pass(test, reason) => {
+                object["type"] = "pass".into();
+                object["test"] = test.into();
+                object["reason"] = reason.into();
+            },
+            BroadcastMessageContents::Start(scenario) => {
+                object["type"] = "start".into();
+                object["scenario"] = scenario.into();
+            },
+            BroadcastMessageContents::Finish(scenario, result, reason) => {
+                object["type"] = "finish".into();
+                object["scenario"] = scenario.into();
+                object["result"] = result.into();
+                object["reason"] = reason.into();
+            },
+        };
+        match writeln!(stdin, "{}", json::stringify(object)) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
     }
 
     fn cfti_unescape(msg: String) -> String {
@@ -291,11 +377,11 @@ impl Interface {
         let stdout = child.stdout.unwrap();
         let stderr = child.stderr.unwrap();
 
-        // Send some initial information to the client.
-        writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
-
         match self.format {
             InterfaceFormat::Text => {
+
+                // Send some initial information to the client.
+                writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
                 let controller = self.controller.clone();
                 let thr_controller = self.controller.clone();
                 let id_str = self.id().to_string();

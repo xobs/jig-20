@@ -355,35 +355,13 @@ impl TestSet {
         }
     }
 
-    pub fn get_jig_id(&self) -> String {
-        match self.jig.as_ref() {
-            None => "".to_string(),
-            Some(s) => {
-                let jig = s.lock().unwrap();
-                jig.id().to_string()
-            }
+    pub fn describe_jig(&self) {
+        if let Some(ref j) = self.jig {
+            self.broadcast(&BroadcastMessageContents::Jig(j.lock().unwrap().id().to_string()));
+            j.lock().unwrap().describe();
         }
     }
 
-    pub fn get_jig_name(&self) -> String {
-        match self.jig.as_ref() {
-            None => "".to_string(),
-            Some(s) => {
-                let jig = s.lock().unwrap();
-                jig.name().to_string()
-            }
-        }
-    }
-
-    pub fn get_jig_description(&self) -> String {
-        match self.jig.as_ref() {
-            None => "".to_string(),
-            Some(s) => {
-                let jig = s.lock().unwrap();
-                jig.description().to_string()
-            }
-        }
-    }
 
     pub fn advance_scenario(&self) {
         // Unwrap, because if it is None then things are very broken.

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use cfti::unitfile::UnitFile;
 use cfti::types::Jig;
-use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
+use cfti::controller::Controller;
 use cfti::config;
 
 #[derive(Debug)]
