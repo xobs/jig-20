@@ -129,7 +129,7 @@ impl Interface {
             Some(s) => match s.to_string().to_lowercase().as_ref() {
                 "text" => InterfaceFormat::Text,
                 "json" => InterfaceFormat::JSON,
-                _ => return Some(Err(InterfaceError::InvalidType(s.clone()))),
+                _ => return Some(Err(InterfaceError::InvalidType(s.to_string()))),
             },
         };
 
