@@ -1,16 +1,13 @@
-extern crate ini;
-
-use self::ini::Ini;
-
 use std::path::Path;
 
 use cfti::process;
 use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents};
+use cfti::unitfile::UnitFile;
 
 #[derive(Debug)]
 pub enum JigError {
-    FileLoadError,
+    FileLoadError(String),
     MissingJigSection,
 }
 
@@ -43,18 +40,18 @@ impl Jig {
                controller: &Controller) -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Some(Err(JigError::FileLoadError)),
+        let unitfile = match UnitFile::new(path) {
+            Err(e) => return Some(Err(JigError::FileLoadError(format!("{:?}", e)))),
             Ok(s) => s,
         };
 
-        let jig_section = match ini_file.section(Some("Jig")) {
-            None => return Some(Err(JigError::MissingJigSection)),
-            Some(s) => s,
-        };
+        // Make sure there is a "Jig" section.
+        if ! unitfile.has_section("Jig") {
+            return Some(Err(JigError::MissingJigSection));
+        }
 
         // Determine if this is the jig we're running on
-        if let Some(s) = jig_section.get("TestFile") {
+        if let Some(s) = unitfile.get("Jig", "TestFile") {
             if !Path::new(s).exists() {
                 controller.debug("jig", id, format!("Test file {} DOES NOT EXIST", s));
                 return None;
@@ -62,34 +59,34 @@ impl Jig {
             controller.debug("jig", id, format!("Test file {} exists", s));
         };
 
-        let working_directory = match jig_section.get("WorkingDirectory") {
+        let working_directory = match unitfile.get("Jig", "WorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        if let Some(s) = jig_section.get("TestProgram") {
+        if let Some(s) = unitfile.get("Jig", "TestProgram") {
             if !process::try_command(&controller, s, &working_directory, config.timeout()) {
                 controller.debug("jig", id, format!("Test program FAILED"));
                 return None;
             }
         };
 
-        let description = match jig_section.get("Description") {
+        let description = match unitfile.get("Jig", "Description") {
             None => "".to_string(),
             Some(s) => s.to_string(),
         };
 
-        let name = match jig_section.get("Name") {
+        let name = match unitfile.get("Jig", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let default_scenario = match jig_section.get("DefaultScenario") {
+        let default_scenario = match unitfile.get("Jig", "DefaultScenario") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let working_directory = match jig_section.get("DefaultWorkingDirectory") {
+        let working_directory = match unitfile.get("Jig", "DefaultWorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
