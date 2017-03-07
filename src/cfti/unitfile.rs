@@ -2,6 +2,7 @@ extern crate systemd_parser;
 use std::io::Read;
 use std::fs::File;
 
+#[derive(Debug)]
 pub enum UnitFileError {
     FileUnreadable(String),
     FileReadError(String),
