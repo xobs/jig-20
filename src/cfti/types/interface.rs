@@ -260,7 +260,7 @@ impl Interface {
         Ok(())
     }
 
-    pub fn start(&self, ts: &TestSet) -> Result<(), InterfaceError> {
+    pub fn start(&self) -> Result<(), InterfaceError> {
         let mut cmd = match process::make_command(self.exec_start.as_str()) {
             Ok(s) => s,
             Err(e) => {
@@ -293,9 +293,6 @@ impl Interface {
 
         // Send some initial information to the client.
         writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
-        writeln!(stdin, "JIG {}", ts.get_jig_id()).unwrap();
-        writeln!(stdin, "DESCRIBE JIG NAME {}", ts.get_jig_name()).unwrap();
-        writeln!(stdin, "DESCRIBE JIG DESCRIPTION {}", ts.get_jig_description()).unwrap();
 
         match self.format {
             InterfaceFormat::Text => {
