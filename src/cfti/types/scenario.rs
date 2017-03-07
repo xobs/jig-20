@@ -1,8 +1,6 @@
-extern crate ini;
 extern crate daggy;
 extern crate bus;
 
-use self::ini::Ini;
 use self::daggy::{Dag, Walker, NodeIndex};
 
 use std::collections::HashMap;
@@ -17,10 +15,11 @@ use cfti::types::Jig;
 use cfti::process;
 use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
+use cfti::unitfile::UnitFile;
 
 #[derive(Clone, Debug)]
 pub enum ScenarioError {
-    FileLoadError,
+    FileLoadError(String),
     MissingScenarioSection,
     TestListNotFound,
     TestNotFound(String),
@@ -151,18 +150,17 @@ impl Scenario {
                controller: &Controller) -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Some(Err(ScenarioError::FileLoadError)),
+        let unitfile = match UnitFile::new(path) {
+            Err(e) => return Some(Err(ScenarioError::FileLoadError(format!("{:?}", e)))),
             Ok(s) => s,
         };
 
-        let scenario_section = match ini_file.section(Some("Scenario")) {
-            None => return Some(Err(ScenarioError::MissingScenarioSection)),
-            Some(s) => s,
-        };
+        if ! unitfile.has_section("Scenario") {
+            return Some(Err(ScenarioError::MissingScenarioSection));
+        }
 
         // Check to see if this scenario is compatible with this jig.
-        match scenario_section.get("Jigs") {
+        match unitfile.get("Scenario", "Jigs") {
             None => (),
             Some(s) => {
                 let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
@@ -180,43 +178,43 @@ impl Scenario {
             }
         }
 
-        let description = match scenario_section.get("Description") {
+        let description = match unitfile.get("Scenario", "Description") {
             None => "".to_string(),
             Some(s) => s.to_string(),
         };
 
-        let name = match scenario_section.get("Name") {
+        let name = match unitfile.get("Scenario", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let timeout = match scenario_section.get("Timeout") {
+        let timeout = match unitfile.get("Scenario", "Timeout") {
             None => config.scenario_timeout(),
             Some(s) => time::Duration::from_secs(s.parse().unwrap()),
         };
 
-        let exec_start = match scenario_section.get("ExecStart") {
+        let exec_start = match unitfile.get("Scenario", "ExecStart") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let exec_stop_success = match scenario_section.get("ExecStopSuccess") {
-            None => match scenario_section.get("ExecStop") {
+        let exec_stop_success = match unitfile.get("Scenario", "ExecStopSuccess") {
+            None => match unitfile.get("Scenario", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
                 },
             Some(s) => Some(s.to_string()),
         };
 
-        let exec_stop_failure = match scenario_section.get("ExecStopFail") {
-            None => match scenario_section.get("ExecStop") {
+        let exec_stop_failure = match unitfile.get("Scenario", "ExecStopFail") {
+            None => match unitfile.get("Scenario", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
                 },
             Some(s) => Some(s.to_string()),
         };
 
-        let test_names = match scenario_section.get("Tests") {
+        let test_names = match unitfile.get("Scenario", "Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
             // Split by "," and also whitespace, and combine back into an array.
             Some(s) => s.split(",").map(|x|
