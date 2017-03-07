@@ -122,7 +122,7 @@ impl TestSet {
         //test_set.load_updaters(&updater_paths);
         test_set.lock().unwrap().load_tests(&config, &test_paths);
         test_set.lock().unwrap().load_scenarios(&config, &scenario_paths);
-        //test_set.load_triggers(&trigger_paths);
+        test_set.lock().unwrap().load_triggers(&config, &trigger_paths);
         //test_set.load_coupons(&coupon_paths);
 
         Ok(test_set)
@@ -219,6 +219,36 @@ impl TestSet {
         }
         if let Some(ref jig) = self.jig.as_ref() {
             jig.lock().unwrap().describe();
+        }
+    }
+
+    fn load_triggers(&mut self, config: &config::Config, trigger_paths: &Vec<PathBuf>) {
+        for trigger_path in trigger_paths {
+            let item_name = trigger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let path_str = trigger_path.to_str().unwrap_or("");
+            let new_trigger = match Trigger::new(item_name, path_str, &self.jigs, config, &self.controller) {
+                // In this case, it just means the interface is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => {
+                            self.debug(format!("Unable to load trigger {}: {:?}", item_name, e));
+                            continue;
+                        },
+                        Ok(s) => s,
+                    }
+                },
+            };
+
+            match new_trigger.start() {
+                Err(e) => {
+                    self.debug(format!("Unable to start trigger {}: {:?}", new_trigger.id(), e));
+                    continue;
+                },
+                Ok(_) => (),
+            }
+
+            self.triggers.insert(new_trigger.id().to_string(), Arc::new(Mutex::new(new_trigger)));
         }
     }
 
