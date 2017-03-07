@@ -1,10 +1,9 @@
-extern crate ini;
 extern crate json;
-use self::ini::Ini;
 
 use cfti::types::Jig;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
+use cfti::unitfile::UnitFile;
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -19,7 +18,7 @@ enum LoggerFormat {
 
 #[derive(Debug)]
 pub enum LoggerError {
-    FileLoadError,
+    FileLoadError(String),
     MissingLoggerSection,
     MissingExecSection,
     MakeCommandFailed,
@@ -30,7 +29,7 @@ pub enum LoggerError {
 impl Display for LoggerError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
-            &LoggerError::FileLoadError => write!(f, "Unable to load file"),
+            &LoggerError::FileLoadError(ref s) => write!(f, "Unable to load file: {}", s),
             &LoggerError::MissingLoggerSection => write!(f, "Unit file is missing logger section"),
             &LoggerError::MissingExecSection => write!(f, "Unit file is missing exec section"),
             &LoggerError::MakeCommandFailed => write!(f, "Unable to make command"),
@@ -71,18 +70,17 @@ impl Logger {
                controller: &Controller) -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Some(Err(LoggerError::FileLoadError)),
+        let unitfile = match UnitFile::new(path) {
+            Err(e) => return Some(Err(LoggerError::FileLoadError(format!("{:?}", e)))),
             Ok(s) => s,
         };
 
-        let logger_section = match ini_file.section(Some("Logger")) {
-            None => return Some(Err(LoggerError::MissingLoggerSection)),
-            Some(s) => s,
-        };
+        if ! unitfile.has_section("Logger") {
+            return Some(Err(LoggerError::MissingLoggerSection));
+        }
 
         // Check to see if this logger is compatible with this jig.
-        match logger_section.get("Jigs") {
+        match unitfile.get("Logger", "Jigs") {
             None => (),
             Some(s) => {
                 let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
@@ -104,32 +102,32 @@ impl Logger {
             }
         }
 
-        let description = match logger_section.get("Description") {
+        let description = match unitfile.get("Logger", "Description") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let name = match logger_section.get("Name") {
+        let name = match unitfile.get("Logger", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let working_directory = match logger_section.get("WorkingDirectory") {
+        let working_directory = match unitfile.get("Logger", "WorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let exec_start = match logger_section.get("ExecStart") {
+        let exec_start = match unitfile.get("Logger", "ExecStart") {
             None => return Some(Err(LoggerError::MissingExecSection)),
             Some(s) => s.to_string(),
         };
 
-        let format = match logger_section.get("Format") {
+        let format = match unitfile.get("Logger", "Format") {
             None => LoggerFormat::TabSeparatedValue,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
                 "tsv" => LoggerFormat::TabSeparatedValue,
                 "json" => LoggerFormat::JSON,
-                _ => return Some(Err(LoggerError::InvalidType(s.clone()))),
+                _ => return Some(Err(LoggerError::InvalidType(s.to_string()))),
             },
         };
 
