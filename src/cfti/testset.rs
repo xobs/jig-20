@@ -207,7 +207,7 @@ impl TestSet {
                 },
             };
 
-            match new_interface.start(&self) {
+            match new_interface.start() {
                 Err(e) => {
                     self.debug(format!("Unable to start interface {}: {:?}", new_interface.id(), e));
                     continue;
