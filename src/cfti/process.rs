@@ -137,13 +137,25 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
     }).unwrap();
 }
 
-pub fn spawn_cmd(cmd_str: &str, id: &str, kind: &str, controller: &Controller)
+/// Formats `cmd_str` as a Command, runs it, and returns the Process.
+///
+/// Runs the specified command and returns the result.  The command can be
+/// waited upon, or timed out.  It is possible to interact with its stdin,
+/// stdout, and stderr.
+pub fn spawn_cmd(cmd_str: &str,
+                 id: &str, kind: &str,
+                 working_directory: &Option<String>,
+                 controller: &Controller)
         -> Result<Process, CommandError> {
 
-    let cmd = match make_command(cmd_str) {
+    let mut cmd = match make_command(cmd_str) {
         Ok(c) => c,
         Err(e) => return  Err(e),
     };
+
+    if let &Some(ref d) = working_directory {
+        cmd.current_dir(d);
+    }
 
     match spawn(cmd, id, kind, controller) {
         Ok(o) => Ok(o),
