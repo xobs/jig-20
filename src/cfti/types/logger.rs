@@ -22,7 +22,6 @@ pub enum LoggerError {
     FileLoadError(String),
     MissingLoggerSection,
     MissingExecSection,
-    MakeCommandFailed,
     ExecCommandFailed,
     InvalidType(String),
 }
@@ -33,7 +32,6 @@ impl Display for LoggerError {
             &LoggerError::FileLoadError(ref s) => write!(f, "Unable to load file: {}", s),
             &LoggerError::MissingLoggerSection => write!(f, "Unit file is missing logger section"),
             &LoggerError::MissingExecSection => write!(f, "Unit file is missing exec section"),
-            &LoggerError::MakeCommandFailed => write!(f, "Unable to make command"),
             &LoggerError::ExecCommandFailed => write!(f, "Unable to exec command"),
             &LoggerError::InvalidType(ref s) => write!(f, "Invalid logger type: {}", s),
         }
