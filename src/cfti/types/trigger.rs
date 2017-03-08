@@ -126,6 +126,7 @@ impl Trigger {
             },
             "stop" => ControlMessageContents::AbortTests,
             "hello" => ControlMessageContents::Hello(words.join(" ")),
+            "log" => ControlMessageContents::Log(words.join(" ")),
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
         controller.control(id, "trigger", &response);

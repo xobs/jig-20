@@ -94,3 +94,4 @@ The IPC is line-ordered, and supports the following verbs:
 * HELLO [version] - Identify this trigger as a particular version.  Optional.
 * START [scenario] - Start running a scenario, or the current scenario if none is specified.
 * STOP - Interrupt the current test.
+* LOG [message] - Post a log message, for example indicate why a test was started.
