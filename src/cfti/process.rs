@@ -97,15 +97,12 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
 
 pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, stream_name: &str) {
 
-    let thr_controller = unit.controller().clone();
-    let thr_id = unit.id().to_string();
-    let thr_kind = unit.kind().to_string();
     let thr_stream_name = stream_name.to_string();
 
-    watch_output(stream, unit, move |msg| {
-        thr_controller.control_class(thr_stream_name.as_str(),
-                                     thr_id.as_str(),
-                                     thr_kind.as_str(),
+    watch_output(stream, unit, move |msg, unit| {
+        unit.controller().control_class(thr_stream_name.as_str(),
+                                     unit.id(),
+                                     unit.kind(),
                                      &ControlMessageContents::Log(msg));
         Ok(())
     });
@@ -114,13 +111,14 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, st
 pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
                                                      unit: &U,
                                                      mut msg_func: F)
-        where F: Send + 'static + FnMut(String) -> Result<(), ()> {
+        where F: Send + 'static + FnMut(String, &Unit) -> Result<(), ()> {
     // Monitor the child process' stderr, and pass values to the controller.
     let controller = unit.controller().clone();
     let id = unit.id().to_string();
     let kind = unit.kind().to_string();
     let builder = thread::Builder::new()
         .name(format!("I-E {} -> CFTI", id).into());
+    let thr_unit = unit.to_simple_unit();
 
     builder.spawn(move || {
         for line in io::BufReader::new(stream).lines() {
@@ -129,7 +127,7 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
                     controller.debug(id.as_str(), kind.as_str(), format!("Error in interface: {}", e));
                     return;
                 },
-                Ok(l) => if let Err(e) = msg_func(l) {
+                Ok(l) => if let Err(e) = msg_func(l, &thr_unit) {
                     controller.debug(id.as_str(), kind.as_str(), format!("Message func returned error: {:?}", e));
                     return;
                 }

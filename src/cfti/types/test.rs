@@ -493,32 +493,26 @@ impl Test {
         };
 
         let thr_last_line = self.last_line.clone();
-        let thr_controller = self.controller.clone();
-        let thr_id = self.id().to_string();
-        let thr_kind = self.kind().to_string();
         process::watch_output(child.stdout, self,
-            move |msg| {
+            move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                thr_controller.broadcast_class(
+                unit.controller().broadcast_class(
                             "stdout",
-                            thr_id.as_str(),
-                            thr_kind.as_str(),
+                            unit.id(),
+                            unit.kind(),
                             &BroadcastMessageContents::Log(msg)
                 );
                 Ok(())
             });
 
         let thr_last_line = self.last_line.clone();
-        let thr_controller = self.controller.clone();
-        let thr_id = self.id().to_string();
-        let thr_kind = self.kind().to_string();
         process::watch_output(child.stderr, self,
-            move |msg| {
+            move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                thr_controller.broadcast_class(
+                unit.controller().broadcast_class(
                             "stderr",
-                            thr_id.as_str(),
-                            thr_kind.as_str(),
+                            unit.id(),
+                            unit.kind(),
                             &BroadcastMessageContents::Log(msg)
                 );
                 Ok(())

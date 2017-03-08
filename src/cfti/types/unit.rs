@@ -18,7 +18,7 @@ pub trait Unit {
     fn description(&self) -> &str;
     fn controller(&self) -> &Controller;
 
-    fn as_simple_unit(&self) -> SimpleUnit {
+    fn to_simple_unit(&self) -> SimpleUnit {
         SimpleUnit {
             id: self.id().to_string(),
             kind: self.kind().to_string(),
