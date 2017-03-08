@@ -29,6 +29,9 @@ pub struct Trigger {
     /// exec_start: A command to run to monitor for triggers.
     exec_start: String,
 
+    /// Optional working directory for the trigger
+    working_directory: Option<String>,
+
     /// The controller where messages come and go.
     controller: Controller,
 }
@@ -65,6 +68,11 @@ impl Trigger {
             Some(s) => s.to_string(),
         };
 
+        let working_directory = match unitfile.get("Trigger", "WorkingDirectory") {
+            None => None,
+            Some(s) => Some(s.to_string()),
+        };
+
         // Check to see if this interface is compatible with this jig.
         match unitfile.get("Trigger", "Jigs") {
             None => (),
@@ -89,6 +97,7 @@ impl Trigger {
             name: name,
             description: description,
             exec_start: exec_start,
+            working_directory: working_directory,
             controller: controller.clone(),
        }))
     }
@@ -123,10 +132,21 @@ impl Trigger {
         Ok(())
     }
 
-    pub fn start(&self) ->  Result<(), TriggerError> {
+    pub fn start(&self, working_directory: &Option<String>)
+             -> Result<(), TriggerError> {
+
+        let working_directory = match *working_directory {
+            Some(ref s) => Some(s.clone()),
+            None => match self.working_directory {
+                Some(ref s) => Some(s.clone()),
+                None => None,
+            },
+        };
+
         let cmd = match process::spawn_cmd(self.exec_start.as_str(),
                                            self.id(),
                                            self.kind(),
+                                           &working_directory,
                                            &self.controller) {
             Err(e) => return Err(TriggerError::TriggerSpawnError(e)),
             Ok(o) => o,
