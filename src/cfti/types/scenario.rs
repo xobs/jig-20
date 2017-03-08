@@ -613,8 +613,8 @@ impl Scenario {
             Ok(s) => s,
         };
 
-        process::log_output(child.stdout, &self.controller.clone(), self, "stdout");
-        process::log_output(child.stderr, &self.controller.clone(), self, "stderr");
+        process::log_output(child.stdout, self, "stdout");
+        process::log_output(child.stderr, self, "stderr");
     }
 
     // Given the current state, figure out the next test to run (if any)
@@ -759,5 +759,9 @@ impl Unit for Scenario {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
     }
 }

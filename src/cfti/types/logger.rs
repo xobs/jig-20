@@ -243,4 +243,8 @@ impl Unit for Logger {
             None => "",
         }
     }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
+    }
 }

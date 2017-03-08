@@ -1,11 +1,14 @@
 /// Generic Unit implementations
 
+use cfti::controller::Controller;
+
 #[derive(Clone)]
 pub struct SimpleUnit {
     id: String,
     kind: String,
     name: String,
     description: String,
+    controller: Controller,
 }
 
 pub trait Unit {
@@ -13,6 +16,7 @@ pub trait Unit {
     fn kind(&self) -> &str;
     fn name(&self) -> &str;
     fn description(&self) -> &str;
+    fn controller(&self) -> &Controller;
 
     fn as_simple_unit(&self) -> SimpleUnit {
         SimpleUnit {
@@ -20,6 +24,7 @@ pub trait Unit {
             kind: self.kind().to_string(),
             name: self.name().to_string(),
             description: self.description().to_string(),
+            controller: self.controller().clone(),
         }
     }
 }
@@ -39,5 +44,9 @@ impl Unit for SimpleUnit {
 
     fn description(&self) -> &str {
         self.description.as_str()
+    }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
     }
 }

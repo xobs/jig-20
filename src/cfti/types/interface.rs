@@ -381,15 +381,12 @@ impl Interface {
 
                 // Send some initial information to the client.
                 writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
-                let controller = self.controller.clone();
                 let thr_controller = self.controller.clone();
                 let id_str = self.id().to_string();
-                let id = self.id().to_string();
-                let kind = self.kind().to_string();
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
-                process::log_output(stderr, &controller, self, "stderr");
-                process::watch_output(stdout, &controller, self,
+                process::log_output(stderr, self, "stderr");
+                process::watch_output(stdout,self,
                         move |line| Interface::text_read(line, &id_str, &thr_controller));
             },
             InterfaceFormat::JSON => {
@@ -418,5 +415,9 @@ impl Unit for Interface {
             Some(ref s) => s.as_str(),
             None => "",
         }
+    }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
     }
 }

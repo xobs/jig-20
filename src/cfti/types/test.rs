@@ -338,7 +338,7 @@ impl Test {
         };
 
         // Hook up stderr right away, because we'll be looking for the output on stdout.
-        process::log_output(child.stderr, &self.controller.clone(), self, "stderr");
+        process::log_output(child.stderr, self, "stderr");
 
         // Wait until the "match" string appears.
         let mut buf_reader = io::BufReader::new(child.stdout);
@@ -415,7 +415,7 @@ impl Test {
             *(self.state.lock().unwrap()) = TestState::Running;
         }
 
-        process::log_output(buf_reader, &self.controller.clone(), self, "stdout");
+        process::log_output(buf_reader, self, "stdout");
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
 
         // Move the child into its own thread and wait for it to terminate.
@@ -496,7 +496,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(child.stdout, &self.controller, self,
+        process::watch_output(child.stdout, self,
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -512,7 +512,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(child.stderr, &self.controller, self,
+        process::watch_output(child.stderr, self,
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -622,5 +622,9 @@ impl Unit for Test {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
     }
 }

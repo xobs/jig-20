@@ -145,4 +145,8 @@ impl Unit for Jig {
     fn id(&self) -> &str {
         self.id.as_str()
     }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
+    }
 }
