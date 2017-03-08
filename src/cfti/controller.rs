@@ -345,6 +345,10 @@ impl Controller {
         Self::do_broadcast_class(&self.broadcast, "debug", unit_name, unit_type, &BroadcastMessageContents::Log(msg))
     }
 
+    pub fn debug_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
+        Self::broadcast_class_unit("debug", unit, &BroadcastMessageContents::Log(msg))
+    }
+
     fn do_broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
                            message_class: &str,
                            unit_name: &str,
