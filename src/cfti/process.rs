@@ -148,7 +148,7 @@ pub fn spawn_cmd(cmd_str: &str,
                  controller: &Controller)
         -> Result<Process, CommandError> {
 
-    let mut cmd = match make_command(cmd_str) {
+    let cmd = match make_command(cmd_str) {
         Ok(c) => c,
         Err(e) => return  Err(e),
     };
@@ -159,10 +159,10 @@ pub fn spawn_cmd(cmd_str: &str,
     }
 }
 
-pub fn spawn(mut cmd: Command,
-             id: &str, kind: &str,
-             working_directory: &Option<String>,
-             controller: &Controller)
+fn spawn(mut cmd: Command,
+         id: &str, kind: &str,
+         working_directory: &Option<String>,
+         controller: &Controller)
         -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
