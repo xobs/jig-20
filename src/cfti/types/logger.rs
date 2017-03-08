@@ -156,23 +156,23 @@ impl Logger {
                               msg);
     }
 
-    pub fn start(&self) -> Result<(), LoggerError> {
-        let mut cmd = match process::make_command(self.exec_start.as_str()) {
-            Ok(s) => s,
-            Err(e) => {
-                self.debug(format!("Unable to run logger: {:?}", e));
-                return Err(LoggerError::MakeCommandFailed)
+    pub fn start(&self, working_directory: &Option<String>) -> Result<(), LoggerError> {
+
+        let working_directory = match *working_directory {
+            Some(ref s) => Some(s.clone()),
+            None => match self.working_directory {
+                Some(ref s) => Some(s.clone()),
+                None => None,
             },
         };
 
-        if let Some(ref s) = self.working_directory {
-            cmd.current_dir(s);
-        }
-
         self.debug(format!("Starting logger..."));
-        let process = match process::spawn(cmd, self.id(), self.kind(), &self.controller) {
+        let process = match process::spawn_cmd(self.exec_start.as_str(),
+                                               self.id(), self.kind(),
+                                               &working_directory,
+                                               &self.controller) {
             Err(e) => {
-                self.debug(format!("Unable to spawn {}: {}", self.exec_start, e));
+                self.debug(format!("Unable to spawn {}: {:?}", self.exec_start, e));
                 return Err(LoggerError::ExecCommandFailed);
             },
             Ok(s) => s,
