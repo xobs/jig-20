@@ -107,8 +107,8 @@ impl Trigger {
         msg.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\\\", "\\")
     }
 
-    fn read_line(line: String, id: &str, controller: &Controller) -> Result<(), ()> {
-        controller.debug(id, "trigger", format!("CFTI trigger input: {}", line));
+    fn read_line<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
+        Controller::debug_unit(unit, format!("CFTI trigger input: {}", line));
         let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
         // Don't crash if we get a blank line.
@@ -130,7 +130,7 @@ impl Trigger {
             "log" => ControlMessageContents::Log(words.join(" ")),
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
-        controller.control(id, "trigger", &response);
+        Controller::control_unit(unit, &response);
         Ok(())
     }
 
@@ -154,7 +154,7 @@ impl Trigger {
 
         process::log_output(cmd.stderr, self, "stderr");
         process::watch_output(cmd.stdout, self, move |line, unit| {
-            Self::read_line(line, unit.id(), unit.controller())
+            Self::read_line(line, unit)
         });
         Ok(())
     }
