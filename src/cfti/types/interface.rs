@@ -154,7 +154,7 @@ impl Interface {
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        self.controller.broadcast(self.id(), self.kind(), &msg);
+        Controller::broadcast_unit(self, &msg);
     }
 
     fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
@@ -300,8 +300,8 @@ impl Interface {
         msg.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\\\", "\\")
     }
 
-    fn text_read(line: String, id: &String, controller: &Controller) -> Result<(), ()> {
-        controller.debug(id, "interface", format!("CFTI interface input: {}", line));
+    fn text_read<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
+        Controller::debug_unit(unit, format!("CFTI interface input: {}", line));
         let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
         // Don't crash if we get a blank line.
@@ -341,7 +341,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        controller.control(id, "interface", &response);
+        Controller::control_unit(unit, &response);
         Ok(())
     }
 
@@ -385,7 +385,7 @@ impl Interface {
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
                 process::log_output(stderr, self, "stderr");
                 process::watch_output(stdout, self,
-                        move |line, u| Interface::text_read(line, &u.id().to_string(), u.controller()));
+                        move |line, u| Interface::text_read(line, u));
             },
             InterfaceFormat::JSON => {
                 self.controller.listen(move |msg| Interface::json_write(&mut stdin, msg));
