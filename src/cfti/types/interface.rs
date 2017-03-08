@@ -335,8 +335,17 @@ impl Interface {
         Ok(())
     }
 
-    pub fn start(&self) -> Result<(), InterfaceError> {
-        let child = match process::spawn_cmd(self.exec_start.as_str(), self, &self.working_directory) {
+    pub fn start(&self, working_directory: &Option<String>) -> Result<(), InterfaceError> {
+
+        let working_directory = match *working_directory {
+            Some(ref s) => Some(s.clone()),
+            None => match self.working_directory {
+                Some(ref s) => Some(s.clone()),
+                None => None,
+            },
+        };
+        
+        let child = match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
             Err(e) => {
                 self.log(format!("Unable to spawn: {:?}", e));
                 return Err(InterfaceError::ExecCommandFailed);
