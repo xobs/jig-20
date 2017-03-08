@@ -2,6 +2,7 @@ extern crate termcolor;
 
 use cfti::{config, controller};
 use cfti::types::{Test, Scenario, Logger, Trigger, Jig, Interface};
+use cfti::types::unit::Unit;
 /*
 use cfti::types::Coupon;
 use cfti::types::Updater;

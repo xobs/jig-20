@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use cfti::unitfile::UnitFile;
 use cfti::types::Jig;
+use cfti::types::Unit;
 use cfti::controller::{Controller, ControlMessageContents};
 use cfti::config;
 use cfti::process;
@@ -161,12 +162,25 @@ impl Trigger {
         });
         Ok(())
     }
+}
 
-    pub fn id(&self) -> &str {
+impl Unit for Trigger {
+    fn id(&self) -> &str {
         self.id.as_str()
     }
 
-    pub fn kind(&self) -> &str {
+    fn kind(&self) -> &str {
         "trigger"
+    }
+
+    fn description(&self) -> &str {
+        match self.description {
+            Some(ref s) => s.as_str(),
+            None => "",
+        }
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 }

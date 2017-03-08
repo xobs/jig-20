@@ -1,6 +1,7 @@
 extern crate json;
 
 use cfti::types::Jig;
+use cfti::types::unit::Unit;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::unitfile;
@@ -142,14 +143,6 @@ impl Interface {
             controller: controller.clone(),
             hello: "".to_string(),
        }))
-    }
-
-    pub fn id(&self) -> &str {
-        return &self.id.as_ref();
-    }
-
-    pub fn kind(&self) -> &str {
-        return "interface"
     }
 
     pub fn set_hello(&mut self, hello: String) {
@@ -404,5 +397,26 @@ impl Interface {
             },
         };
         Ok(())
+    }
+}
+
+impl Unit for Interface {
+    fn id(&self) -> &str {
+        &self.id.as_ref()
+    }
+
+    fn kind(&self) -> &str {
+        "interface"
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn description(&self) -> &str {
+        match self.description {
+            Some(ref s) => s.as_str(),
+            None => "",
+        }
     }
 }

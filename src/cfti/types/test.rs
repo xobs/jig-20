@@ -10,6 +10,7 @@ use std::thread;
 use std::io::{self, BufRead};
 
 use cfti::types::Jig;
+use cfti::types::Unit;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::config;
@@ -604,20 +605,22 @@ impl Test {
     pub fn provides(&self) -> &Vec<String> {
         &self.provides
     }
+}
 
-    pub fn kind(&self) -> &str {
+impl Unit for Test {
+    fn kind(&self) -> &str {
         "test"
     }
 
-    pub fn name(&self) -> &str {
+    fn name(&self) -> &str {
         self.name.as_str()
     }
 
-    pub fn description(&self) -> &str {
+    fn description(&self) -> &str {
         self.description.as_str()
     }
 
-    pub fn id(&self) -> &str {
+    fn id(&self) -> &str {
         self.id.as_str()
     }
 }

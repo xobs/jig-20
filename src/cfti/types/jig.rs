@@ -4,6 +4,7 @@ use cfti::process;
 use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents};
 use cfti::unitfile::UnitFile;
+use cfti::types::unit::Unit;
 
 #[derive(Debug)]
 pub enum JigError {
@@ -119,27 +120,29 @@ impl Jig {
                                                                   self.description().to_string()));
     }
 
-    pub fn kind(&self) -> &str {
-        "jig"
-    }
-
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    pub fn description(&self) -> &str {
-        self.description.as_str()
-    }
-
-    pub fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
     pub fn default_scenario(&self) -> &Option<String> {
         &self.default_scenario
     }
 
     pub fn default_working_directory(&self) -> &Option<String> {
         &self.working_directory
+    }
+}
+
+impl Unit for Jig {
+    fn kind(&self) -> &str {
+        "jig"
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn description(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 }

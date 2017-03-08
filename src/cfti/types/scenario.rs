@@ -12,6 +12,7 @@ use std::time;
 
 use cfti::types::test::Test;
 use cfti::types::Jig;
+use cfti::types::Unit;
 use cfti::process;
 use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
@@ -734,27 +735,29 @@ impl Scenario {
         self.broadcast(BroadcastMessageContents::Tests(self.id().to_string(), test_names));
     }
 
-    pub fn kind(&self) -> &str {
-        "scenario"
-    }
-
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    pub fn description(&self) -> &str {
-        self.description.as_str()
-    }
-
-    pub fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
     fn broadcast(&self, msg: BroadcastMessageContents) {
         self.controller.broadcast(self.id(), self.kind(), &msg);
     }
 
     fn log(&self, msg: String) {
         self.broadcast(BroadcastMessageContents::Log(msg));
+    }
+}
+
+impl Unit for Scenario {
+    fn kind(&self) -> &str {
+        "scenario"
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn description(&self) -> &str {
+        self.description.as_str()
+    }
+
+    fn id(&self) -> &str {
+        self.id.as_str()
     }
 }

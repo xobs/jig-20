@@ -1,6 +1,7 @@
 extern crate json;
 
 use cfti::types::Jig;
+use cfti::types::unit::Unit;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
 use cfti::unitfile::UnitFile;
@@ -142,14 +143,6 @@ impl Logger {
        }))
     }
 
-    pub fn id(&self) -> &str {
-        return self.id.as_str();
-    }
-
-    pub fn kind(&self) -> &str {
-        return "logger"
-    }
-
     fn debug(&self, msg: String) {
         self.controller.debug(self.id(),
                               self.kind(),
@@ -230,5 +223,26 @@ impl Logger {
 
         self.debug(format!("Logger is running"));
         Ok(())
+    }
+}
+
+impl Unit for Logger {
+    fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    fn kind(&self) -> &str {
+        "logger"
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn description(&self) -> &str {
+        match self.description {
+            Some(ref s) => s.as_str(),
+            None => "",
+        }
     }
 }
