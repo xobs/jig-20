@@ -128,7 +128,8 @@ Implementation Progress
   * Jigs
     * TestFile
     * TestProgram
-  * _Triggers_
+  * Triggers
+    * Running triggers
   * _Updaters_
   * _Services_
   * _Coupons_
