@@ -100,10 +100,9 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, st
     let thr_stream_name = stream_name.to_string();
 
     watch_output(stream, unit, move |msg, unit| {
-        unit.controller().control_class(thr_stream_name.as_str(),
-                                     unit.id(),
-                                     unit.kind(),
-                                     &ControlMessageContents::Log(msg));
+        Controller::control_class_unit(thr_stream_name.as_str(),
+                                       unit,
+                                       &ControlMessageContents::Log(msg));
         Ok(())
     });
 }
