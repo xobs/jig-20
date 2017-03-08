@@ -315,29 +315,18 @@ impl Test {
     }
 
     fn start_daemon(&self, working_directory: &Option<String>, max_duration: time::Duration) {
+
         let result = self.state.clone();
         let id = self.id().to_string();
-        let mut cmd = match process::make_command(self.exec_start.as_str()) {
-            Ok(c) => c,
-            Err(e) => {
-                let msg = format!("{:?}", e);
-                *(result.lock().unwrap()) = TestState::Fail(msg.clone());
-                BroadcastMessageContents::Fail(id, msg);
-                return;
-            },
-        };
-
-        if let Some(ref dir) = *working_directory {
-            cmd.current_dir(dir);
-        }
 
         // Indicate the daemon is beginning it startup.
-        {
-            *(self.state.lock().unwrap()) = TestState::Starting;
-        }
+        *(self.state.lock().unwrap()) = TestState::Starting;
 
         // Try to launch the daemon.  If it fails, report the error immediately and return.
-        let child = match process::spawn(cmd, self.id(), self.kind(), &self.controller.clone()) {
+        let child = match process::spawn_cmd(self.exec_start.as_str(),
+                                             self.id(), self.kind(),
+                                             working_directory,
+                                             &self.controller) {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 *(result.lock().unwrap()) = TestState::Fail(msg.clone());
