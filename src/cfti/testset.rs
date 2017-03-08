@@ -172,7 +172,7 @@ impl TestSet {
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger_res = Logger::new(item_name, path_str, &self.jigs, &self.controller);
+            let new_logger_res = Logger::new(item_name, path_str, &self.jigs, config, &self.controller);
 
             // In this case, it just means the logger is incompatible.
             let new_logger = match new_logger_res {

@@ -118,7 +118,7 @@ impl Interface {
         };
 
         let working_directory = match unit_file.get("Interface", "WorkingDirectory") {
-            None => None,
+            None => config.default_working_directory().clone(),
             Some(s) => Some(s.to_string()),
         };
 

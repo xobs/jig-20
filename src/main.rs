@@ -34,6 +34,12 @@ fn main() {
                             .default_value("tests")
                             .help("Directory where configuration unit files are stored")
                         )
+                        .arg(Arg::with_name("DEFAULT_WORKING_DIRECTORY")
+                            .short("w")
+                            .long("default-working-dir")
+                            .value_name("DEFAULT_WORKING_DIR")
+                            .help("The default working directory for programs if WorkingDirectory is unspecified")
+                        )
                         .arg(Arg::with_name("SCENARIO_TIMEOUT")
                             .short("s")
                             .long("scenario-timeout")
@@ -45,18 +51,10 @@ fn main() {
 
     config.set_locale(matches.value_of("LOCALE"));
     config.set_timeout(matches.value_of("TIMEOUT").unwrap().parse().unwrap());
+    config.set_default_working_directory(matches.value_of("DEFAULT_WORKING_DIRECTORY"));
 
     let mut controller = cfti::controller::Controller::new().unwrap();
 
-    // Add a simple logger to show us debug data.
-    /*
-    controller.listen_logs(|msg| {
-        let mut stdout = StandardStream::stderr(ColorChoice::Always);
-        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red))).unwrap();
-        writeln!(&mut stdout, "DEBUG: {:?}", msg).unwrap();
-        stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
-    });
-*/
     // Add a simple logger to show us debug data.
     let bufwtr = BufferWriter::stderr(ColorChoice::Always);
     controller.listen(move |msg| {

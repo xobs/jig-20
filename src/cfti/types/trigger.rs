@@ -70,7 +70,7 @@ impl Trigger {
         };
 
         let working_directory = match unitfile.get("Trigger", "WorkingDirectory") {
-            None => None,
+            None => config.default_working_directory().clone(),
             Some(s) => Some(s.to_string()),
         };
 

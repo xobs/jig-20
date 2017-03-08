@@ -4,6 +4,7 @@ use cfti::types::Jig;
 use cfti::types::unit::Unit;
 use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
 use cfti::process;
+use cfti::config;
 use cfti::unitfile::UnitFile;
 
 use std::collections::HashMap;
@@ -66,6 +67,7 @@ impl Logger {
     pub fn new(id: &str,
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
+               config: &config::Config,
                controller: &Controller) -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
@@ -112,7 +114,7 @@ impl Logger {
         };
 
         let working_directory = match unitfile.get("Logger", "WorkingDirectory") {
-            None => None,
+            None => config.default_working_directory().clone(),
             Some(s) => Some(s.to_string()),
         };
 
