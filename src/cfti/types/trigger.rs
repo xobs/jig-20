@@ -3,14 +3,16 @@ use std::sync::{Arc, Mutex};
 
 use cfti::unitfile::UnitFile;
 use cfti::types::Jig;
-use cfti::controller::Controller;
+use cfti::controller::{Controller, ControlMessageContents};
 use cfti::config;
+use cfti::process;
 
 #[derive(Debug)]
 pub enum TriggerError {
     FileLoadError(String),
     MissingTriggerSection,
     MissingExecStart,
+    TriggerSpawnError(process::CommandError),
 }
 
 #[derive(Debug)]
@@ -26,6 +28,9 @@ pub struct Trigger {
 
     /// exec_start: A command to run to monitor for triggers.
     exec_start: String,
+
+    /// The controller where messages come and go.
+    controller: Controller,
 }
 
 impl Trigger {
@@ -84,14 +89,63 @@ impl Trigger {
             name: name,
             description: description,
             exec_start: exec_start,
+            controller: controller.clone(),
        }))
     }
 
-    pub fn start(&self) ->  Result<(), TriggerError> {
+    fn cfti_unescape(msg: String) -> String {
+        msg.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\\\", "\\")
+    }
+
+    fn read_line(line: String, id: &str, controller: &Controller) -> Result<(), ()> {
+        controller.debug(id, "trigger", format!("CFTI trigger input: {}", line));
+        let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
+
+        // Don't crash if we get a blank line.
+        if words.len() == 0 {
+            return Ok(());
+        }
+
+        let verb = words[0].to_lowercase();
+        words.remove(0);
+
+        let response = match verb.as_str() {
+            "start" => if words.len() > 0 {
+                ControlMessageContents::StartScenario(Some(words[0].clone()))
+            } else {
+                ControlMessageContents::StartScenario(None)
+            },
+            "stop" => ControlMessageContents::AbortTests,
+            "hello" => ControlMessageContents::Hello(words.join(" ")),
+            _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
+        };
+        controller.control(id, "trigger", &response);
         Ok(())
     }
 
-    pub fn id(&self) -> &String {
-        return &self.id;
+    pub fn start(&self) ->  Result<(), TriggerError> {
+        let cmd = match process::spawn_cmd(self.exec_start.as_str(),
+                                           self.id(),
+                                           self.kind(),
+                                           &self.controller) {
+            Err(e) => return Err(TriggerError::TriggerSpawnError(e)),
+            Ok(o) => o,
+        };
+
+        let thr_controller = self.controller.clone();
+        let thr_id = self.id().to_string();
+        process::log_output(cmd.stderr, &self.controller, self.id(), self.kind(), "stderr");
+        process::watch_output(cmd.stdout, &self.controller, self.id(), self.kind(), move |line| {
+            Self::read_line(line, &thr_id, &thr_controller)
+        });
+        Ok(())
+    }
+
+    pub fn id(&self) -> &str {
+        self.id.as_str()
+    }
+
+    pub fn kind(&self) -> &str {
+        "trigger"
     }
 }
