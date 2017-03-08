@@ -565,14 +565,6 @@ impl Test {
         }
     }
 
-    pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        Controller::broadcast_unit(self, &msg);
-    }
-
-    pub fn log(&self, msg: String) {
-        self.broadcast(BroadcastMessageContents::Log(msg));
-    }
-
     pub fn requirements(&self) -> &Vec<String> {
         &self.requires
     }

@@ -734,14 +734,6 @@ impl Scenario {
 
         self.broadcast(BroadcastMessageContents::Tests(self.id().to_string(), test_names));
     }
-
-    fn broadcast(&self, msg: BroadcastMessageContents) {
-        self.controller.broadcast(self.id(), self.kind(), &msg);
-    }
-
-    fn log(&self, msg: String) {
-        self.broadcast(BroadcastMessageContents::Log(msg));
-    }
 }
 
 impl Unit for Scenario {

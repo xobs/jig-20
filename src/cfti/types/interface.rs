@@ -149,14 +149,6 @@ impl Interface {
         self.hello = hello;
     }
 
-    pub fn log(&self, msg: String) {
-        self.broadcast(BroadcastMessageContents::Log(msg));
-    }
-
-    pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        Controller::broadcast_unit(self, &msg);
-    }
-
     fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
         let result = match msg.message {
             BroadcastMessageContents::Log(l) => writeln!(stdin,

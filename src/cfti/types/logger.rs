@@ -141,12 +141,6 @@ impl Logger {
        }))
     }
 
-    fn debug(&self, msg: String) {
-        self.controller.debug(self.id(),
-                              self.kind(),
-                              msg);
-    }
-
     pub fn start(&self, working_directory: &Option<String>) -> Result<(), LoggerError> {
 
         let working_directory = match *working_directory {
@@ -170,13 +164,9 @@ impl Logger {
         };
 
         let mut stdin = process.stdin;
-        let format = self.format.clone();
+        let unit = self.to_simple_unit();
 
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
-        let controller = self.controller.clone();
-
-        match format {
+        match self.format {
             LoggerFormat::TabSeparatedValue => self.controller.listen_logs(move |msg| {
                 match msg {
                     BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
@@ -187,9 +177,7 @@ impl Logger {
                                         msg.unix_time,
                                         msg.unix_time_nsecs,
                                         log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")) {
-                            controller.debug(id.as_str(),
-                                             kind.as_str(),
-                                             format!("Unable to write to logfile: {:?}", e));
+                            Controller::debug_unit(&unit, format!("Unable to write to logfile: {:?}", e));
                             return Err(());
                         },
                     _ => (),
@@ -207,9 +195,7 @@ impl Logger {
                         object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
                         object["message"] = log.into();
                         if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
-                            controller.debug(id.as_str(),
-                                             kind.as_str(),
-                                             format!("Unable to write to logfile: {:?}", e));
+                            Controller::debug_unit(&unit, format!("Unable to write to logfile: {:?}", e));
                             return Err(());
                         };
                     },
