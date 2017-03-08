@@ -162,6 +162,12 @@ impl TestSet {
     }
 
     fn load_loggers(&mut self, config: &config::Config, logger_paths: &Vec<PathBuf>) {
+        // Start the scenario with the jig's default working directory.
+        let working_directory = match self.jig {
+            None => None,
+            Some(ref jig) => (jig.lock().unwrap().default_working_directory()).clone(),
+        };
+
         for logger_path in logger_paths {
             let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
@@ -181,7 +187,7 @@ impl TestSet {
             };
 
             // If the new logger fails to start, ignore it and move on.
-            if let Err(e) = new_logger.start() {
+            if let Err(e) = new_logger.start(&working_directory) {
                 self.debug(format!("Unable to start logger {}: {:?}", new_logger.id(), e));
                 continue;
             };
