@@ -137,6 +137,20 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
     }).unwrap();
 }
 
+pub fn spawn_cmd(cmd_str: &str, id: &str, kind: &str, controller: &Controller)
+        -> Result<Process, CommandError> {
+
+    let mut cmd = match make_command(cmd_str) {
+        Ok(c) => c,
+        Err(e) => return  Err(e),
+    };
+
+    match spawn(cmd, id, kind, controller) {
+        Ok(o) => Ok(o),
+        Err(e) => Err(CommandError::SpawnError(format!("{}", e))),
+    }
+}
+
 pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
         -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
