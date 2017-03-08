@@ -613,8 +613,8 @@ impl Scenario {
             Ok(s) => s,
         };
 
-        process::log_output(child.stdout, &self.controller.clone(), self.id(), self.kind(), "stdout");
-        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
+        process::log_output(child.stdout, &self.controller.clone(), self, "stdout");
+        process::log_output(child.stderr, &self.controller.clone(), self, "stderr");
     }
 
     // Given the current state, figure out the next test to run (if any)

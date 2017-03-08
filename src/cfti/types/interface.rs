@@ -388,7 +388,7 @@ impl Interface {
                 let kind = self.kind().to_string();
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
-                process::log_output(stderr, &controller, self.id(), self.kind(), "stderr");
+                process::log_output(stderr, &controller, self, "stderr");
                 process::watch_output(stdout, &controller, id.as_str(), kind.as_str(),
                         move |line| Interface::text_read(line, &id_str, &thr_controller));
             },

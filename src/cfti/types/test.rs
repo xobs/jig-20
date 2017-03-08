@@ -338,7 +338,7 @@ impl Test {
         };
 
         // Hook up stderr right away, because we'll be looking for the output on stdout.
-        process::log_output(child.stderr, &self.controller.clone(), self.id(), self.kind(), "stderr");
+        process::log_output(child.stderr, &self.controller.clone(), self, "stderr");
 
         // Wait until the "match" string appears.
         let mut buf_reader = io::BufReader::new(child.stdout);
@@ -415,7 +415,7 @@ impl Test {
             *(self.state.lock().unwrap()) = TestState::Running;
         }
 
-        process::log_output(buf_reader, &self.controller.clone(), self.id(), self.kind(), "stdout");
+        process::log_output(buf_reader, &self.controller.clone(), self, "stdout");
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
 
         // Move the child into its own thread and wait for it to terminate.
