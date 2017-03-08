@@ -583,10 +583,8 @@ impl Scenario {
 
     fn run_support_cmd(&self, cmd: &str, timeout: &Duration, testname: &str) {
         // unwrap is safe because we know a PreStart command exists.
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
         let tn = testname.to_string();
-        let controller = self.controller.clone();
+        let unit = self.to_simple_unit();
         let res = process::try_command_completion(cmd,
                                         self.working_directory.lock().unwrap().deref(),
                                         *timeout,
@@ -597,11 +595,8 @@ impl Scenario {
             };
 
             // Send a message indicating what the test did, and advance the scenario.
-            controller.broadcast_class("support", id.as_str(), kind.as_str(), &msg);
-            controller.control_class(
-                "support",
-                id.as_str(),
-                kind.as_str(),
+            Controller::broadcast_class_unit("support", &unit, &msg);
+            Controller::control_class_unit("support", &unit,
                 &ControlMessageContents::AdvanceScenario);
         });
 

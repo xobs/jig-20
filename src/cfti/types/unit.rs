@@ -39,7 +39,6 @@ pub trait Unit {
     fn log(&self, msg: String) {
         self.broadcast(BroadcastMessageContents::Log(msg));
     }
-
 }
 
 impl Unit for SimpleUnit {
