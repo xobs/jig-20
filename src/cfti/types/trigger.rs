@@ -146,8 +146,7 @@ impl Trigger {
         };
 
         let cmd = match process::spawn_cmd(self.exec_start.as_str(),
-                                           self.id(),
-                                           self.kind(),
+                                           self,
                                            &working_directory,
                                            &self.controller) {
             Err(e) => return Err(TriggerError::TriggerSpawnError(e)),

@@ -12,6 +12,7 @@ use std::fmt;
 use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr, ExitStatus};
 
 use cfti::controller::{Controller, ControlMessageContents};
+use cfti::types::unit::Unit;
 
 #[derive(Debug)]
 pub enum CommandError {
@@ -142,8 +143,8 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
 /// Runs the specified command and returns the result.  The command can be
 /// waited upon, or timed out.  It is possible to interact with its stdin,
 /// stdout, and stderr.
-pub fn spawn_cmd(cmd_str: &str,
-                 id: &str, kind: &str,
+pub fn spawn_cmd<T: Unit>(cmd_str: &str,
+                 unit: &T,
                  working_directory: &Option<String>,
                  controller: &Controller)
         -> Result<Process, CommandError> {
@@ -153,14 +154,14 @@ pub fn spawn_cmd(cmd_str: &str,
         Err(e) => return  Err(e),
     };
 
-    match spawn(cmd, id, kind, working_directory, controller) {
+    match spawn(cmd, unit, working_directory, controller) {
         Ok(o) => Ok(o),
         Err(e) => Err(CommandError::SpawnError(format!("{}", e))),
     }
 }
 
-fn spawn(mut cmd: Command,
-         id: &str, kind: &str,
+fn spawn<T: Unit>(mut cmd: Command,
+         unit: &T,
          working_directory: &Option<String>,
          controller: &Controller)
         -> Result<Process, io::Error> {
@@ -173,8 +174,8 @@ fn spawn(mut cmd: Command,
     }
 
     let controller = controller.clone();
-    let id = id.to_string();
-    let kind = kind.to_string();
+    let id = unit.id().to_string();
+    let kind = unit.kind().to_string();
 
     let mut child = match cmd.spawn() {
         Err(e) => return Err(e),

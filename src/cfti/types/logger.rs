@@ -161,7 +161,7 @@ impl Logger {
 
         self.debug(format!("Starting logger..."));
         let process = match process::spawn_cmd(self.exec_start.as_str(),
-                                               self.id(), self.kind(),
+                                               self,
                                                &working_directory,
                                                &self.controller) {
             Err(e) => {
