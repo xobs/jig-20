@@ -153,21 +153,24 @@ pub fn spawn_cmd(cmd_str: &str,
         Err(e) => return  Err(e),
     };
 
-    if let &Some(ref d) = working_directory {
-        cmd.current_dir(d);
-    }
-
-    match spawn(cmd, id, kind, controller) {
+    match spawn(cmd, id, kind, working_directory, controller) {
         Ok(o) => Ok(o),
         Err(e) => Err(CommandError::SpawnError(format!("{}", e))),
     }
 }
 
-pub fn spawn(mut cmd: Command, id: &str, kind: &str, controller: &Controller)
+pub fn spawn(mut cmd: Command,
+             id: &str, kind: &str,
+             working_directory: &Option<String>,
+             controller: &Controller)
         -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
     cmd.stderr(Stdio::piped());
+
+    if let &Some(ref d) = working_directory {
+        cmd.current_dir(d);
+    }
 
     let controller = controller.clone();
     let id = id.to_string();
