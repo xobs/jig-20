@@ -550,10 +550,7 @@ impl Scenario {
                 *(self.failures.lock().unwrap()) = 0;
                 self.results.lock().unwrap().clear();
 
-                self.controller.broadcast(
-                                      self.id(),
-                                      self.kind(),
-                                      &BroadcastMessageContents::Start(self.id().to_string()));
+                self.broadcast(BroadcastMessageContents::Start(self.id().to_string()));
                 ScenarioState::PreStart
             },
 
@@ -629,11 +626,8 @@ impl Scenario {
             // If we're transitioning to the idle state, it means we just finished
             // running some tests.  Broadcast the result.
             ScenarioState::Idle => {
-                // I'm unsure of why I can't use an iter here.
-                let len = self.tests.len();
-                for i in 0..len {
-                    // Terminate all daemons.
-                    self.tests[i].lock().unwrap().terminate();
+                for test in &self.tests {
+                    test.lock().unwrap().terminate();
                 }
                 if failures > 0 {
                     self.log(format!("{} tests failed", failures));
@@ -686,9 +680,11 @@ impl Scenario {
 
         // If the test would take longer than the scenario has left, limit the test time.
         if (test_max_time + scenario_elapsed_time) > self.timeout {
-            return self.timeout - scenario_elapsed_time;
+            self.timeout - scenario_elapsed_time
         }
-        test_max_time
+        else {
+            test_max_time
+        }
     }
 
     /// Start running a scenario
