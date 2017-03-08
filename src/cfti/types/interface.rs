@@ -8,7 +8,7 @@ use cfti::unitfile;
 use cfti::config;
 
 use std::collections::HashMap;
-use std::process::{Stdio, ChildStdin};
+use std::process::ChildStdin;
 use std::sync::{Arc, Mutex};
 use std::io::Write;
 use std::fmt::{Formatter, Display, Error};
@@ -24,7 +24,6 @@ pub enum InterfaceError {
     FileLoadError,
     MissingInterfaceSection,
     MissingExecSection,
-    MakeCommandFailed,
     ExecCommandFailed,
     InvalidType(String),
 }
@@ -35,7 +34,6 @@ impl Display for InterfaceError {
             &InterfaceError::FileLoadError => write!(f, "Unable to load file"),
             &InterfaceError::MissingInterfaceSection => write!(f, "Unit file is missing interface section"),
             &InterfaceError::MissingExecSection => write!(f, "Unit file is missing exec entry"),
-            &InterfaceError::MakeCommandFailed => write!(f, "Unable to make command"),
             &InterfaceError::ExecCommandFailed => write!(f, "Unable to exec command"),
             &InterfaceError::InvalidType(ref s) => write!(f, "Invalid interface type: {}", s),
         }
@@ -338,35 +336,18 @@ impl Interface {
     }
 
     pub fn start(&self) -> Result<(), InterfaceError> {
-        let mut cmd = match process::make_command(self.exec_start.as_str()) {
-            Ok(s) => s,
+        let child = match process::spawn_cmd(self.exec_start.as_str(), self, &self.working_directory) {
             Err(e) => {
-                self.log(format!("Unable to run logger: {:?}", e));
-                return Err(InterfaceError::MakeCommandFailed)
-            },
-        };
-
-        cmd.stdout(Stdio::piped());
-        cmd.stdin(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-        if let Some(ref s) = self.working_directory {
-            cmd.current_dir(s);
-        }
-
-        self.log(format!("About to run command: {:?}", cmd));
-
-        let child = match cmd.spawn() {
-            Err(e) => {
-                self.log(format!("Unable to spawn {:?}: {}", cmd, e));
+                self.log(format!("Unable to spawn: {:?}", e));
                 return Err(InterfaceError::ExecCommandFailed);
             },
             Ok(s) => s,
         };
 
         self.log(format!("Launched an interface: {}", self.id()));
-        let mut stdin = child.stdin.unwrap();
-        let stdout = child.stdout.unwrap();
-        let stderr = child.stderr.unwrap();
+        let mut stdin = child.stdin;
+        let stdout = child.stdout;
+        let stderr = child.stderr;
 
         match self.format {
             InterfaceFormat::Text => {
