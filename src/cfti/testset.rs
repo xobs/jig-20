@@ -223,6 +223,13 @@ impl TestSet {
     }
 
     fn load_triggers(&mut self, config: &config::Config, trigger_paths: &Vec<PathBuf>) {
+
+        // Start the scenario with the jig's default working directory.
+        let working_directory = match self.jig {
+            None => None,
+            Some(ref jig) => (jig.lock().unwrap().default_working_directory()).clone(),
+        };
+
         for trigger_path in trigger_paths {
             let item_name = trigger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = trigger_path.to_str().unwrap_or("");
@@ -240,7 +247,7 @@ impl TestSet {
                 },
             };
 
-            match new_trigger.start() {
+            match new_trigger.start(&working_directory) {
                 Err(e) => {
                     self.debug(format!("Unable to start trigger {}: {:?}", new_trigger.id(), e));
                     continue;
