@@ -102,7 +102,7 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, controller: 
     let thr_kind = unit.kind().to_string();
     let thr_stream_name = stream_name.to_string();
 
-    watch_output(stream, controller, unit.id(), unit.kind(), move |msg| {
+    watch_output(stream, controller, unit, move |msg| {
         thr_controller.control_class(thr_stream_name.as_str(),
                                      thr_id.as_str(),
                                      thr_kind.as_str(),
@@ -111,14 +111,14 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, controller: 
     });
 }
 
-pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Controller,
-                                                     id: &str, kind: &str,
+pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T, controller: &Controller,
+                                                     unit: &U,
                                                      mut msg_func: F)
         where F: Send + 'static + FnMut(String) -> Result<(), ()> {
     // Monitor the child process' stderr, and pass values to the controller.
     let controller = controller.clone();
-    let id = id.to_string();
-    let kind = kind.to_string();
+    let id = unit.id().to_string();
+    let kind = unit.kind().to_string();
     let builder = thread::Builder::new()
         .name(format!("I-E {} -> CFTI", id).into());
 

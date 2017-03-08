@@ -496,7 +496,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(child.stdout, &self.controller, self.id(), self.kind(),
+        process::watch_output(child.stdout, &self.controller, self,
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(
@@ -512,7 +512,7 @@ impl Test {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         let thr_kind = self.kind().to_string();
-        process::watch_output(child.stderr, &self.controller, self.id(), self.kind(),
+        process::watch_output(child.stderr, &self.controller, self,
             move |msg| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
                 thr_controller.broadcast_class(

@@ -389,7 +389,7 @@ impl Interface {
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
                 process::log_output(stderr, &controller, self, "stderr");
-                process::watch_output(stdout, &controller, id.as_str(), kind.as_str(),
+                process::watch_output(stdout, &controller, self,
                         move |line| Interface::text_read(line, &id_str, &thr_controller));
             },
             InterfaceFormat::JSON => {

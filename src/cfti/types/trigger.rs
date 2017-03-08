@@ -156,7 +156,7 @@ impl Trigger {
         let thr_controller = self.controller.clone();
         let thr_id = self.id().to_string();
         process::log_output(cmd.stderr, &self.controller, self, "stderr");
-        process::watch_output(cmd.stdout, &self.controller, self.id(), self.kind(), move |line| {
+        process::watch_output(cmd.stdout, &self.controller, self, move |line| {
             Self::read_line(line, &thr_id, &thr_controller)
         });
         Ok(())
