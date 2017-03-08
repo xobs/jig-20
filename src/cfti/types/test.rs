@@ -1,8 +1,6 @@
-extern crate ini;
 extern crate bus;
 extern crate regex;
 
-use self::ini::Ini;
 use self::regex::Regex;
 
 use std::sync::{Arc, Mutex};
@@ -15,10 +13,11 @@ use cfti::types::Jig;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::config;
+use cfti::unitfile::UnitFile;
 
 #[derive(Debug)]
 pub enum TestError {
-    FileLoadError,
+    FileLoadError(String),
     MissingTestSection,
     MissingExecSection,
     ParseTimeoutError,
@@ -125,18 +124,17 @@ impl Test {
                controller: &Controller) -> Option<Result<Test, TestError>> {
 
         // Load the .ini file
-        let ini_file = match Ini::load_from_file(&path) {
-            Err(_) => return Some(Err(TestError::FileLoadError)),
+        let unitfile = match UnitFile::new(path) {
+            Err(e) => return Some(Err(TestError::FileLoadError(format!("{:?}", e)))),
             Ok(s) => s,
         };
 
-        let test_section = match ini_file.section(Some("Test")) {
-            None => return Some(Err(TestError::MissingTestSection)),
-            Some(s) => s,
-        };
+        if ! unitfile.has_section("Test") {
+            return Some(Err(TestError::MissingTestSection));
+        }
 
         // Check to see if this test is compatible with this jig.
-        match test_section.get("Jigs") {
+        match unitfile.get("Test", "Jigs") {
             None => (),
             Some(s) => {
                 let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
@@ -154,7 +152,7 @@ impl Test {
             }
         }
 
-        let test_daemon_ready = match test_section.get("DaemonReadyText") {
+        let test_daemon_ready = match unitfile.get("Test", "DaemonReadyText") {
             None => None,
             Some(s) => match Regex::new(s) {
                 Ok(o) => Some(o),
@@ -165,7 +163,7 @@ impl Test {
             },
         };
 
-        let test_type = match test_section.get("Type") {
+        let test_type = match unitfile.get("Test", "Type") {
             None => TestType::Simple,
             Some(s) => match s.to_string().to_lowercase().as_ref() {
                 "simple" => TestType::Simple,
@@ -174,43 +172,43 @@ impl Test {
             },
         };
 
-        let exec_start = match test_section.get("ExecStart") {
+        let exec_start = match unitfile.get("Test", "ExecStart") {
             None => return Some(Err(TestError::MissingExecSection)),
             Some(s) => s.to_string(),
         };
 
-        let exec_stop_success = match test_section.get("ExecStopSuccess") {
-            None => match test_section.get("ExecStop") {
+        let exec_stop_success = match unitfile.get("Test", "ExecStopSuccess") {
+            None => match unitfile.get("Test", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
                 },
             Some(s) => Some(s.to_string()),
         };
 
-        let exec_stop_failure = match test_section.get("ExecStopFail") {
-            None => match test_section.get("ExecStop") {
+        let exec_stop_failure = match unitfile.get("Test", "ExecStopFail") {
+            None => match unitfile.get("Test", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
                 },
             Some(s) => Some(s.to_string()),
         };
 
-        let working_directory = match test_section.get("WorkingDirectory") {
+        let working_directory = match unitfile.get("Test", "WorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
-        let description = match test_section.get("Description") {
+        let description = match unitfile.get("Test", "Description") {
             None => "".to_string(),
             Some(s) => s.to_string(),
         };
 
-        let name = match test_section.get("Name") {
+        let name = match unitfile.get("Test", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
-        let timeout = match test_section.get("Timeout") {
+        let timeout = match unitfile.get("Test", "Timeout") {
             None => config.timeout(),
             Some(s) => match s.parse() {
                 Err(_) => return Some(Err(TestError::ParseTimeoutError)),
@@ -219,7 +217,7 @@ impl Test {
         };
 
         // Get a list of all the requirements, or make a blank list
-        let requires = match test_section.get("Requires") {
+        let requires = match unitfile.get("Test", "Requires") {
             None => Vec::new(),
             // Split by "," and also whitespace, and combine back into an array.
             Some(s) => s.split(",").map(|x|
@@ -227,7 +225,7 @@ impl Test {
                         y.to_string().trim().to_string()).collect()).collect()
         };
 
-        let suggests = match test_section.get("Suggests") {
+        let suggests = match unitfile.get("Test", "Suggests") {
             None => Vec::new(),
             // Split by "," and also whitespace, and combine back into an array.
             Some(s) => s.split(",").map(|x|
@@ -235,7 +233,7 @@ impl Test {
                         y.to_string().trim().to_string()).collect()).collect()
         };
 
-        let provides = match test_section.get("Provides") {
+        let provides = match unitfile.get("Test", "Provides") {
             None => vec![],
             Some(s) =>
                 s.split(",").map(|x|
