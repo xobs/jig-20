@@ -169,10 +169,6 @@ fn spawn<T: Unit>(mut cmd: Command,
         cmd.current_dir(d);
     }
 
-    let controller = unit.controller().clone();
-    let id = unit.id().to_string();
-    let kind = unit.kind().to_string();
-
     let mut child = match cmd.spawn() {
         Err(e) => return Err(e),
         Ok(child) => child.into_clonable(),
@@ -182,11 +178,12 @@ fn spawn<T: Unit>(mut cmd: Command,
     let stdout = child.stdout().unwrap();
     let stderr = child.stderr().unwrap();
     let child_thr = child.clone();
+    let unit_thr = unit.to_simple_unit();
 
     thread::spawn(move || {
         match child_thr.wait() {
-            Ok(status) => controller.debug(id.as_str(), kind.as_str(), format!("Child exited successfully with result: {:?}", status)),
-            Err(e) => controller.debug(id.as_str(), kind.as_str(), format!("Child errored with exit: {:?}", e)),
+            Ok(status) => Controller::debug_unit(&unit_thr, format!("Child exited successfully with result: {:?}", status)),
+            Err(e) => Controller::debug_unit(&unit_thr, format!("Child errored with exit: {:?}", e)),
         };
     });
 
