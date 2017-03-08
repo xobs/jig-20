@@ -140,7 +140,7 @@ pub fn watch_output<T: io::Read + Send + 'static, F>(stream: T, controller: &Con
 pub fn spawn_cmd(cmd_str: &str, id: &str, kind: &str, controller: &Controller)
         -> Result<Process, CommandError> {
 
-    let mut cmd = match make_command(cmd_str) {
+    let cmd = match make_command(cmd_str) {
         Ok(c) => c,
         Err(e) => return  Err(e),
     };
