@@ -304,6 +304,17 @@ impl Controller {
         Self::do_control_class(&self.control, "standard", unit_name, unit_type, contents)
     }
 
+    pub fn control_class_unit<T: Unit + ?Sized>(message_class: &str,
+                                          unit: &T,
+                                          contents: &ControlMessageContents) {
+        unit.controller().control_class(message_class, unit.id(), unit.kind(), contents);
+    }
+
+    pub fn control_unit<T: Unit + ?Sized>(unit: &T,
+                                          contents: &ControlMessageContents) {
+        unit.controller().control(unit.id(), unit.kind(), contents);
+    }
+
     pub fn broadcast_class(&self,
                            message_class: &str,
                            unit_name: &str,
@@ -313,11 +324,11 @@ impl Controller {
     }
 
     pub fn broadcast_class_unit<T: Unit + ?Sized>(message_class: &str, unit: &T, contents: &BroadcastMessageContents) {
-        unit.controller().broadcast_class(message_class, unit.name(), unit.kind(), contents);
+        unit.controller().broadcast_class(message_class, unit.id(), unit.kind(), contents);
     }
 
     pub fn broadcast_unit<T: Unit + ?Sized>(unit: &T, contents: &BroadcastMessageContents) {
-        unit.controller().broadcast(unit.name(), unit.kind(), contents);
+        unit.controller().broadcast(unit.id(), unit.kind(), contents);
     }
 
     pub fn broadcast(&self,
