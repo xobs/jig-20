@@ -8,6 +8,7 @@ use std::ops::DerefMut;
 use std::process;
 
 use cfti::testset::TestSet;
+use cfti::types::unit::Unit;
 
 #[derive(Clone, Debug)]
 pub enum BroadcastMessageContents {
@@ -309,6 +310,14 @@ impl Controller {
                            unit_type: &str,
                            contents: &BroadcastMessageContents) {
         Self::do_broadcast_class(&self.broadcast, message_class, unit_name, unit_type, contents)
+    }
+
+    pub fn broadcast_class_unit<T: Unit + ?Sized>(message_class: &str, unit: &T, contents: &BroadcastMessageContents) {
+        unit.controller().broadcast_class(message_class, unit.name(), unit.kind(), contents);
+    }
+
+    pub fn broadcast_unit<T: Unit + ?Sized>(unit: &T, contents: &BroadcastMessageContents) {
+        unit.controller().broadcast(unit.name(), unit.kind(), contents);
     }
 
     pub fn broadcast(&self,
