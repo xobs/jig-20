@@ -310,6 +310,12 @@ impl Interface {
     fn text_read(line: String, id: &String, controller: &Controller) -> Result<(), ()> {
         controller.debug(id, "interface", format!("CFTI interface input: {}", line));
         let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
+
+        // Don't crash if we get a blank line.
+        if words.len() == 0 {
+            return Ok(());
+        }
+
         let verb = words[0].to_lowercase();
         words.remove(0);
 
