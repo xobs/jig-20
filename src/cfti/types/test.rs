@@ -272,16 +272,12 @@ impl Test {
     }
 
     pub fn describe(&self) {
-        self.controller.broadcast(
-                              self.id(),
-                              self.kind(),
+        Controller::broadcast_unit(self,
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "name".to_string(),
                                                                   self.id().to_string(),
                                                                   self.name().to_string()));
-        self.controller.broadcast(
-                              self.id(),
-                              self.kind(),
+        Controller::broadcast_unit(self,
                               &BroadcastMessageContents::Describe(self.kind().to_string(),
                                                                   "description".to_string(),
                                                                   self.id().to_string(),
@@ -346,26 +342,24 @@ impl Test {
             // Fire off a thread to kill the process if it takes too long to start.
             let thr_state = self.state.clone();
             let thr_child = child.child.clone();
-            let thr_id = self.id().to_string();
-            let thr_kind = self.kind().to_string();
-            let thr_controller = self.controller.clone();
             let thr_end = self.exec_stop_failure.clone();
             let thr_end_timeout = self.exec_stop_failure_timeout.clone();
             let thr_dir = self.test_working_directory.clone();
+            let unit = self.to_simple_unit();
             let thr = thread::spawn(move || {
                 thread::park_timeout(max_duration);
                 if *(thr_state.lock().unwrap()) == TestState::Starting {
                     let msg = format!("Test daemon never came ready");
                     *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                    thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(msg));
+                    Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
                     if let Err(e) = thr_child.kill() {
-                        thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
+                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
                     }
 
                     if let Some(cmd) = thr_end {
-                        thr_controller.broadcast(thr_id.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
+                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
                         let ref dir = thr_dir.lock().unwrap();
-                        process::try_command(&thr_controller, cmd.as_str(), dir, thr_end_timeout);
+                        process::try_command(unit.controller(), cmd.as_str(), dir, thr_end_timeout);
                     }
                 }
             });
@@ -381,7 +375,7 @@ impl Test {
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
+                        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
                         return;
                     },
                     Ok(0) => {
@@ -390,7 +384,7 @@ impl Test {
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
+                        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
                         return;
                     },
                     Ok(_) => {
@@ -422,22 +416,19 @@ impl Test {
         // If we're still in the "Running" state when it quits, then the daemon
         // has failed.
         let thr_child = child.child.clone();
-        let thr_controller = self.controller.clone();
-        let thr_id = self.id().to_string();
-        let thr_kind = self.kind().to_string();
         let thr_state = self.state.clone();
+        let unit = self.to_simple_unit();
         thread::spawn(move || {
             let result = thr_child.wait();
-            let thr_id2 = thr_id.clone();
 
             // If we're still in the "Running" state, it's a failure.
             if *(thr_state.lock().unwrap()) == TestState::Running {
                 let msg = format!("Daemon exited: {:?}", result);
                 *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                thr_controller.broadcast(thr_id2.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Fail(thr_id, msg));
+                Controller::broadcast_unit(&unit, &BroadcastMessageContents::Fail(unit.id().to_string(), msg));
             }
             else {
-                thr_controller.broadcast(thr_id2.as_str(), thr_kind.as_str(), &BroadcastMessageContents::Pass(thr_id, "Okay".to_string()));
+                Controller::broadcast_unit(&unit, &BroadcastMessageContents::Pass(unit.id().to_string(), "Okay".to_string()));
             }
         });
 
@@ -496,10 +487,9 @@ impl Test {
         process::watch_output(child.stdout, self,
             move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                unit.controller().broadcast_class(
+                Controller::broadcast_class_unit(
                             "stdout",
-                            unit.id(),
-                            unit.kind(),
+                            unit,
                             &BroadcastMessageContents::Log(msg)
                 );
                 Ok(())
@@ -509,12 +499,7 @@ impl Test {
         process::watch_output(child.stderr, self,
             move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                unit.controller().broadcast_class(
-                            "stderr",
-                            unit.id(),
-                            unit.kind(),
-                            &BroadcastMessageContents::Log(msg)
-                );
+                Controller::broadcast_class_unit("stderr", unit, &BroadcastMessageContents::Log(msg));
                 Ok(())
             });
 
@@ -581,7 +566,7 @@ impl Test {
     }
 
     pub fn broadcast(&self, msg: BroadcastMessageContents) {
-        self.controller.broadcast(self.id(), self.kind(), &msg);
+        Controller::broadcast_unit(self, &msg);
     }
 
     pub fn log(&self, msg: String) {
