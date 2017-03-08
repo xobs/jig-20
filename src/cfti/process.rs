@@ -143,8 +143,7 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
 /// stdout, and stderr.
 pub fn spawn_cmd<T: Unit>(cmd_str: &str,
                  unit: &T,
-                 working_directory: &Option<String>,
-                 controller: &Controller)
+                 working_directory: &Option<String>)
         -> Result<Process, CommandError> {
 
     let cmd = match make_command(cmd_str) {
@@ -152,7 +151,7 @@ pub fn spawn_cmd<T: Unit>(cmd_str: &str,
         Err(e) => return  Err(e),
     };
 
-    match spawn(cmd, unit, working_directory, controller) {
+    match spawn(cmd, unit, working_directory) {
         Ok(o) => Ok(o),
         Err(e) => Err(CommandError::SpawnError(format!("{}", e))),
     }
@@ -160,8 +159,7 @@ pub fn spawn_cmd<T: Unit>(cmd_str: &str,
 
 fn spawn<T: Unit>(mut cmd: Command,
          unit: &T,
-         working_directory: &Option<String>,
-         controller: &Controller)
+         working_directory: &Option<String>)
         -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
@@ -171,7 +169,7 @@ fn spawn<T: Unit>(mut cmd: Command,
         cmd.current_dir(d);
     }
 
-    let controller = controller.clone();
+    let controller = unit.controller().clone();
     let id = unit.id().to_string();
     let kind = unit.kind().to_string();
 

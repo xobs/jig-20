@@ -322,8 +322,7 @@ impl Test {
         // Try to launch the daemon.  If it fails, report the error immediately and return.
         let child = match process::spawn_cmd(self.exec_start.as_str(),
                                              self,
-                                             working_directory,
-                                             &self.controller) {
+                                             working_directory) {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 *(result.lock().unwrap()) = TestState::Fail(msg.clone());
