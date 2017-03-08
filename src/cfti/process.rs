@@ -113,22 +113,19 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
                                                      mut msg_func: F)
         where F: Send + 'static + FnMut(String, &Unit) -> Result<(), ()> {
     // Monitor the child process' stderr, and pass values to the controller.
-    let controller = unit.controller().clone();
-    let id = unit.id().to_string();
-    let kind = unit.kind().to_string();
     let builder = thread::Builder::new()
-        .name(format!("I-E {} -> CFTI", id).into());
+        .name(format!("I-E {} -> CFTI", unit.id()).into());
     let thr_unit = unit.to_simple_unit();
 
     builder.spawn(move || {
         for line in io::BufReader::new(stream).lines() {
             match line {
                 Err(e) => {
-                    controller.debug(id.as_str(), kind.as_str(), format!("Error in interface: {}", e));
+                    Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
                     return;
                 },
                 Ok(l) => if let Err(e) = msg_func(l, &thr_unit) {
-                    controller.debug(id.as_str(), kind.as_str(), format!("Message func returned error: {:?}", e));
+                    Controller::debug_unit(&thr_unit, format!("Message func returned error: {:?}", e));
                     return;
                 }
             }
