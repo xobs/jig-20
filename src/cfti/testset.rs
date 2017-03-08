@@ -458,10 +458,6 @@ impl TestSet {
         "testset"
     }
 
-    pub fn name(&self) -> &'static str {
-        "testset"
-    }
-
     pub fn id(&self) -> &str {
         "testset"
     }
