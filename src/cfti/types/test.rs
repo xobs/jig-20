@@ -432,18 +432,16 @@ impl Test {
         });
 
         // Now that the test is running as a daemon, advance to the next scenario.
-        self.controller.control_class("result", self.id(), self.kind(), &ControlMessageContents::AdvanceScenario);
+        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
     }
 
     fn start_simple(&self, working_directory: &Option<String>, max_duration: time::Duration) {
         // Try to create a command.  If this fails, then the command completion will be called,
         // so we can just ignore the error.
-        let controller = self.controller.clone();
-        let id = self.id().to_string();
-        let kind = self.kind().to_string();
         let cmd = self.exec_start.clone();
         let last_line = self.last_line.clone();
         let result = self.state.clone();
+        let unit = self.to_simple_unit();
 
         // Mark the test as "Running"
         *(self.state.lock().unwrap()) = TestState::Running;
@@ -457,12 +455,12 @@ impl Test {
             let msg = match res {
                 Ok(_) => {
                     *(result.lock().unwrap()) = TestState::Pass;
-                    BroadcastMessageContents::Pass(id.clone(), last_line.lock().unwrap().to_string())
+                    BroadcastMessageContents::Pass(unit.id().to_string(), last_line.lock().unwrap().to_string())
                 },
                 Err(e) => {
                     let msg = format!("{:?}", e);
                     *(result.lock().unwrap()) = TestState::Fail(msg.clone());
-                    BroadcastMessageContents::Fail(id.clone(), msg)
+                    BroadcastMessageContents::Fail(unit.id().to_string(), msg)
                 },
             };
 
@@ -471,11 +469,8 @@ impl Test {
             *(thr_process.lock().unwrap()) = None;
 
             // Send a message indicating what the test did, and advance the scenario.
-            controller.broadcast_class("result", id.as_str(), kind.as_str(), &msg);
-            controller.control_class(
-                "result",
-                id.as_str(),
-                kind.as_str(),
+            Controller::broadcast_class_unit("result", &unit, &msg);
+            Controller::control_class_unit("result", &unit,
                 &ControlMessageContents::AdvanceScenario);
         }) {
             Err(_) => return,
