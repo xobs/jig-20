@@ -82,3 +82,15 @@ Test -- Daemon
 Test daemons are a bit of a misnomer.  The ExecStart command should not fork() like a normal daemon.  Rather, they should run in the foreground.  They will be logged like a Simple test.
 
 If the test exits at all, it will be considered to have "Failed".
+
+
+Trigger
+-------
+
+A trigger is used to start a test, or to stop a test that's in progress.  An example of a trigger might be a button or switch attached to a GPIO, a script monitoring a network connection, or a timer.
+
+The IPC is line-ordered, and supports the following verbs:
+
+* HELLO [version] - Identify this trigger as a particular version.  Optional.
+* START [scenario] - Start running a scenario, or the current scenario if none is specified.
+* STOP - Interrupt the current test.
