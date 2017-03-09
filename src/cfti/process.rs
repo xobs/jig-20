@@ -113,7 +113,11 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, st
     });
 }
 
-pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T, unit: &U, mut msg_func: F)
+pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>
+    (stream: T,
+     unit: &U,
+     mut msg_func: F)
+     -> Result<thread::JoinHandle<()>, io::Error>
     where F: Send + 'static + FnMut(String, &Unit) -> Result<(), ()>
 {
     // Monitor the child process' stderr, and pass values to the controller.
@@ -121,23 +125,22 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T, unit: &
     let thr_unit = unit.to_simple_unit();
 
     builder.spawn(move || {
-            for line in io::BufReader::new(stream).lines() {
-                match line {
-                    Err(e) => {
-                        Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
+        for line in io::BufReader::new(stream).lines() {
+            match line {
+                Err(e) => {
+                    Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
+                    return;
+                }
+                Ok(l) => {
+                    if let Err(e) = msg_func(l, &thr_unit) {
+                        Controller::debug_unit(&thr_unit,
+                                               format!("Message func returned error: {:?}", e));
                         return;
-                    }
-                    Ok(l) => {
-                        if let Err(e) = msg_func(l, &thr_unit) {
-                            Controller::debug_unit(&thr_unit,
-                                                   format!("Message func returned error: {:?}", e));
-                            return;
-                        }
                     }
                 }
             }
-        })
-        .unwrap();
+        }
+    })
 }
 
 /// Formats `cmd_str` as a Command, runs it, and returns the Process.
