@@ -46,7 +46,12 @@ fn main() {
 
     config.set_locale(matches.value_of("LOCALE"));
     config.set_timeout(matches.value_of("TIMEOUT").unwrap().parse().unwrap());
-    config.set_default_working_directory(matches.value_of("DEFAULT_WORKING_DIRECTORY"));
+
+    let default_cwd = match matches.value_of("DEFAULT_WORKING_DIRECTORY") {
+        Some(s) => Some(s),
+        None => matches.value_of("CONFIG_DIR"),
+    };
+    config.set_default_working_directory(default_cwd);
 
     let mut controller = cfti::controller::Controller::new().unwrap();
 
