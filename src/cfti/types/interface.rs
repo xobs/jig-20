@@ -32,7 +32,9 @@ impl Display for InterfaceError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
             &InterfaceError::FileLoadError => write!(f, "Unable to load file"),
-            &InterfaceError::MissingInterfaceSection => write!(f, "Unit file is missing interface section"),
+            &InterfaceError::MissingInterfaceSection => {
+                write!(f, "Unit file is missing interface section")
+            }
             &InterfaceError::MissingExecSection => write!(f, "Unit file is missing exec entry"),
             &InterfaceError::ExecCommandFailed => write!(f, "Unable to exec command"),
             &InterfaceError::InvalidType(ref s) => write!(f, "Invalid interface type: {}", s),
@@ -72,14 +74,15 @@ impl Interface {
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Interface, InterfaceError>> {
+               controller: &Controller)
+               -> Option<Result<Interface, InterfaceError>> {
 
         let unit_file = match unitfile::UnitFile::new(path) {
             Err(_) => return Some(Err(InterfaceError::FileLoadError)),
             Ok(f) => f,
         };
 
-        if ! unit_file.has_section("Interface") {
+        if !unit_file.has_section("Interface") {
             return Some(Err(InterfaceError::MissingInterfaceSection));
         }
 
@@ -87,16 +90,20 @@ impl Interface {
         match unit_file.get("Interface", "Jigs") {
             None => (),
             Some(s) => {
-                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let jig_names: Vec<String> =
+                    s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
                     if jigs.get(&jig_name).is_some() {
                         found_it = true;
-                        break
+                        break;
                     }
                 }
                 if found_it == false {
-                    controller.debug("interface", id, format!("The interface '{}' is not compatible with this jig", id));
+                    controller.debug("interface",
+                                     id,
+                                     format!("The interface '{}' is not compatible with this jig",
+                                             id));
                     return None;
                 }
             }
@@ -124,14 +131,16 @@ impl Interface {
 
         let format = match unit_file.get("Interface", "Format") {
             None => InterfaceFormat::Text,
-            Some(s) => match s.to_string().to_lowercase().as_ref() {
-                "text" => InterfaceFormat::Text,
-                "json" => InterfaceFormat::JSON,
-                _ => return Some(Err(InterfaceError::InvalidType(s.to_string()))),
-            },
+            Some(s) => {
+                match s.to_string().to_lowercase().as_ref() {
+                    "text" => InterfaceFormat::Text,
+                    "json" => InterfaceFormat::JSON,
+                    _ => return Some(Err(InterfaceError::InvalidType(s.to_string()))),
+                }
+            }
         };
 
-       Some(Ok(Interface {
+        Some(Ok(Interface {
             id: id.to_string(),
             name: name,
             description: description,
@@ -140,7 +149,7 @@ impl Interface {
             format: format,
             controller: controller.clone(),
             hello: "".to_string(),
-       }))
+        }))
     }
 
     pub fn set_hello(&mut self, hello: String) {
@@ -149,48 +158,54 @@ impl Interface {
 
     fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
         let result = match msg.message {
-            BroadcastMessageContents::Log(l) => writeln!(stdin,
-                                                "LOG {}\t{}\t{}\t{}\t{}\t{}",
-                                                msg.message_class,
-                                                msg.unit_id,
-                                                msg.unit_type,
-                                                msg.unix_time,
-                                                msg.unix_time_nsecs,
-                                                l.to_string().replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r")),
-            BroadcastMessageContents::Jig(j) => writeln!(stdin,
-                                                "JIG {}", j.to_string()),
-            BroadcastMessageContents::Describe(class, field, name, value) =>
-                                        writeln!(stdin,
-                                        "DESCRIBE {} {} {} {}",
-                                        class, field, name, value),
-            BroadcastMessageContents::Scenario(name) => writeln!(stdin,
-                                                "SCENARIO {}", name),
-            BroadcastMessageContents::Scenarios(list) => writeln!(stdin,
-                                                "SCENARIOS {}", list.join(" ")),
-//            BroadcastMessageContents::Hello(name) => writeln!(stdin,
-//                                                "HELLO {}", name),
-//            BroadcastMessageContents::Ping(val) => writeln!(stdin,
-//                                                "PING {}", val),
-            BroadcastMessageContents::Shutdown(reason) => writeln!(stdin,
-                                                "SHUTDOWN {}", reason),
-            BroadcastMessageContents::Tests(scenario, tests) => writeln!(stdin,
-                                                "TESTS {} {}", scenario, tests.join(" ")),
-            BroadcastMessageContents::Running(test) => writeln!(stdin,
-                                                "RUNNING {}", test),
-            BroadcastMessageContents::Skip(test, reason) => writeln!(stdin,
-                                                "SKIP {} {}", test, reason),
-            BroadcastMessageContents::Fail(test, reason) => writeln!(stdin,
-                                                "FAIL {} {}", test, reason),
-            BroadcastMessageContents::Pass(test, reason) => writeln!(stdin,
-                                                "PASS {} {}", test, reason),
-            BroadcastMessageContents::Start(scenario) => writeln!(stdin,
-                                                "START {}", scenario),
-            BroadcastMessageContents::Finish(scenario, result, reason) => writeln!(stdin,
-                                                "FINISH {} {} {}", scenario, result, reason),
+            BroadcastMessageContents::Log(l) => {
+                writeln!(stdin,
+                         "LOG {}\t{}\t{}\t{}\t{}\t{}",
+                         msg.message_class,
+                         msg.unit_id,
+                         msg.unit_type,
+                         msg.unix_time,
+                         msg.unix_time_nsecs,
+                         l.to_string()
+                             .replace("\\", "\\\\")
+                             .replace("\t", "\\t")
+                             .replace("\n", "\\n")
+                             .replace("\r", "\\r"))
+            }
+            BroadcastMessageContents::Jig(j) => writeln!(stdin, "JIG {}", j.to_string()),
+            BroadcastMessageContents::Describe(class, field, name, value) => {
+                writeln!(stdin, "DESCRIBE {} {} {} {}", class, field, name, value)
+            }
+            BroadcastMessageContents::Scenario(name) => writeln!(stdin, "SCENARIO {}", name),
+            BroadcastMessageContents::Scenarios(list) => {
+                writeln!(stdin, "SCENARIOS {}", list.join(" "))
+            }
+            //            BroadcastMessageContents::Hello(name) => writeln!(stdin,
+            //                                                "HELLO {}", name),
+            //            BroadcastMessageContents::Ping(val) => writeln!(stdin,
+            //                                                "PING {}", val),
+            BroadcastMessageContents::Shutdown(reason) => writeln!(stdin, "SHUTDOWN {}", reason),
+            BroadcastMessageContents::Tests(scenario, tests) => {
+                writeln!(stdin, "TESTS {} {}", scenario, tests.join(" "))
+            }
+            BroadcastMessageContents::Running(test) => writeln!(stdin, "RUNNING {}", test),
+            BroadcastMessageContents::Skip(test, reason) => {
+                writeln!(stdin, "SKIP {} {}", test, reason)
+            }
+            BroadcastMessageContents::Fail(test, reason) => {
+                writeln!(stdin, "FAIL {} {}", test, reason)
+            }
+            BroadcastMessageContents::Pass(test, reason) => {
+                writeln!(stdin, "PASS {} {}", test, reason)
+            }
+            BroadcastMessageContents::Start(scenario) => writeln!(stdin, "START {}", scenario),
+            BroadcastMessageContents::Finish(scenario, result, reason) => {
+                writeln!(stdin, "FINISH {} {} {}", scenario, result, reason)
+            }
         };
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(())
+            Err(_) => Err(()),
         }
     }
 
@@ -205,22 +220,22 @@ impl Interface {
             BroadcastMessageContents::Log(l) => {
                 object["type"] = "log".into();
                 object["message"] = l.into();
-            },
+            }
             BroadcastMessageContents::Jig(j) => {
                 object["type"] = "jig".into();
                 object["id"] = j.into();
-            },
+            }
             BroadcastMessageContents::Describe(class, field, name, value) => {
                 object["type"] = "describe".into();
                 object["class"] = class.into();
                 object["field"] = field.into();
                 object["name"] = name.into();
                 object["value"] = value.into();
-            },
+            }
             BroadcastMessageContents::Scenario(name) => {
                 object["type"] = "scenario".into();
                 object["id"] = name.into();
-            },
+            }
             BroadcastMessageContents::Scenarios(list) => {
                 object["type"] = "scenarios".into();
                 let mut scenarios: Vec<json::JsonValue> = vec![];
@@ -228,19 +243,19 @@ impl Interface {
                     scenarios.push(scenario.clone().into());
                 }
                 object["scenarios"] = scenarios.into();
-            },
-//            BroadcastMessageContents::Hello(name) => {
-//                object["type"] = "hello".into();
-//                object["id"] = name.into();
-//            },
-//            BroadcastMessageContents::Ping(val) => {
-//                object["type"] = "ping".into();
-//                object["val"] = val.into();
-//            },
+            }
+            //            BroadcastMessageContents::Hello(name) => {
+            //                object["type"] = "hello".into();
+            //                object["id"] = name.into();
+            //            },
+            //            BroadcastMessageContents::Ping(val) => {
+            //                object["type"] = "ping".into();
+            //                object["val"] = val.into();
+            //            },
             BroadcastMessageContents::Shutdown(reason) => {
                 object["type"] = "shutdown".into();
                 object["reason"] = reason.into();
-            },
+            }
             BroadcastMessageContents::Tests(scenario, list) => {
                 object["type"] = "tests".into();
                 object["scenario"] = scenario.into();
@@ -249,36 +264,36 @@ impl Interface {
                     tests.push(test.clone().into());
                 }
                 object["tests"] = tests.into();
-            },
+            }
             BroadcastMessageContents::Running(test) => {
                 object["type"] = "running".into();
                 object["test"] = test.into();
-            },
+            }
             BroadcastMessageContents::Skip(test, reason) => {
                 object["type"] = "skip".into();
                 object["test"] = test.into();
                 object["reason"] = reason.into();
-            },
+            }
             BroadcastMessageContents::Fail(test, reason) => {
                 object["type"] = "fail".into();
                 object["test"] = test.into();
                 object["reason"] = reason.into();
-            },
+            }
             BroadcastMessageContents::Pass(test, reason) => {
                 object["type"] = "pass".into();
                 object["test"] = test.into();
                 object["reason"] = reason.into();
-            },
+            }
             BroadcastMessageContents::Start(scenario) => {
                 object["type"] = "start".into();
                 object["scenario"] = scenario.into();
-            },
+            }
             BroadcastMessageContents::Finish(scenario, result, reason) => {
                 object["type"] = "finish".into();
                 object["scenario"] = scenario.into();
                 object["result"] = result.into();
                 object["reason"] = reason.into();
-            },
+            }
         };
         match writeln!(stdin, "{}", json::stringify(object)) {
             Ok(_) => Ok(()),
@@ -292,7 +307,8 @@ impl Interface {
 
     fn text_read<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
         Controller::debug_unit(unit, format!("CFTI interface input: {}", line));
-        let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
+        let mut words: Vec<String> =
+            line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
         // Don't crash if we get a blank line.
         if words.len() == 0 {
@@ -305,28 +321,31 @@ impl Interface {
         let response = match verb.as_str() {
             "scenario" => ControlMessageContents::Scenario(words[0].to_lowercase()),
             "scenarios" => ControlMessageContents::GetScenarios,
-            "tests" =>
+            "tests" => {
                 if words.is_empty() {
                     ControlMessageContents::GetTests(None)
                 } else {
                     ControlMessageContents::GetTests(Some(words[0].to_lowercase()))
-                },
-            "start" =>
+                }
+            }
+            "start" => {
                 if words.is_empty() {
                     ControlMessageContents::StartScenario(None)
                 } else {
                     ControlMessageContents::StartScenario(Some(words[0].to_lowercase()))
-                },
+                }
+            }
             "abort" => ControlMessageContents::AbortTests,
             "pong" => ControlMessageContents::Pong(words[0].to_lowercase()),
             "jig" => ControlMessageContents::GetJig,
             "hello" => ControlMessageContents::Hello(words.join(" ")),
-            "shutdown" =>
+            "shutdown" => {
                 if words.is_empty() {
                     ControlMessageContents::Shutdown(None)
                 } else {
                     ControlMessageContents::Shutdown(Some(words.join(" ")))
-                },
+                }
+            }
             "log" => ControlMessageContents::Log(words.join(" ")),
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
@@ -339,17 +358,19 @@ impl Interface {
 
         let working_directory = match *working_directory {
             Some(ref s) => Some(s.clone()),
-            None => match self.working_directory {
-                Some(ref s) => Some(s.clone()),
-                None => None,
-            },
+            None => {
+                match self.working_directory {
+                    Some(ref s) => Some(s.clone()),
+                    None => None,
+                }
+            }
         };
-        
+
         let child = match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
             Err(e) => {
                 self.log(format!("Unable to spawn: {:?}", e));
                 return Err(InterfaceError::ExecCommandFailed);
-            },
+            }
             Ok(s) => s,
         };
 
@@ -366,12 +387,11 @@ impl Interface {
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
                 process::log_output(stderr, self, "stderr");
-                process::watch_output(stdout, self,
-                        move |line, u| Interface::text_read(line, u));
-            },
+                process::watch_output(stdout, self, move |line, u| Interface::text_read(line, u));
+            }
             InterfaceFormat::JSON => {
                 self.controller.listen(move |msg| Interface::json_write(&mut stdin, msg));
-            },
+            }
         };
         Ok(())
     }

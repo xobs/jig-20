@@ -34,7 +34,6 @@ enum TestType {
 
 #[derive(Debug, PartialEq)]
 pub enum TestState {
-
     /// A test has yet to be run.
     Pending,
 
@@ -53,7 +52,6 @@ pub enum TestState {
 
 #[derive(Debug)]
 pub struct Test {
-
     /// Id: File name on disk, what other units refer to this one as.
     id: String,
 
@@ -122,7 +120,8 @@ impl Test {
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Test, TestError>> {
+               controller: &Controller)
+               -> Option<Result<Test, TestError>> {
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -130,7 +129,7 @@ impl Test {
             Ok(s) => s,
         };
 
-        if ! unitfile.has_section("Test") {
+        if !unitfile.has_section("Test") {
             return Some(Err(TestError::MissingTestSection));
         }
 
@@ -138,16 +137,19 @@ impl Test {
         match unitfile.get("Test", "Jigs") {
             None => (),
             Some(s) => {
-                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let jig_names: Vec<String> =
+                    s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
                     if jigs.get(&jig_name).is_some() {
                         found_it = true;
-                        break
+                        break;
                     }
                 }
                 if found_it == false {
-                    controller.debug("test", id, format!("The test '{}' is not compatible with this jig", id));
+                    controller.debug("test",
+                                     id,
+                                     format!("The test '{}' is not compatible with this jig", id));
                     return None;
                 }
             }
@@ -155,22 +157,28 @@ impl Test {
 
         let test_daemon_ready = match unitfile.get("Test", "DaemonReadyText") {
             None => None,
-            Some(s) => match Regex::new(s) {
-                Ok(o) => Some(o),
-                Err(e) => {
-                    controller.debug("test", id, format!("Unable to compile DaemonReadyText: {}", e));
-                    return Some(Err(TestError::DaemonReadyTextError));
-                },
-            },
+            Some(s) => {
+                match Regex::new(s) {
+                    Ok(o) => Some(o),
+                    Err(e) => {
+                        controller.debug("test",
+                                         id,
+                                         format!("Unable to compile DaemonReadyText: {}", e));
+                        return Some(Err(TestError::DaemonReadyTextError));
+                    }
+                }
+            }
         };
 
         let test_type = match unitfile.get("Test", "Type") {
             None => TestType::Simple,
-            Some(s) => match s.to_string().to_lowercase().as_ref() {
-                "simple" => TestType::Simple,
-                "daemon" => TestType::Daemon,
-                other => return Some(Err(TestError::InvalidType(other.to_string()))),
-            },
+            Some(s) => {
+                match s.to_string().to_lowercase().as_ref() {
+                    "simple" => TestType::Simple,
+                    "daemon" => TestType::Daemon,
+                    other => return Some(Err(TestError::InvalidType(other.to_string()))),
+                }
+            }
         };
 
         let exec_start = match unitfile.get("Test", "ExecStart") {
@@ -179,18 +187,22 @@ impl Test {
         };
 
         let exec_stop_success = match unitfile.get("Test", "ExecStopSuccess") {
-            None => match unitfile.get("Test", "ExecStop") {
+            None => {
+                match unitfile.get("Test", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
-                },
+                }
+            }
             Some(s) => Some(s.to_string()),
         };
 
         let exec_stop_failure = match unitfile.get("Test", "ExecStopFail") {
-            None => match unitfile.get("Test", "ExecStop") {
+            None => {
+                match unitfile.get("Test", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
-                },
+                }
+            }
             Some(s) => Some(s.to_string()),
         };
 
@@ -211,35 +223,57 @@ impl Test {
 
         let timeout = match unitfile.get("Test", "Timeout") {
             None => config.timeout(),
-            Some(s) => match s.parse() {
-                Err(_) => return Some(Err(TestError::ParseTimeoutError)),
-                Ok(n) => time::Duration::from_secs(n),
-            },
+            Some(s) => {
+                match s.parse() {
+                    Err(_) => return Some(Err(TestError::ParseTimeoutError)),
+                    Ok(n) => time::Duration::from_secs(n),
+                }
+            }
         };
 
         // Get a list of all the requirements, or make a blank list
         let requires = match unitfile.get("Test", "Requires") {
             None => Vec::new(),
             // Split by "," and also whitespace, and combine back into an array.
-            Some(s) => s.split(",").map(|x|
-                        x.to_string().split_whitespace().map(|y|
-                        y.to_string().trim().to_string()).collect()).collect()
+            Some(s) => {
+                s.split(",")
+                    .map(|x| {
+                        x.to_string()
+                            .split_whitespace()
+                            .map(|y| y.to_string().trim().to_string())
+                            .collect()
+                    })
+                    .collect()
+            }
         };
 
         let suggests = match unitfile.get("Test", "Suggests") {
             None => Vec::new(),
             // Split by "," and also whitespace, and combine back into an array.
-            Some(s) => s.split(",").map(|x|
-                        x.to_string().split_whitespace().map(|y|
-                        y.to_string().trim().to_string()).collect()).collect()
+            Some(s) => {
+                s.split(",")
+                    .map(|x| {
+                        x.to_string()
+                            .split_whitespace()
+                            .map(|y| y.to_string().trim().to_string())
+                            .collect()
+                    })
+                    .collect()
+            }
         };
 
         let provides = match unitfile.get("Test", "Provides") {
             None => vec![],
-            Some(s) =>
-                s.split(",").map(|x|
-                        x.to_string().split_whitespace().map(|y|
-                y.to_string().trim().to_string()).collect()).collect()
+            Some(s) => {
+                s.split(",")
+                    .map(|x| {
+                        x.to_string()
+                            .split_whitespace()
+                            .map(|y| y.to_string().trim().to_string())
+                            .collect()
+                    })
+                    .collect()
+            }
         };
 
         Some(Ok(Test {
@@ -273,15 +307,16 @@ impl Test {
 
     pub fn describe(&self) {
         Controller::broadcast_unit(self,
-                              &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                  "name".to_string(),
-                                                                  self.id().to_string(),
-                                                                  self.name().to_string()));
+                                   &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                       "name".to_string(),
+                                                                       self.id().to_string(),
+                                                                       self.name().to_string()));
         Controller::broadcast_unit(self,
-                              &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                  "description".to_string(),
-                                                                  self.id().to_string(),
-                                                                  self.description().to_string()));
+                                   &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                       "description".to_string(),
+                                                                       self.id().to_string(),
+                                                                       self.description()
+                                                                           .to_string()));
     }
 
     pub fn timeout(&self) -> time::Duration {
@@ -292,14 +327,18 @@ impl Test {
     ///
     /// Start running a test.  If `working_directory` is specified and
     /// there is no WorkingDirectory in this test, use the provided one.
-    pub fn start(&self, scenario_working_directory: &Option<String>, max_duration: time::Duration) {
+    pub fn start(&self,
+                 scenario_working_directory: &Option<String>,
+                 max_duration: time::Duration) {
         self.broadcast(BroadcastMessageContents::Running(self.id().to_string()));
 
         let test_working_directory = match self.working_directory {
-            None => match scenario_working_directory {
-                &None => None,
-                &Some(ref s) => Some(s.clone()),
-            },
+            None => {
+                match scenario_working_directory {
+                    &None => None,
+                    &Some(ref s) => Some(s.clone()),
+                }
+            }
             Some(ref s) => Some(s.clone()),
         };
 
@@ -320,15 +359,13 @@ impl Test {
         *(self.state.lock().unwrap()) = TestState::Starting;
 
         // Try to launch the daemon.  If it fails, report the error immediately and return.
-        let child = match process::spawn_cmd(self.exec_start.as_str(),
-                                             self,
-                                             working_directory) {
+        let child = match process::spawn_cmd(self.exec_start.as_str(), self, working_directory) {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 *(result.lock().unwrap()) = TestState::Fail(msg.clone());
                 BroadcastMessageContents::Fail(id, msg);
                 return;
-            },
+            }
             Ok(o) => o,
         };
 
@@ -345,23 +382,27 @@ impl Test {
             let thr_end_timeout = self.exec_stop_failure_timeout.clone();
             let thr_dir = self.test_working_directory.clone();
             let unit = self.to_simple_unit();
-            let thr = thread::spawn(move || {
-                thread::park_timeout(max_duration);
-                if *(thr_state.lock().unwrap()) == TestState::Starting {
-                    let msg = format!("Test daemon never came ready");
-                    *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                    Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
-                    if let Err(e) = thr_child.kill() {
-                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
-                    }
+            let thr =
+                thread::spawn(move || {
+                    thread::park_timeout(max_duration);
+                    if *(thr_state.lock().unwrap()) == TestState::Starting {
+                        let msg = format!("Test daemon never came ready");
+                        *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
+                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
+                        if let Err(e) = thr_child.kill() {
+                            Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
+                        }
 
-                    if let Some(cmd) = thr_end {
-                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
-                        let ref dir = thr_dir.lock().unwrap();
-                        process::try_command(unit.controller(), cmd.as_str(), dir, thr_end_timeout);
+                        if let Some(cmd) = thr_end {
+                            Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
+                            let ref dir = thr_dir.lock().unwrap();
+                            process::try_command(unit.controller(),
+                                                 cmd.as_str(),
+                                                 dir,
+                                                 thr_end_timeout);
+                        }
                     }
-                }
-            });
+                });
 
             // Wait for the string to appear.
             self.log(format!("Waiting for string: {}", r));
@@ -374,37 +415,41 @@ impl Test {
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
+                        Controller::control_class_unit("result",
+                                                       self,
+                                                       &ControlMessageContents::AdvanceScenario);
                         return;
-                    },
+                    }
                     Ok(0) => {
                         let msg = format!("Test daemon exited");
                         self.log(msg.clone());
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
+                        Controller::control_class_unit("result",
+                                                       self,
+                                                       &ControlMessageContents::AdvanceScenario);
                         return;
-                    },
+                    }
                     Ok(_) => {
-                        self.controller.broadcast_class("stdout",
-                                     self.id(),
-                                     self.kind(),
-                                     &BroadcastMessageContents::Log(line.clone()));
+                        self.controller
+                            .broadcast_class("stdout",
+                                             self.id(),
+                                             self.kind(),
+                                             &BroadcastMessageContents::Log(line.clone()));
                         self.log(format!("Comparing {} to {}", r, line));
                         if r.is_match(line.as_str()) {
                             self.log(format!("It's a match!"));
                             *(self.state.lock().unwrap()) = TestState::Running;
                             break;
                         }
-                    },
+                    }
                 }
                 line.clear();
             }
             // Now that the match string has been found (if any), mark the daemon as "Running".
             thr.thread().unpark();
-        }
-        else {
+        } else {
             *(self.state.lock().unwrap()) = TestState::Running;
         }
 
@@ -424,10 +469,13 @@ impl Test {
             if *(thr_state.lock().unwrap()) == TestState::Running {
                 let msg = format!("Daemon exited: {:?}", result);
                 *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                Controller::broadcast_unit(&unit, &BroadcastMessageContents::Fail(unit.id().to_string(), msg));
-            }
-            else {
-                Controller::broadcast_unit(&unit, &BroadcastMessageContents::Pass(unit.id().to_string(), "Okay".to_string()));
+                Controller::broadcast_unit(&unit,
+                                           &BroadcastMessageContents::Fail(unit.id().to_string(),
+                                                                           msg));
+            } else {
+                Controller::broadcast_unit(&unit,
+                                           &BroadcastMessageContents::Pass(unit.id().to_string(),
+                                                                           "Okay".to_string()));
             }
         });
 
@@ -447,55 +495,52 @@ impl Test {
         *(self.state.lock().unwrap()) = TestState::Running;
 
         let thr_process = self.test_process.clone();
-        let child = match process::try_command_completion(
-                        cmd.as_str(),
-                        working_directory,
-                        max_duration,
-                        move |res: Result<(), process::CommandError>| {
-            let msg = match res {
-                Ok(_) => {
-                    *(result.lock().unwrap()) = TestState::Pass;
-                    BroadcastMessageContents::Pass(unit.id().to_string(), last_line.lock().unwrap().to_string())
-                },
-                Err(e) => {
-                    let msg = format!("{:?}", e);
-                    *(result.lock().unwrap()) = TestState::Fail(msg.clone());
-                    BroadcastMessageContents::Fail(unit.id().to_string(), msg)
-                },
+        let child =
+            match process::try_command_completion(cmd.as_str(),
+                                                  working_directory,
+                                                  max_duration,
+                                                  move |res: Result<(),
+                                                                    process::CommandError>| {
+                let msg = match res {
+                    Ok(_) => {
+                        *(result.lock().unwrap()) = TestState::Pass;
+                        BroadcastMessageContents::Pass(unit.id().to_string(),
+                                                       last_line.lock().unwrap().to_string())
+                    }
+                    Err(e) => {
+                        let msg = format!("{:?}", e);
+                        *(result.lock().unwrap()) = TestState::Fail(msg.clone());
+                        BroadcastMessageContents::Fail(unit.id().to_string(), msg)
+                    }
+                };
+
+                // Nullify the current process, since it ought to have exited.
+                // If it was an unclean exit this will have already happened.
+                *(thr_process.lock().unwrap()) = None;
+
+                // Send a message indicating what the test did, and advance the scenario.
+                Controller::broadcast_class_unit("result", &unit, &msg);
+                Controller::control_class_unit("result",
+                                               &unit,
+                                               &ControlMessageContents::AdvanceScenario);
+            }) {
+                Err(_) => return,
+                Ok(o) => o,
             };
 
-            // Nullify the current process, since it ought to have exited.
-            // If it was an unclean exit this will have already happened.
-            *(thr_process.lock().unwrap()) = None;
-
-            // Send a message indicating what the test did, and advance the scenario.
-            Controller::broadcast_class_unit("result", &unit, &msg);
-            Controller::control_class_unit("result", &unit,
-                &ControlMessageContents::AdvanceScenario);
-        }) {
-            Err(_) => return,
-            Ok(o) => o,
-        };
+        let thr_last_line = self.last_line.clone();
+        process::watch_output(child.stdout, self, move |msg, unit| {
+            *(thr_last_line.lock().unwrap()) = msg.clone();
+            Controller::broadcast_class_unit("stdout", unit, &BroadcastMessageContents::Log(msg));
+            Ok(())
+        });
 
         let thr_last_line = self.last_line.clone();
-        process::watch_output(child.stdout, self,
-            move |msg, unit| {
-                *(thr_last_line.lock().unwrap()) = msg.clone();
-                Controller::broadcast_class_unit(
-                            "stdout",
-                            unit,
-                            &BroadcastMessageContents::Log(msg)
-                );
-                Ok(())
-            });
-
-        let thr_last_line = self.last_line.clone();
-        process::watch_output(child.stderr, self,
-            move |msg, unit| {
-                *(thr_last_line.lock().unwrap()) = msg.clone();
-                Controller::broadcast_class_unit("stderr", unit, &BroadcastMessageContents::Log(msg));
-                Ok(())
-            });
+        process::watch_output(child.stderr, self, move |msg, unit| {
+            *(thr_last_line.lock().unwrap()) = msg.clone();
+            Controller::broadcast_class_unit("stderr", unit, &BroadcastMessageContents::Log(msg));
+            Ok(())
+        });
 
         // Save the child process so that we can terminate it early if necessary.
         *(self.test_process.lock().unwrap()) = Some(child.child.clone());
@@ -517,13 +562,24 @@ impl Test {
 
         match *(self.state.lock().unwrap()) {
             TestState::Pending | TestState::Starting => (),
-            TestState::Running | TestState::Fail(_) => if let Some(ref cmd) = self.exec_stop_failure {
-                self.log(format!("Running ExecStopFailure: {}", cmd));
-                process::try_command(&self.controller, cmd, working_directory, self.exec_stop_failure_timeout);
-            },
-            TestState::Pass => if let Some(ref cmd) = self.exec_stop_success {
-                self.log(format!("Running ExecStopSuccess: {}", cmd));
-                process::try_command(&self.controller, cmd, working_directory, self.exec_stop_success_timeout);
+            TestState::Running |
+            TestState::Fail(_) => {
+                if let Some(ref cmd) = self.exec_stop_failure {
+                    self.log(format!("Running ExecStopFailure: {}", cmd));
+                    process::try_command(&self.controller,
+                                         cmd,
+                                         working_directory,
+                                         self.exec_stop_failure_timeout);
+                }
+            }
+            TestState::Pass => {
+                if let Some(ref cmd) = self.exec_stop_success {
+                    self.log(format!("Running ExecStopSuccess: {}", cmd));
+                    process::try_command(&self.controller,
+                                         cmd,
+                                         working_directory,
+                                         self.exec_stop_success_timeout);
+                }
             }
         }
     }
@@ -537,8 +593,7 @@ impl Test {
                 let (cmd, timeout) = if *(self.state.lock().unwrap()) == TestState::Running {
                     *(self.state.lock().unwrap()) = TestState::Pass;
                     (self.exec_stop_success.clone(), self.exec_stop_success_timeout)
-                }
-                else {
+                } else {
                     (self.exec_stop_failure.clone(), self.exec_stop_failure_timeout)
                 };
 
@@ -555,7 +610,7 @@ impl Test {
                     let ref dir = self.test_working_directory.lock().unwrap();
                     process::try_command(&self.controller, c.as_str(), dir, timeout);
                 }
-            },
+            }
         }
     }
 

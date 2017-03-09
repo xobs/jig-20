@@ -12,7 +12,7 @@ use cfti::types::unit::Unit;
 
 #[derive(Clone, Debug)]
 pub enum BroadcastMessageContents {
-    //Hello(String),
+    // Hello(String),
     Log(String),
 
     /// DESCRIBE [type] [field] [item] [value]
@@ -31,8 +31,7 @@ pub enum BroadcastMessageContents {
     Shutdown(String),
 
     /// PING [string] -- Sends a challenge.  Must respond with PONG [string]
-    //Ping(String),
-
+    // Ping(String),
     /// TESTS [list of tests] -- Report the tests associated with a scenario
     Tests(String, Vec<String>),
 
@@ -75,7 +74,6 @@ pub enum ControlMessageContents {
 
 #[derive(Clone, Debug)]
 pub struct BroadcastMessage {
-
     /// A string identifying whta type of message it is.  Common predefined values
     /// are "internal-debug", "internal-status", and "normal".
     pub message_class: String,
@@ -98,7 +96,6 @@ pub struct BroadcastMessage {
 
 #[derive(Clone, Debug)]
 pub struct ControlMessage {
-
     /// A string indicating what sort of message it is.
     pub message_class: String,
 
@@ -137,7 +134,6 @@ impl fmt::Debug for Controller {
 }
 
 impl Controller {
-
     pub fn new() -> Result<Controller, ControllerError> {
         let (tx, rx) = mpsc::channel();
         let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
@@ -151,12 +147,9 @@ impl Controller {
         };
 
         // The controller runs in its own thread.
-        let builder = thread::Builder::new()
-                .name("C-Rx".into());
-        builder.spawn(move || Controller::controller_thread(rx,
-                                                            bus,
-                                                            should_exit,
-                                                            testset_opt)).unwrap();
+        let builder = thread::Builder::new().name("C-Rx".into());
+        builder.spawn(move || Controller::controller_thread(rx, bus, should_exit, testset_opt))
+            .unwrap();
 
         Ok(controller)
     }
@@ -176,19 +169,21 @@ impl Controller {
                              testset_opt: Arc<Mutex<Option<Arc<Mutex<TestSet>>>>>) {
         loop {
             let msg = match rx.recv() {
-                Err(e) => {println!("Error receiving: {:?}", e); continue; },
+                Err(e) => {
+                    println!("Error receiving: {:?}", e);
+                    continue;
+                }
                 Ok(o) => o,
             };
 
             let testset = match *(testset_opt.lock().unwrap()) {
                 None => {
                     Self::broadcast_internal(&bus,
-                                             BroadcastMessageContents::Log("TestSet is None".to_string()));
+                                             BroadcastMessageContents::Log("TestSet is None"
+                                                 .to_string()));
                     continue;
-                },
-                Some(ref mut s) => {
-                    s.clone()
-                },
+                }
+                Some(ref mut s) => s.clone(),
             };
 
             match msg.message {
@@ -203,22 +198,22 @@ impl Controller {
                         message: BroadcastMessageContents::Log(l),
                     };
                     bus.lock().unwrap().deref_mut().broadcast(bc_msg);
-                },
+                }
 
                 // Get the current jig information and broadcast it on the bus.
                 ControlMessageContents::GetJig => {
                     testset.lock().unwrap().describe_jig();
-                },
+                }
 
                 // Set the current scenario to the specified one.
                 ControlMessageContents::Scenario(s) => {
                     testset.lock().unwrap().set_scenario(&s);
-                },
+                }
 
                 ControlMessageContents::Hello(s) => {
                     testset.lock().unwrap().set_interface_hello(msg.unit_id, s);
                     process::exit(0);
-                },
+                }
 
                 ControlMessageContents::Shutdown(s) => {
                     let reason = match s {
@@ -237,26 +232,31 @@ impl Controller {
 
                     let mut should_exit = should_exit.lock().unwrap();
                     *(should_exit.deref_mut()) = true;
-                },
+                }
 
                 // Respond to a PING command.  Unimplemented.
                 ControlMessageContents::Pong(_) => (),
 
                 // Start running tests.
-                ControlMessageContents::StartScenario(s) => testset.lock().unwrap().start_scenario(s),
+                ControlMessageContents::StartScenario(s) => {
+                    testset.lock().unwrap().start_scenario(s)
+                }
                 ControlMessageContents::AbortTests => (),
-                ControlMessageContents::AdvanceScenario => testset.lock().unwrap().advance_scenario(),
+                ControlMessageContents::AdvanceScenario => {
+                    testset.lock().unwrap().advance_scenario()
+                }
 
                 ControlMessageContents::GetScenarios => testset.lock().unwrap().send_scenarios(),
                 ControlMessageContents::GetTests(s) => testset.lock().unwrap().send_tests(s),
 
-                //_ => println!("Unhandled message: {:?}", msg),
+                // _ => println!("Unhandled message: {:?}", msg),
             }
-        };
+        }
     }
 
     pub fn listen_logs<F>(&self, mut logger_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()> {
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()>
+    {
 
         self.listen(move |msg| match msg {
             BroadcastMessage { message: BroadcastMessageContents::Log(_), .. } => logger_func(msg),
@@ -265,12 +265,12 @@ impl Controller {
     }
 
     pub fn listen<F>(&self, mut broadcast_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()> {
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()>
+    {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
         let broadcaster = self.broadcast.clone();
-        let builder = thread::Builder::new()
-                    .name("B-Hook".into());
+        let builder = thread::Builder::new().name("B-Hook".into());
         builder.spawn(move ||
             loop {
                 match console_rx_channel.recv() {
@@ -297,21 +297,17 @@ impl Controller {
         Self::do_control_class(&self.control, message_class, unit_name, unit_type, contents)
     }
 
-    pub fn control(&self,
-                   unit_name: &str,
-                   unit_type: &str,
-                   contents: &ControlMessageContents) {
+    pub fn control(&self, unit_name: &str, unit_type: &str, contents: &ControlMessageContents) {
         Self::do_control_class(&self.control, "standard", unit_name, unit_type, contents)
     }
 
     pub fn control_class_unit<T: Unit + ?Sized>(message_class: &str,
-                                          unit: &T,
-                                          contents: &ControlMessageContents) {
+                                                unit: &T,
+                                                contents: &ControlMessageContents) {
         unit.controller().control_class(message_class, unit.id(), unit.kind(), contents);
     }
 
-    pub fn control_unit<T: Unit + ?Sized>(unit: &T,
-                                          contents: &ControlMessageContents) {
+    pub fn control_unit<T: Unit + ?Sized>(unit: &T, contents: &ControlMessageContents) {
         unit.controller().control(unit.id(), unit.kind(), contents);
     }
 
@@ -320,10 +316,16 @@ impl Controller {
                            unit_name: &str,
                            unit_type: &str,
                            contents: &BroadcastMessageContents) {
-        Self::do_broadcast_class(&self.broadcast, message_class, unit_name, unit_type, contents)
+        Self::do_broadcast_class(&self.broadcast,
+                                 message_class,
+                                 unit_name,
+                                 unit_type,
+                                 contents)
     }
 
-    pub fn broadcast_class_unit<T: Unit + ?Sized>(message_class: &str, unit: &T, contents: &BroadcastMessageContents) {
+    pub fn broadcast_class_unit<T: Unit + ?Sized>(message_class: &str,
+                                                  unit: &T,
+                                                  contents: &BroadcastMessageContents) {
         unit.controller().broadcast_class(message_class, unit.id(), unit.kind(), contents);
     }
 
@@ -338,11 +340,12 @@ impl Controller {
         Self::do_broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
     }
 
-    pub fn debug(&self,
-                     unit_name: &str,
-                     unit_type: &str,
-                     msg: String) {
-        Self::do_broadcast_class(&self.broadcast, "debug", unit_name, unit_type, &BroadcastMessageContents::Log(msg))
+    pub fn debug(&self, unit_name: &str, unit_type: &str, msg: String) {
+        Self::do_broadcast_class(&self.broadcast,
+                                 "debug",
+                                 unit_name,
+                                 unit_type,
+                                 &BroadcastMessageContents::Log(msg))
     }
 
     pub fn debug_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
@@ -350,10 +353,10 @@ impl Controller {
     }
 
     fn do_broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
-                           message_class: &str,
-                           unit_name: &str,
-                           unit_type: &str,
-                           contents: &BroadcastMessageContents) {
+                          message_class: &str,
+                          unit_name: &str,
+                          unit_type: &str,
+                          contents: &BroadcastMessageContents) {
         let now = time::SystemTime::now();
         let elapsed = match now.duration_since(time::UNIX_EPOCH) {
             Ok(d) => d,
@@ -401,12 +404,13 @@ impl Controller {
         };
 
         control.send(ControlMessage {
-            message_class: message_class.to_string(),
-            unit_id: unit_name.to_string(),
-            unit_type: unit_type.to_string(),
-            unix_time: elapsed.as_secs(),
-            unix_time_nsecs: elapsed.subsec_nanos(),
-            message: contents.clone(),
-        }).unwrap();
+                message_class: message_class.to_string(),
+                unit_id: unit_name.to_string(),
+                unit_type: unit_type.to_string(),
+                unix_time: elapsed.as_secs(),
+                unix_time_nsecs: elapsed.subsec_nanos(),
+                message: contents.clone(),
+            })
+            .unwrap();
     }
 }

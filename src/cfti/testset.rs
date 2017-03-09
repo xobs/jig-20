@@ -3,11 +3,10 @@ extern crate termcolor;
 use cfti::{config, controller};
 use cfti::types::{Test, Scenario, Logger, Trigger, Jig, Interface};
 use cfti::types::unit::Unit;
-/*
-use cfti::types::Coupon;
-use cfti::types::Updater;
-use cfti::types::Service;
-*/
+// use cfti::types::Coupon;
+// use cfti::types::Updater;
+// use cfti::types::Service;
+//
 
 use std::collections::HashMap;
 use std::fs;
@@ -39,19 +38,20 @@ pub struct TestSet {
     /// Tests can "Provide" other tests.  This maps those.
     test_aliases: HashMap<String, String>,
 
-    /*
-    coupons: HashMap<String, Coupon>,
-    updaters: HashMap<String, Updater>,
-    services: HashMap<String, Service>,
-    */
-
+    // coupons: HashMap<String, Coupon>,
+    // updaters: HashMap<String, Updater>,
+    // services: HashMap<String, Service>,
+    //
     /// The controller object, where messages come and go.
     controller: Controller,
 }
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str, config: &config::Config, controller: &mut controller::Controller) -> Result<Arc<Mutex<TestSet>>, Error> {
+    pub fn new(dir: &str,
+               config: &config::Config,
+               controller: &mut controller::Controller)
+               -> Result<Arc<Mutex<TestSet>>, Error> {
 
         let test_set = Arc::new(Mutex::new(TestSet {
             tests: HashMap::new(),
@@ -68,21 +68,21 @@ impl TestSet {
 
         controller.set_testset(test_set.clone());
 
-        /* TestSet ordering:
-         * When a TestSet is loaded off the disk, the order of unit files is
-         * prioritized so that dependencies can be checked.
-         *
-         * The order of files to be loaded:
-         *  1) Jig
-         *  2) Logger
-         *  3) Interface
-         *  4) Service
-         *  5) Updater
-         *  6) Test
-         *  7) Scenario
-         *  8) Trigger
-         *  9) Coupon
-         */
+        // TestSet ordering:
+        // When a TestSet is loaded off the disk, the order of unit files is
+        // prioritized so that dependencies can be checked.
+        //
+        // The order of files to be loaded:
+        //  1) Jig
+        //  2) Logger
+        //  3) Interface
+        //  4) Service
+        //  5) Updater
+        //  6) Test
+        //  7) Scenario
+        //  8) Trigger
+        //  9) Coupon
+        //
         let mut jig_paths = vec![];
         let mut logger_paths = vec![];
         let mut interface_paths = vec![];
@@ -112,19 +112,25 @@ impl TestSet {
                 "scenario" => scenario_paths.push(path.clone()),
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
-                unknown => controller.debug("testset", "testset", format!("Unrecognized unit type {}, path: {}", unknown, path.to_str().unwrap_or(""))),
+                unknown => {
+                    controller.debug("testset",
+                                     "testset",
+                                     format!("Unrecognized unit type {}, path: {}",
+                                             unknown,
+                                             path.to_str().unwrap_or("")))
+                }
             }
         }
 
         test_set.lock().unwrap().load_jigs(&config, &jig_paths);
         test_set.lock().unwrap().load_loggers(&config, &logger_paths);
         test_set.lock().unwrap().load_interfaces(&config, &interface_paths);
-        //test_set.load_services(&service_paths);
-        //test_set.load_updaters(&updater_paths);
+        // test_set.load_services(&service_paths);
+        // test_set.load_updaters(&updater_paths);
         test_set.lock().unwrap().load_tests(&config, &test_paths);
         test_set.lock().unwrap().load_scenarios(&config, &scenario_paths);
         test_set.lock().unwrap().load_triggers(&config, &trigger_paths);
-        //test_set.load_coupons(&coupon_paths);
+        // test_set.load_coupons(&coupon_paths);
 
         Ok(test_set)
     }
@@ -148,7 +154,7 @@ impl TestSet {
                 Err(e) => {
                     self.debug(format!("Unable to load jig file {}: {:?}", item_name, e));
                     continue;
-                },
+                }
                 Ok(s) => Arc::new(Mutex::new(s)),
             };
 
@@ -170,21 +176,25 @@ impl TestSet {
         };
 
         for logger_path in logger_paths {
-            let item_name = logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let item_name =
+                logger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = logger_path.to_str().unwrap_or("");
-            let new_logger_res = Logger::new(item_name, path_str, &self.jigs, config, &self.controller);
+            let new_logger_res =
+                Logger::new(item_name, path_str, &self.jigs, config, &self.controller);
 
             // In this case, it just means the logger is incompatible.
             let new_logger = match new_logger_res {
                 None => continue,
                 // If there was an error loading the logger, note it and continue.
-                Some(s) => match s {
-                    Err(e) => {
-                        self.debug(format!("Unable to load logger {}: {:?}", item_name, e));
-                        continue;
-                    },
-                    Ok(t) => t,
-                },
+                Some(s) => {
+                    match s {
+                        Err(e) => {
+                            self.debug(format!("Unable to load logger {}: {:?}", item_name, e));
+                            continue;
+                        }
+                        Ok(t) => t,
+                    }
+                }
             };
 
             // If the new logger fails to start, ignore it and move on.
@@ -192,7 +202,8 @@ impl TestSet {
                 self.debug(format!("Unable to start logger {}: {:?}", new_logger.id(), e));
                 continue;
             };
-            self.loggers.insert(new_logger.id().to_string(), Arc::new(Mutex::new(new_logger)));
+            self.loggers.insert(new_logger.id().to_string(),
+                                Arc::new(Mutex::new(new_logger)));
         }
     }
 
@@ -205,31 +216,38 @@ impl TestSet {
         };
 
         for interface_path in interface_paths {
-            let item_name = interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let item_name =
+                interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
-            let new_interface = match Interface::new(item_name, path_str, &self.jigs, config, &self.controller) {
-                // In this case, it just means the interface is incompatible.
-                None => continue,
-                Some(s) => {
-                    match s {
-                        Err(e) => {
-                            self.debug(format!("Unable to load interface {}: {:?}", item_name, e));
-                            continue;
-                        },
-                        Ok(s) => s,
+            let new_interface =
+                match Interface::new(item_name, path_str, &self.jigs, config, &self.controller) {
+                    // In this case, it just means the interface is incompatible.
+                    None => continue,
+                    Some(s) => {
+                        match s {
+                            Err(e) => {
+                                self.debug(format!("Unable to load interface {}: {:?}",
+                                                   item_name,
+                                                   e));
+                                continue;
+                            }
+                            Ok(s) => s,
+                        }
                     }
-                },
-            };
+                };
 
             match new_interface.start(&working_directory) {
                 Err(e) => {
-                    self.debug(format!("Unable to start interface {}: {:?}", new_interface.id(), e));
+                    self.debug(format!("Unable to start interface {}: {:?}",
+                                       new_interface.id(),
+                                       e));
                     continue;
-                },
+                }
                 Ok(_) => (),
             }
 
-            self.interfaces.insert(new_interface.id().to_string(), Arc::new(Mutex::new(new_interface)));
+            self.interfaces.insert(new_interface.id().to_string(),
+                                   Arc::new(Mutex::new(new_interface)));
         }
         if let Some(ref jig) = self.jig.as_ref() {
             jig.lock().unwrap().describe();
@@ -245,31 +263,36 @@ impl TestSet {
         };
 
         for trigger_path in trigger_paths {
-            let item_name = trigger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let item_name =
+                trigger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = trigger_path.to_str().unwrap_or("");
-            let new_trigger = match Trigger::new(item_name, path_str, &self.jigs, config, &self.controller) {
-                // In this case, it just means the interface is incompatible.
-                None => continue,
-                Some(s) => {
-                    match s {
-                        Err(e) => {
-                            self.debug(format!("Unable to load trigger {}: {:?}", item_name, e));
-                            continue;
-                        },
-                        Ok(s) => s,
+            let new_trigger =
+                match Trigger::new(item_name, path_str, &self.jigs, config, &self.controller) {
+                    // In this case, it just means the interface is incompatible.
+                    None => continue,
+                    Some(s) => {
+                        match s {
+                            Err(e) => {
+                                self.debug(format!("Unable to load trigger {}: {:?}",
+                                                   item_name,
+                                                   e));
+                                continue;
+                            }
+                            Ok(s) => s,
+                        }
                     }
-                },
-            };
+                };
 
             match new_trigger.start(&working_directory) {
                 Err(e) => {
                     self.debug(format!("Unable to start trigger {}: {:?}", new_trigger.id(), e));
                     continue;
-                },
+                }
                 Ok(_) => (),
             }
 
-            self.triggers.insert(new_trigger.id().to_string(), Arc::new(Mutex::new(new_trigger)));
+            self.triggers.insert(new_trigger.id().to_string(),
+                                 Arc::new(Mutex::new(new_trigger)));
         }
     }
 
@@ -277,35 +300,36 @@ impl TestSet {
         for test_path in test_paths {
             let item_name = test_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = test_path.to_str().unwrap_or("");
-            let new_test = match Test::new(item_name,
-                                           path_str,
-                                           &self.jigs,
-                                           config,
-                                           &self.controller) {
-                // In this case, it just means the test is incompatible.
-                None => continue,
-                Some(s) => {
-                    match s {
-                        Err(e) => {
-                            self.debug(format!("Unable to load test {}: {:?}", item_name, e));
-                            continue;
-                        },
-                        Ok(s) => s,
+            let new_test =
+                match Test::new(item_name, path_str, &self.jigs, config, &self.controller) {
+                    // In this case, it just means the test is incompatible.
+                    None => continue,
+                    Some(s) => {
+                        match s {
+                            Err(e) => {
+                                self.debug(format!("Unable to load test {}: {:?}", item_name, e));
+                                continue;
+                            }
+                            Ok(s) => s,
+                        }
                     }
-                },
-            };
+                };
 
             // If another test already Provides this one, complain.
             if let Some(collision) = self.test_aliases.get(&new_test.id().to_string()) {
                 self.debug(format!("Error: Loaded test {}, but test {} already 'Provides'",
-                                    new_test.id(), collision));
+                                   new_test.id(),
+                                   collision));
                 continue;
             }
 
             for test_provides in new_test.provides() {
                 if let Some(collision) = self.test_aliases.get(test_provides) {
-                    self.debug(format!("Error: Loaded test {}, but both it and test {} 'Provides' {}",
-                                    new_test.id(), collision, test_provides));
+                    self.debug(format!("Error: Loaded test {}, but both it and test {} \
+                                        'Provides' {}",
+                                       new_test.id(),
+                                       collision,
+                                       test_provides));
                     continue;
                 }
             }
@@ -340,10 +364,10 @@ impl TestSet {
                         Err(e) => {
                             self.debug(format!("Unable to load scenario {}: {:?}", item_name, e));
                             continue;
-                        },
+                        }
                         Ok(s) => s,
                     }
-                },
+                }
             };
 
             let new_scenario_id = new_scenario.id().to_string();
@@ -391,7 +415,7 @@ impl TestSet {
             Some(ref s) => {
                 let ref scenario = s.lock().unwrap();
                 scenario.advance();
-            },
+            }
         };
     }
 
@@ -399,13 +423,15 @@ impl TestSet {
 
         // Figure out what scenario to run.  Run the default scenario if unspecified.
         let scenario: Arc<Mutex<Scenario>> = match scenario_id {
-            None => match self.scenario {
-                None => {
-                    self.debug(format!("No default scenario selected"));
-                    return;
-                },
-                Some(ref t) => t.clone(),
-            },
+            None => {
+                match self.scenario {
+                    None => {
+                        self.debug(format!("No default scenario selected"));
+                        return;
+                    }
+                    Some(ref t) => t.clone(),
+                }
+            }
             Some(s) => self.scenarios[s.as_str()].clone(),
         };
 
@@ -425,19 +451,22 @@ impl TestSet {
     }
 
     pub fn send_scenarios(&self) {
-        let scenario_list = self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
+        let scenario_list =
+            self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
         self.broadcast(&BroadcastMessageContents::Scenarios(scenario_list));
     }
 
     pub fn send_tests(&self, scenario_id: Option<String>) {
         let ref scenario = match scenario_id {
-            None => match self.scenario {
-                None => {
-                    self.debug(format!("No default scenario selected"));
-                    return;
-                },
-                Some(ref t) => t.lock().unwrap(),
-            },
+            None => {
+                match self.scenario {
+                    None => {
+                        self.debug(format!("No default scenario selected"));
+                        return;
+                    }
+                    Some(ref t) => t.lock().unwrap(),
+                }
+            }
             Some(s) => self.scenarios[s.as_str()].lock().unwrap(),
         };
         scenario.describe();
@@ -455,7 +484,7 @@ impl TestSet {
             None => {
                 self.debug(format!("Unable to find scenario: {}", scenario_name));
                 return;
-            },
+            }
             Some(s) => s,
         };
         self.scenario = Some(scenario.clone());

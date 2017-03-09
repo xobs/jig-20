@@ -58,9 +58,11 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
 pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
         Err(e) => {
-            controller.debug("internal", "unknown", format!("Unable to make command: {:?}", e));
+            controller.debug("internal",
+                             "unknown",
+                             format!("Unable to make command: {:?}", e));
             return false;
-        },
+        }
         Ok(val) => val,
     };
 
@@ -70,9 +72,11 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
 
     let child = match cmd.spawn() {
         Err(e) => {
-            controller.debug("process", "process", format!("Unable to spawn child {:?}: {:?}", cmd, e));
+            controller.debug("process",
+                             "process",
+                             format!("Unable to spawn child {:?}: {:?}", cmd, e));
             return false;
-        },
+        }
         Ok(o) => o.into_clonable(),
     };
 
@@ -86,13 +90,15 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         Ok(status) => status.code(),
         Err(e) => {
             thr.thread().unpark();
-            controller.debug("process", "process", format!("Unable to wait() for child: {:?}", e));
+            controller.debug("process",
+                             "process",
+                             format!("Unable to wait() for child: {:?}", e));
             return false;
         }
     };
 
     thr.thread().unpark();
-    return status_code.unwrap() == 0
+    return status_code.unwrap() == 0;
 }
 
 pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, stream_name: &str) {
@@ -107,29 +113,31 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, st
     });
 }
 
-pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
-                                                     unit: &U,
-                                                     mut msg_func: F)
-        where F: Send + 'static + FnMut(String, &Unit) -> Result<(), ()> {
+pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T, unit: &U, mut msg_func: F)
+    where F: Send + 'static + FnMut(String, &Unit) -> Result<(), ()>
+{
     // Monitor the child process' stderr, and pass values to the controller.
-    let builder = thread::Builder::new()
-        .name(format!("I-E {} -> CFTI", unit.id()).into());
+    let builder = thread::Builder::new().name(format!("I-E {} -> CFTI", unit.id()).into());
     let thr_unit = unit.to_simple_unit();
 
     builder.spawn(move || {
-        for line in io::BufReader::new(stream).lines() {
-            match line {
-                Err(e) => {
-                    Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
-                    return;
-                },
-                Ok(l) => if let Err(e) = msg_func(l, &thr_unit) {
-                    Controller::debug_unit(&thr_unit, format!("Message func returned error: {:?}", e));
-                    return;
+            for line in io::BufReader::new(stream).lines() {
+                match line {
+                    Err(e) => {
+                        Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
+                        return;
+                    }
+                    Ok(l) => {
+                        if let Err(e) = msg_func(l, &thr_unit) {
+                            Controller::debug_unit(&thr_unit,
+                                                   format!("Message func returned error: {:?}", e));
+                            return;
+                        }
+                    }
                 }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 }
 
 /// Formats `cmd_str` as a Command, runs it, and returns the Process.
@@ -138,13 +146,13 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>(stream: T,
 /// waited upon, or timed out.  It is possible to interact with its stdin,
 /// stdout, and stderr.
 pub fn spawn_cmd<T: Unit>(cmd_str: &str,
-                 unit: &T,
-                 working_directory: &Option<String>)
-        -> Result<Process, CommandError> {
+                          unit: &T,
+                          working_directory: &Option<String>)
+                          -> Result<Process, CommandError> {
 
     let cmd = match make_command(cmd_str) {
         Ok(c) => c,
-        Err(e) => return  Err(e),
+        Err(e) => return Err(e),
     };
 
     match spawn(cmd, unit, working_directory) {
@@ -154,9 +162,9 @@ pub fn spawn_cmd<T: Unit>(cmd_str: &str,
 }
 
 fn spawn<T: Unit>(mut cmd: Command,
-         unit: &T,
-         working_directory: &Option<String>)
-        -> Result<Process, io::Error> {
+                  unit: &T,
+                  working_directory: &Option<String>)
+                  -> Result<Process, io::Error> {
     cmd.stdout(Stdio::piped());
     cmd.stdin(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -169,7 +177,7 @@ fn spawn<T: Unit>(mut cmd: Command,
         Err(e) => return Err(e),
         Ok(child) => child.into_clonable(),
     };
-    
+
     let stdin = child.stdin().unwrap();
     let stdout = child.stdout().unwrap();
     let stderr = child.stderr().unwrap();
@@ -178,8 +186,14 @@ fn spawn<T: Unit>(mut cmd: Command,
 
     thread::spawn(move || {
         match child_thr.wait() {
-            Ok(status) => Controller::debug_unit(&unit_thr, format!("Child exited successfully with result: {:?}", status)),
-            Err(e) => Controller::debug_unit(&unit_thr, format!("Child errored with exit: {:?}", e)),
+            Ok(status) => {
+                Controller::debug_unit(&unit_thr,
+                                       format!("Child exited successfully with result: {:?}",
+                                               status))
+            }
+            Err(e) => {
+                Controller::debug_unit(&unit_thr, format!("Child errored with exit: {:?}", e))
+            }
         };
     });
 
@@ -204,16 +218,19 @@ fn spawn<T: Unit>(mut cmd: Command,
 /// `CommandError::ChildTimeoutWaitError(String)` - Couldn't wait for the child after it timed out.
 /// `CommandError::ChildTimeout` - Child timed out and was successfully terminated.
 
-pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Duration, completion: F)
-        -> Result<Process, CommandError>
-        where F: Send + 'static + FnOnce(Result<(), CommandError>)
+pub fn try_command_completion<F>(cmd_str: &str,
+                                 wd: &Option<String>,
+                                 max: Duration,
+                                 completion: F)
+                                 -> Result<Process, CommandError>
+    where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
 
     let mut cmd = match make_command(cmd_str) {
         Err(e) => {
             completion(Err(CommandError::MakeCommandError(format!("{:?}", e))));
             return Err(CommandError::MakeCommandError(format!("{:?}", e)));
-        },
+        }
         Ok(val) => val,
     };
 
@@ -229,7 +246,7 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
         Err(err) => {
             completion(Err(CommandError::SpawnError(format!("{}", err))));
             return Err(CommandError::SpawnError(format!("{}", err)));
-        },
+        }
         Ok(s) => s.into_clonable(),
     };
 
@@ -248,19 +265,21 @@ pub fn try_command_completion<F>(cmd_str: &str, wd: &Option<String>, max: Durati
     let thr_child = child.clone();
     thread::spawn(move || {
         let status_code = match thr_child.wait() {
-            Ok(status) => match status.code() {
-                None => {
-                    thr.thread().unpark();
-                    completion(Err(CommandError::ChildTerminatedBySignal));
-                    return;
-                },
-                Some(s) => s,
-            },
+            Ok(status) => {
+                match status.code() {
+                    None => {
+                        thr.thread().unpark();
+                        completion(Err(CommandError::ChildTerminatedBySignal));
+                        return;
+                    }
+                    Some(s) => s,
+                }
+            }
             Err(e) => {
                 thr.thread().unpark();
                 completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", e))));
                 return;
-            },
+            }
         };
 
         // If it's a nonzero exit code, that counts as an error.

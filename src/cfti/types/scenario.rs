@@ -148,7 +148,8 @@ impl Scenario {
                loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
                test_aliases: &HashMap<String, String>,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Scenario, ScenarioError>> {
+               controller: &Controller)
+               -> Option<Result<Scenario, ScenarioError>> {
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -156,7 +157,7 @@ impl Scenario {
             Ok(s) => s,
         };
 
-        if ! unitfile.has_section("Scenario") {
+        if !unitfile.has_section("Scenario") {
             return Some(Err(ScenarioError::MissingScenarioSection));
         }
 
@@ -164,16 +165,20 @@ impl Scenario {
         match unitfile.get("Scenario", "Jigs") {
             None => (),
             Some(s) => {
-                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let jig_names: Vec<String> =
+                    s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
                     if loaded_jigs.get(&jig_name).is_some() {
                         found_it = true;
-                        break
+                        break;
                     }
                 }
                 if found_it == false {
-                    controller.debug("scenario", id, format!("The scenario '{}' is not compatible with this jig", id));
+                    controller.debug("scenario",
+                                     id,
+                                     format!("The scenario '{}' is not compatible with this jig",
+                                             id));
                     return None;
                 }
             }
@@ -200,27 +205,38 @@ impl Scenario {
         };
 
         let exec_stop_success = match unitfile.get("Scenario", "ExecStopSuccess") {
-            None => match unitfile.get("Scenario", "ExecStop") {
+            None => {
+                match unitfile.get("Scenario", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
-                },
+                }
+            }
             Some(s) => Some(s.to_string()),
         };
 
         let exec_stop_failure = match unitfile.get("Scenario", "ExecStopFail") {
-            None => match unitfile.get("Scenario", "ExecStop") {
+            None => {
+                match unitfile.get("Scenario", "ExecStop") {
                     None => None,
                     Some(s) => Some(s.to_string()),
-                },
+                }
+            }
             Some(s) => Some(s.to_string()),
         };
 
         let test_names = match unitfile.get("Scenario", "Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
             // Split by "," and also whitespace, and combine back into an array.
-            Some(s) => s.split(",").map(|x|
-                        x.to_string().split_whitespace().map(|y|
-                        y.to_string().trim().to_string()).collect()).collect()
+            Some(s) => {
+                s.split(",")
+                    .map(|x| {
+                        x.to_string()
+                            .split_whitespace()
+                            .map(|y| y.to_string().trim().to_string())
+                            .collect()
+                    })
+                    .collect()
+            }
         };
 
         let graph_result = match Self::build_graph(controller, id, &test_names, &loaded_tests) {
@@ -238,14 +254,20 @@ impl Scenario {
         controller.listen(move |msg| {
             let mut results = thr_results.lock().unwrap();
             match msg.message {
-                BroadcastMessageContents::Skip(test, _) => results.insert(test, TestResult::Skipped),
-                BroadcastMessageContents::Pass(test, _) => results.insert(test, TestResult::Success),
-                BroadcastMessageContents::Running(test) => results.insert(test, TestResult::Running),
+                BroadcastMessageContents::Skip(test, _) => {
+                    results.insert(test, TestResult::Skipped)
+                }
+                BroadcastMessageContents::Pass(test, _) => {
+                    results.insert(test, TestResult::Success)
+                }
+                BroadcastMessageContents::Running(test) => {
+                    results.insert(test, TestResult::Running)
+                }
                 BroadcastMessageContents::Fail(test, _) => {
                     let mut failures = thr_failures.lock().unwrap();
                     *failures = *failures + 1;
                     results.insert(test, TestResult::Failure)
-                },
+                }
                 _ => None,
             };
             Ok(())
@@ -286,12 +308,11 @@ impl Scenario {
             return;
         }
 
-        /*
         // 1. Visit all parents
         // 2. Visit ourselves
         // 3. Visit all children
         // Build the nodes into a vec
-        */
+        //
 
         let parents = test_graph.parents(*node);
         for (_, parent_index) in parents.iter(test_graph) {
@@ -329,8 +350,7 @@ impl Scenario {
         // Create a node for each available test.  We will add
         // edges later on as we traverse the dependency lists.
         for (test_name, _) in loaded_tests {
-            node_bucket.insert(test_name.clone(),
-                               test_graph.add_node(test_name.clone()));
+            node_bucket.insert(test_name.clone(), test_graph.add_node(test_name.clone()));
         }
 
         let mut to_resolve = test_names.clone();
@@ -338,30 +358,39 @@ impl Scenario {
         // Add a dependency on the graph to indicate the order of tests.
         {
             let num_tests = test_names.len();
-            for i in 1 .. num_tests {
+            for i in 1..num_tests {
                 let previous_test = test_names[i - 1].clone();
                 let this_test = test_names[i].clone();
                 let previous_edge = match node_bucket.get(&previous_test) {
                     Some(s) => s,
                     None => {
-                        controller.debug("scenario", id,
-                            format!("Previous test {} could not be found in the node bucket", previous_test));
+                        controller.debug("scenario",
+                                         id,
+                                         format!("Previous test {} could not be found in the \
+                                                  node bucket",
+                                                 previous_test));
                         return Err(ScenarioError::MissingDependency(this_test, previous_test));
-                    },
+                    }
                 };
                 let this_edge = match node_bucket.get(&this_test) {
                     Some(s) => s,
                     None => {
-                        controller.debug("scenario", id,
-                            format!("This test {} could not be found in the node bucket", this_test));
+                        controller.debug("scenario",
+                                         id,
+                                         format!("This test {} could not be found in the node \
+                                                  bucket",
+                                                 this_test));
                         return Err(ScenarioError::MissingDependency(this_test, previous_test));
-                    },
+                    }
                 };
                 if let Err(_) = test_graph.add_edge(*previous_edge, *this_edge, TestEdge::Follows) {
-                    controller.debug("scenario", id,
-                            format!("Test {} has a circular requirement on {}",
-                                    test_names[i - 1], test_names[i]));
-                    return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(), test_names[i].clone()));
+                    controller.debug("scenario",
+                                     id,
+                                     format!("Test {} has a circular requirement on {}",
+                                             test_names[i - 1],
+                                             test_names[i]));
+                    return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(),
+                                                                 test_names[i].clone()));
                 }
             }
         }
@@ -382,9 +411,11 @@ impl Scenario {
 
             let ref mut test = match loaded_tests.get(&test_name) {
                 None => {
-                    controller.debug("scenario", id, format!("Test {} not found when loading scenario", test_name));
+                    controller.debug("scenario",
+                                     id,
+                                     format!("Test {} not found when loading scenario", test_name));
                     return Err(ScenarioError::TestNotFound(test_name.clone()));
-                },
+                }
                 Some(s) => s.lock().unwrap(),
             };
 
@@ -394,21 +425,25 @@ impl Scenario {
                 let edge = match node_bucket.get(requirement) {
                     None => {
                         controller.debug("scenario",
-                                id,
-                                format!("Test {} has a requirement that doesn't exist: {}",
-                                        test_name, requirement));
-                        return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
-                    },
+                                         id,
+                                         format!("Test {} has a requirement that doesn't exist: \
+                                                  {}",
+                                                 test_name,
+                                                 requirement));
+                        return Err(ScenarioError::TestDependencyNotFound(test_name,
+                                                                         requirement.to_string()));
+                    }
                     Some(e) => e,
                 };
-                if let Err(_) = test_graph.add_edge(*edge,
-                                                    node_bucket[&test_name],
-                                                    TestEdge::Requires) {
+                if let Err(_) =
+                       test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Requires) {
                     controller.debug("scenario",
-                            id,
-                            format!("Test {} has a circular requirement on {}",
-                                    test_name, requirement));
-                    return Err(ScenarioError::CircularDependency(test_name.clone(), requirement.clone()));
+                                     id,
+                                     format!("Test {} has a circular requirement on {}",
+                                             test_name,
+                                             requirement));
+                    return Err(ScenarioError::CircularDependency(test_name.clone(),
+                                                                 requirement.clone()));
                 }
             }
 
@@ -418,20 +453,23 @@ impl Scenario {
                 let edge = match node_bucket.get(requirement) {
                     None => {
                         controller.debug("scenario",
-                                id,
-                                format!("Test {} has a dependency that doesn't exist: {}",
-                                        test_name, requirement));
-                        return Err(ScenarioError::TestDependencyNotFound(test_name, requirement.to_string()));
-                    },
+                                         id,
+                                         format!("Test {} has a dependency that doesn't exist: \
+                                                  {}",
+                                                 test_name,
+                                                 requirement));
+                        return Err(ScenarioError::TestDependencyNotFound(test_name,
+                                                                         requirement.to_string()));
+                    }
                     Some(e) => e,
                 };
-                if let Err(_) = test_graph.add_edge(*edge,
-                                                    node_bucket[&test_name],
-                                                    TestEdge::Suggests) {
+                if let Err(_) =
+                       test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Suggests) {
                     controller.debug("scenario",
-                            id,
-                            format!("Warning: test {} has a circular suggestion for {}",
-                                    test_name, requirement));
+                                     id,
+                                     format!("Warning: test {} has a circular suggestion for {}",
+                                             test_name,
+                                             requirement));
                 }
             }
         }
@@ -443,13 +481,14 @@ impl Scenario {
             // all nodes in the graph to be visited, in order.
             let some_node = node_bucket.get(&test_names[0]).unwrap();
             Self::visit_node(&mut seen_nodes,
-                            loaded_tests,
-                            some_node,
-                            &test_graph,
-                            &node_bucket,
-                            &mut test_order);
+                             loaded_tests,
+                             some_node,
+                             &test_graph,
+                             &node_bucket,
+                             &mut test_order);
         }
-        let vec_names: Vec<String> = test_order.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
+        let vec_names: Vec<String> =
+            test_order.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
         controller.debug("scenario", id, format!("Vector order: {:?}", vec_names));
         Ok(GraphResult {
             tests: test_order,
@@ -511,20 +550,19 @@ impl Scenario {
                 let test_name = self.tests[i].lock().unwrap().id().to_string();
                 if self.scenario_timed_out() {
                     false
-                }
-                else if i >= self.tests.len() {
+                } else if i >= self.tests.len() {
                     false
                 }
                 // Make sure all required dependencies succeeded.
-                else if ! self.all_dependencies_succeeded(&test_name) {
+                else if !self.all_dependencies_succeeded(&test_name) {
                     self.results.lock().unwrap().insert(test_name.clone(), TestResult::Skipped);
-                    self.broadcast(BroadcastMessageContents::Skip(test_name.clone(), "dependency failed".to_string()));
+                    self.broadcast(BroadcastMessageContents::Skip(test_name.clone(),
+                                                                  "dependency failed".to_string()));
                     false
-                }
-                else {
+                } else {
                     true
                 }
-            },
+            }
 
             // Run a script on scenario success.
             ScenarioState::PostSuccess => self.exec_stop_success.is_some(),
@@ -534,13 +572,13 @@ impl Scenario {
         }
     }
 
-    /* Find the next state.
-     * If we're idle, start the test.
-     * The state order goes:
-     * Idle -> [PreStart] -> Test(0) -> ... -> Test(n) -> [PostSuccess/Fail] -> Idle
-     */
+    // Find the next state.
+    // If we're idle, start the test.
+    // The state order goes:
+    // Idle -> [PreStart] -> Test(0) -> ... -> Test(n) -> [PostSuccess/Fail] -> Idle
+    //
     fn find_next_state(&self, current_state: ScenarioState) -> ScenarioState {
-        
+
         let test_count = self.tests.len();
         let failure_count = *(self.failures.lock().unwrap());
 
@@ -552,7 +590,7 @@ impl Scenario {
 
                 self.broadcast(BroadcastMessageContents::Start(self.id().to_string()));
                 ScenarioState::PreStart
-            },
+            }
 
             // If we've just run the PreStart command, see if we need
             // to run test 0, or skip straight to Success.
@@ -560,9 +598,18 @@ impl Scenario {
 
             // If we just finished running a test, determine the next test to run.
             ScenarioState::Running(i) if (i + 1) < test_count => ScenarioState::Running(i + 1),
-            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count > 0 => ScenarioState::PostFailure,
-            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count == 0 => ScenarioState::PostSuccess,
-            ScenarioState::Running(i) => panic!("Got into a weird state. Running({}), test_count: {}, failure_count: {}", i, test_count, failure_count),
+            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count > 0 => {
+                ScenarioState::PostFailure
+            }
+            ScenarioState::Running(i) if (i + 1) >= test_count && failure_count == 0 => {
+                ScenarioState::PostSuccess
+            }
+            ScenarioState::Running(i) => {
+                panic!("Got into a weird state. Running({}), test_count: {}, failure_count: {}",
+                       i,
+                       test_count,
+                       failure_count)
+            }
             ScenarioState::PostFailure => ScenarioState::Idle,
             ScenarioState::PostSuccess => ScenarioState::Idle,
         };
@@ -572,8 +619,7 @@ impl Scenario {
         if self.is_state_okay(&new_state) {
             *(self.state.lock().unwrap().deref_mut()) = new_state.clone();
             new_state
-        }
-        else {
+        } else {
             self.find_next_state(new_state)
         }
     }
@@ -583,9 +629,9 @@ impl Scenario {
         let tn = testname.to_string();
         let unit = self.to_simple_unit();
         let res = process::try_command_completion(cmd,
-                                        self.working_directory.lock().unwrap().deref(),
-                                        *timeout,
-                                        move |res: Result<(), process::CommandError>| {
+                                                  self.working_directory.lock().unwrap().deref(),
+                                                  *timeout,
+                                                  move |res: Result<(), process::CommandError>| {
             let msg = match res {
                 Ok(_) => BroadcastMessageContents::Pass(tn, "".to_string()),
                 Err(e) => BroadcastMessageContents::Fail(tn, format!("{:?}", e)),
@@ -593,8 +639,9 @@ impl Scenario {
 
             // Send a message indicating what the test did, and advance the scenario.
             Controller::broadcast_class_unit("support", &unit, &msg);
-            Controller::control_class_unit("support", &unit,
-                &ControlMessageContents::AdvanceScenario);
+            Controller::control_class_unit("support",
+                                           &unit,
+                                           &ControlMessageContents::AdvanceScenario);
         });
 
         // The command will either return an error, or a tuple containing (stdout,stdin).
@@ -615,7 +662,12 @@ impl Scenario {
 
         // Run the test's stop() command if we just ran a test.
         match current_state {
-            ScenarioState::Running(step) => self.tests[step].lock().unwrap().stop(self.working_directory.lock().unwrap().deref()),
+            ScenarioState::Running(step) => {
+                self.tests[step]
+                    .lock()
+                    .unwrap()
+                    .stop(self.working_directory.lock().unwrap().deref())
+            }
             _ => (),
         }
 
@@ -633,38 +685,43 @@ impl Scenario {
                     self.log(format!("{} tests failed", failures));
                     self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
                                                                     failures + 500,
-                                                                    "At least one test failed".to_string()));
-                }
-                else {
+                                                                    "At least one test failed"
+                                                                        .to_string()));
+                } else {
                     self.log(format!("All tests passed successfully"));
                     self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
                                                                     200,
                                                                     "Finished tests".to_string()));
                 }
-            },
+            }
 
             // If we want to run a preroll command and it fails, log it and start the tests.
             ScenarioState::PreStart => {
                 let ref cmd = self.exec_start;
                 let cmd = cmd.clone().unwrap();
                 self.run_support_cmd(cmd.as_str(), &self.exec_start_timeout, "execstart");
-            },
+            }
             ScenarioState::Running(next_step) => {
                 let ref test = self.tests[next_step].lock().unwrap();
                 let test_timeout = test.timeout();
                 let test_max_time = self.make_timeout(test_timeout);
-                test.start(self.working_directory.lock().unwrap().deref(), test_max_time);
-            },
+                test.start(self.working_directory.lock().unwrap().deref(),
+                           test_max_time);
+            }
             ScenarioState::PostSuccess => {
                 let ref cmd = self.exec_stop_success;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), &self.exec_stop_success_timeout, "execstopsuccess");
-            },
+                self.run_support_cmd(cmd.as_str(),
+                                     &self.exec_stop_success_timeout,
+                                     "execstopsuccess");
+            }
             ScenarioState::PostFailure => {
                 let ref cmd = self.exec_stop_failure;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), &self.exec_stop_failure_timeout, "execstopfailure");
-            },
+                self.run_support_cmd(cmd.as_str(),
+                                     &self.exec_stop_failure_timeout,
+                                     "execstopfailure");
+            }
         }
     }
 
@@ -681,8 +738,7 @@ impl Scenario {
         // If the test would take longer than the scenario has left, limit the test time.
         if (test_max_time + scenario_elapsed_time) > self.timeout {
             self.timeout - scenario_elapsed_time
-        }
-        else {
+        } else {
             test_max_time
         }
     }
@@ -695,7 +751,9 @@ impl Scenario {
         {
             let current_state = self.state.lock().unwrap().clone();
             if current_state != ScenarioState::Idle {
-                self.log(format!("NOT starting new scenario run because ScenarioState is {:?}, not Idle", current_state));
+                self.log(format!("NOT starting new scenario run because ScenarioState is {:?}, \
+                                  not Idle",
+                                 current_state));
                 return;
             }
             self.log("Starting new scenario run".to_string());
@@ -721,7 +779,8 @@ impl Scenario {
                                                           self.id().to_string(),
                                                           self.description().to_string()));
 
-        let test_names: Vec<String> = self.tests.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
+        let test_names: Vec<String> =
+            self.tests.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
 
         self.broadcast(BroadcastMessageContents::Tests(self.id().to_string(), test_names));
     }

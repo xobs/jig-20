@@ -17,7 +17,7 @@ impl UnitFile {
     pub fn new(path: &str) -> Result<UnitFile, UnitFileError> {
 
         let mut contents = String::with_capacity(8192);
-         let mut file = match File::open(path) {
+        let mut file = match File::open(path) {
             Ok(f) => f,
             Err(e) => return Err(UnitFileError::FileUnreadable(format!("{:?}", e))),
         };
@@ -31,9 +31,7 @@ impl UnitFile {
             Err(e) => return Err(UnitFileError::FileParseError(format!("{:?}", e))),
         };
 
-        Ok(UnitFile {
-            unitfile: unit_file,
-        })
+        Ok(UnitFile { unitfile: unit_file })
     }
 
     pub fn has_section(&self, name: &str) -> bool {

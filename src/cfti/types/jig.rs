@@ -14,7 +14,6 @@ pub enum JigError {
 
 #[derive(Debug)]
 pub struct Jig {
-
     /// Id: File name on disk, what other units refer to this one as.
     id: String,
 
@@ -38,7 +37,8 @@ impl Jig {
     pub fn new(id: &str,
                path: &str,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Jig, JigError>> {
+               controller: &Controller)
+               -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -47,7 +47,7 @@ impl Jig {
         };
 
         // Make sure there is a "Jig" section.
-        if ! unitfile.has_section("Jig") {
+        if !unitfile.has_section("Jig") {
             return Some(Err(JigError::MissingJigSection));
         }
 
@@ -104,20 +104,19 @@ impl Jig {
     }
 
     pub fn describe(&self) {
-        self.controller.broadcast(
-                              self.id(),
-                              self.kind(),
-                              &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                  "name".to_string(),
-                                                                  self.id().to_string(),
-                                                                  self.name().to_string()));
-        self.controller.broadcast(
-                              self.id(),
-                              self.kind(),
-                              &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                  "description".to_string(),
-                                                                  self.id().to_string(),
-                                                                  self.description().to_string()));
+        self.controller.broadcast(self.id(),
+                                  self.kind(),
+                                  &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                      "name".to_string(),
+                                                                      self.id().to_string(),
+                                                                      self.name().to_string()));
+        self.controller.broadcast(self.id(),
+                                  self.kind(),
+                                  &BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                                      "description".to_string(),
+                                                                      self.id().to_string(),
+                                                                      self.description()
+                                                                          .to_string()));
     }
 
     pub fn default_scenario(&self) -> &Option<String> {

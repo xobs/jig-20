@@ -11,43 +11,38 @@ use clap::{Arg, App};
 fn main() {
     let mut config = cfti::config::Config::new();
     let matches = App::new("Jig-20 Test Controller")
-                        .version("1.0")
-                        .author("Sean Cross <sean@xobs.io>")
-                        .about("Orchestrates the Common Factory Test Interface server")
-                        .arg(Arg::with_name("LOCALE")
-                            .short("l")
-                            .long("language")
-                            .value_name("LOCALE")
-                            .help("Sets the language to the given locale, such as en_US, zh_CN, or zh")
-                        )
-                        .arg(Arg::with_name("TIMEOUT")
-                            .short("t")
-                            .long("timeout")
-                            .value_name("SECONDS")
-                            .default_value("10")
-                            .help("The maximum number of seconds to allow individual test commands to run")
-                        )
-                        .arg(Arg::with_name("CONFIG_DIR")
-                            .short("c")
-                            .long("config-dir")
-                            .value_name("CONFIG_DIR")
-                            .default_value("tests")
-                            .help("Directory where configuration unit files are stored")
-                        )
-                        .arg(Arg::with_name("DEFAULT_WORKING_DIRECTORY")
-                            .short("w")
-                            .long("default-working-dir")
-                            .value_name("DEFAULT_WORKING_DIR")
-                            .help("The default working directory for programs if WorkingDirectory is unspecified")
-                        )
-                        .arg(Arg::with_name("SCENARIO_TIMEOUT")
-                            .short("s")
-                            .long("scenario-timeout")
-                            .value_name("SECONDS")
-                            .default_value("60")
-                            .help("The default number of seconds to allow scenarios to run, if unspecified")
-                        )
-                        .get_matches();
+        .version("1.0")
+        .author("Sean Cross <sean@xobs.io>")
+        .about("Orchestrates the Common Factory Test Interface server")
+        .arg(Arg::with_name("LOCALE")
+            .short("l")
+            .long("language")
+            .value_name("LOCALE")
+            .help("Sets the language to the given locale, such as en_US, zh_CN, or zh"))
+        .arg(Arg::with_name("TIMEOUT")
+            .short("t")
+            .long("timeout")
+            .value_name("SECONDS")
+            .default_value("10")
+            .help("The maximum number of seconds to allow individual test commands to run"))
+        .arg(Arg::with_name("CONFIG_DIR")
+            .short("c")
+            .long("config-dir")
+            .value_name("CONFIG_DIR")
+            .default_value("tests")
+            .help("Directory where configuration unit files are stored"))
+        .arg(Arg::with_name("DEFAULT_WORKING_DIRECTORY")
+            .short("w")
+            .long("default-working-dir")
+            .value_name("DEFAULT_WORKING_DIR")
+            .help("The default working directory for programs if WorkingDirectory is unspecified"))
+        .arg(Arg::with_name("SCENARIO_TIMEOUT")
+            .short("s")
+            .long("scenario-timeout")
+            .value_name("SECONDS")
+            .default_value("60")
+            .help("The default number of seconds to allow scenarios to run, if unspecified"))
+        .get_matches();
 
     config.set_locale(matches.value_of("LOCALE"));
     config.set_timeout(matches.value_of("TIMEOUT").unwrap().parse().unwrap());
@@ -69,9 +64,12 @@ fn main() {
         Ok(())
     });
 
-    let test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(), &config, &mut controller).unwrap();
+    let test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(),
+                                      &config,
+                                      &mut controller)
+        .unwrap();
 
-    //println!("Test set: {:?}", test_set);
+    // println!("Test set: {:?}", test_set);
     loop {
         if controller.should_exit() {
             break;

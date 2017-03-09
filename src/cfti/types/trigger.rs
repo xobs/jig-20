@@ -42,7 +42,8 @@ impl Trigger {
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Trigger, TriggerError>> {
+               controller: &Controller)
+               -> Option<Result<Trigger, TriggerError>> {
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -50,7 +51,7 @@ impl Trigger {
             Ok(s) => s,
         };
 
-        if ! unitfile.has_section("Trigger") {
+        if !unitfile.has_section("Trigger") {
             return Some(Err(TriggerError::MissingTriggerSection));
         }
 
@@ -78,29 +79,33 @@ impl Trigger {
         match unitfile.get("Trigger", "Jigs") {
             None => (),
             Some(s) => {
-                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let jig_names: Vec<String> =
+                    s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
                     if jigs.get(&jig_name).is_some() {
                         found_it = true;
-                        break
+                        break;
                     }
                 }
                 if found_it == false {
-                    controller.debug("trigger", id, format!("The trigger '{}' is not compatible with this jig", id));
+                    controller.debug("trigger",
+                                     id,
+                                     format!("The trigger '{}' is not compatible with this jig",
+                                             id));
                     return None;
                 }
             }
         }
 
-       Some(Ok(Trigger {
+        Some(Ok(Trigger {
             id: id.to_string(),
             name: name,
             description: description,
             exec_start: exec_start,
             working_directory: working_directory,
             controller: controller.clone(),
-       }))
+        }))
     }
 
     fn cfti_unescape(msg: String) -> String {
@@ -109,7 +114,8 @@ impl Trigger {
 
     fn read_line<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
         Controller::debug_unit(unit, format!("CFTI trigger input: {}", line));
-        let mut words: Vec<String> = line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
+        let mut words: Vec<String> =
+            line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
         // Don't crash if we get a blank line.
         if words.len() == 0 {
@@ -120,11 +126,13 @@ impl Trigger {
         words.remove(0);
 
         let response = match verb.as_str() {
-            "start" => if words.len() > 0 {
-                ControlMessageContents::StartScenario(Some(words[0].clone()))
-            } else {
-                ControlMessageContents::StartScenario(None)
-            },
+            "start" => {
+                if words.len() > 0 {
+                    ControlMessageContents::StartScenario(Some(words[0].clone()))
+                } else {
+                    ControlMessageContents::StartScenario(None)
+                }
+            }
             "stop" => ControlMessageContents::AbortTests,
             "hello" => ControlMessageContents::Hello(words.join(" ")),
             "log" => ControlMessageContents::Log(words.join(" ")),
@@ -134,28 +142,27 @@ impl Trigger {
         Ok(())
     }
 
-    pub fn start(&self, working_directory: &Option<String>)
-             -> Result<(), TriggerError> {
+    pub fn start(&self, working_directory: &Option<String>) -> Result<(), TriggerError> {
 
         let working_directory = match *working_directory {
             Some(ref s) => Some(s.clone()),
-            None => match self.working_directory {
-                Some(ref s) => Some(s.clone()),
-                None => None,
-            },
+            None => {
+                match self.working_directory {
+                    Some(ref s) => Some(s.clone()),
+                    None => None,
+                }
+            }
         };
 
-        let cmd = match process::spawn_cmd(self.exec_start.as_str(),
-                                           self,
-                                           &working_directory) {
+        let cmd = match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
             Err(e) => return Err(TriggerError::TriggerSpawnError(e)),
             Ok(o) => o,
         };
 
         process::log_output(cmd.stderr, self, "stderr");
-        process::watch_output(cmd.stdout, self, move |line, unit| {
-            Self::read_line(line, unit)
-        });
+        process::watch_output(cmd.stdout,
+                              self,
+                              move |line, unit| Self::read_line(line, unit));
         Ok(())
     }
 }

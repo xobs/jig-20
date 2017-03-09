@@ -2,7 +2,8 @@ extern crate json;
 
 use cfti::types::Jig;
 use cfti::types::unit::Unit;
-use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage, BroadcastMessageContents};
+use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage,
+                       BroadcastMessageContents};
 use cfti::process;
 use cfti::config;
 use cfti::unitfile::UnitFile;
@@ -68,7 +69,8 @@ impl Logger {
                path: &str,
                jigs: &HashMap<String, Arc<Mutex<Jig>>>,
                config: &config::Config,
-               controller: &Controller) -> Option<Result<Logger, LoggerError>> {
+               controller: &Controller)
+               -> Option<Result<Logger, LoggerError>> {
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -76,7 +78,7 @@ impl Logger {
             Ok(s) => s,
         };
 
-        if ! unitfile.has_section("Logger") {
+        if !unitfile.has_section("Logger") {
             return Some(Err(LoggerError::MissingLoggerSection));
         }
 
@@ -84,20 +86,25 @@ impl Logger {
         match unitfile.get("Logger", "Jigs") {
             None => (),
             Some(s) => {
-                let jig_names: Vec<String> = s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
+                let jig_names: Vec<String> =
+                    s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
                 for jig_name in jig_names {
                     if jigs.get(&jig_name).is_some() {
                         found_it = true;
-                        break
+                        break;
                     }
                 }
                 if found_it == false {
-                    controller.control_class(
-                                  "debug",
-                                  id,
-                                  "logger",
-                                  &ControlMessageContents::Log(format!("The logger '{}' is not compatible with this jig", id)));
+                    controller.control_class("debug",
+                                             id,
+                                             "logger",
+                                             &ControlMessageContents::Log(format!("The logger \
+                                                                                   '{}' is not \
+                                                                                   compatible \
+                                                                                   with this \
+                                                                                   jig",
+                                                                                  id)));
                     return None;
                 }
             }
@@ -125,14 +132,16 @@ impl Logger {
 
         let format = match unitfile.get("Logger", "Format") {
             None => LoggerFormat::TabSeparatedValue,
-            Some(s) => match s.to_string().to_lowercase().as_ref() {
-                "tsv" => LoggerFormat::TabSeparatedValue,
-                "json" => LoggerFormat::JSON,
-                _ => return Some(Err(LoggerError::InvalidType(s.to_string()))),
-            },
+            Some(s) => {
+                match s.to_string().to_lowercase().as_ref() {
+                    "tsv" => LoggerFormat::TabSeparatedValue,
+                    "json" => LoggerFormat::JSON,
+                    _ => return Some(Err(LoggerError::InvalidType(s.to_string()))),
+                }
+            }
         };
 
-       Some(Ok(Logger {
+        Some(Ok(Logger {
             id: id.to_string(),
             name: name,
             description: description,
@@ -140,70 +149,83 @@ impl Logger {
             working_directory: working_directory,
             format: format,
             controller: controller.clone(),
-       }))
+        }))
     }
 
     pub fn start(&self, working_directory: &Option<String>) -> Result<(), LoggerError> {
 
         let working_directory = match *working_directory {
             Some(ref s) => Some(s.clone()),
-            None => match self.working_directory {
-                Some(ref s) => Some(s.clone()),
-                None => None,
-            },
+            None => {
+                match self.working_directory {
+                    Some(ref s) => Some(s.clone()),
+                    None => None,
+                }
+            }
         };
 
         self.debug(format!("Starting logger..."));
-        let process = match process::spawn_cmd(self.exec_start.as_str(),
-                                               self,
-                                               &working_directory) {
-            Err(e) => {
-                self.debug(format!("Unable to spawn {}: {:?}", self.exec_start, e));
-                return Err(LoggerError::ExecCommandFailed);
-            },
-            Ok(s) => s,
-        };
+        let process =
+            match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
+                Err(e) => {
+                    self.debug(format!("Unable to spawn {}: {:?}", self.exec_start, e));
+                    return Err(LoggerError::ExecCommandFailed);
+                }
+                Ok(s) => s,
+            };
 
         let mut stdin = process.stdin;
         let unit = self.to_simple_unit();
 
         match self.format {
-            LoggerFormat::TabSeparatedValue => self.controller.listen_logs(move |msg| {
-                match msg {
-                    BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => 
-                        if let Err(e) = writeln!(&mut stdin, "{}\t{}\t{}\t{}\t{}\t{}\t",
-                                        msg.message_class,
-                                        msg.unit_id,
-                                        msg.unit_type,
-                                        msg.unix_time,
-                                        msg.unix_time_nsecs,
-                                        log.replace("\\", "\\\\").replace("\n", "\\n").replace("\t", "\\t")) {
-                            Controller::debug_unit(&unit, format!("Unable to write to logfile: {:?}", e));
-                            return Err(());
-                        },
-                    _ => (),
-                };
-                Ok(())
-            }),
-            LoggerFormat::JSON => self.controller.listen_logs(move |msg| {
-                match msg {
-                    BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
-                        let mut object = json::JsonValue::new_object();
-                        object["message_class"] = msg.message_class.into();
-                        object["unit_id"] = msg.unit_id.into();
-                        object["unit_type"] = msg.unit_type.into();
-                        object["unix_time"] = msg.unix_time.into();
-                        object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
-                        object["message"] = log.into();
-                        if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
-                            Controller::debug_unit(&unit, format!("Unable to write to logfile: {:?}", e));
-                            return Err(());
-                        };
-                    },
-                    _ => (),
-                }
-                Ok(())
-            }),
+            LoggerFormat::TabSeparatedValue => {
+                self.controller.listen_logs(move |msg| {
+                    match msg {
+                        BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
+                            if let Err(e) = writeln!(&mut stdin,
+                                                     "{}\t{}\t{}\t{}\t{}\t{}\t",
+                                                     msg.message_class,
+                                                     msg.unit_id,
+                                                     msg.unit_type,
+                                                     msg.unix_time,
+                                                     msg.unix_time_nsecs,
+                                                     log.replace("\\", "\\\\")
+                                                         .replace("\n", "\\n")
+                                                         .replace("\t", "\\t")) {
+                                Controller::debug_unit(&unit,
+                                                       format!("Unable to write to logfile: {:?}",
+                                                               e));
+                                return Err(());
+                            }
+                        }
+                        _ => (),
+                    };
+                    Ok(())
+                })
+            }
+            LoggerFormat::JSON => {
+                self.controller.listen_logs(move |msg| {
+                    match msg {
+                        BroadcastMessage { message: BroadcastMessageContents::Log(log), .. } => {
+                            let mut object = json::JsonValue::new_object();
+                            object["message_class"] = msg.message_class.into();
+                            object["unit_id"] = msg.unit_id.into();
+                            object["unit_type"] = msg.unit_type.into();
+                            object["unix_time"] = msg.unix_time.into();
+                            object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
+                            object["message"] = log.into();
+                            if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
+                                Controller::debug_unit(&unit,
+                                                       format!("Unable to write to logfile: {:?}",
+                                                               e));
+                                return Err(());
+                            };
+                        }
+                        _ => (),
+                    }
+                    Ok(())
+                })
+            }
         };
 
         self.debug(format!("Logger is running"));
