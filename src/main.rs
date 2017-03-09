@@ -60,10 +60,16 @@ fn main() {
     controller.listen(move |msg| {
         let mut buffer = bufwtr.buffer();
 
-        buffer.set_color(ColorSpec::new().set_fg(Some(Color::Red))).unwrap();
-        write!(&mut buffer, "DEBUG: ").unwrap();
-        buffer.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).unwrap();
-        writeln!(&mut buffer, "{:?}", msg).unwrap();
+        if msg.message_class == "debug" {
+            buffer.set_color(ColorSpec::new().set_fg(Some(Color::Red))).unwrap();
+            write!(&mut buffer, "DEBUG: ").unwrap();
+            buffer.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).unwrap();
+            writeln!(&mut buffer, "{:?}", msg).unwrap();
+        }
+        else {
+            buffer.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+            writeln!(&mut buffer, "{:?}", msg).unwrap();
+        }
         buffer.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
         bufwtr.print(&buffer).unwrap();
         Ok(())
