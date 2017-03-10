@@ -5,12 +5,10 @@ use self::daggy::{Dag, Walker, NodeIndex};
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::time::Duration;
 use std::time;
 
-use cfti::types::test::Test;
+use cfti::types::test::{Test, TestState};
 use cfti::types::Jig;
 use cfti::types::Unit;
 use cfti::process;
@@ -98,6 +96,9 @@ pub struct Scenario {
     /// tests: A vector containing all the tests in this scenario.
     pub tests: Vec<Arc<Mutex<Test>>>,
 
+    /// A map of test names to test indexes.
+    tests_map: HashMap<String, usize>,
+
     /// exec_start: A command to run when starting tests.
     exec_start: Option<String>,
 
@@ -125,9 +126,6 @@ pub struct Scenario {
     /// How many tests have failed.
     failures: Arc<Mutex<u32>>,
 
-    /// The result of various tests, indexed by test name.
-    results: Arc<Mutex<HashMap<String, TestResult>>>,
-
     /// Dependency graph for all tests to be run.
     graph: Dag<String, TestEdge>,
 
@@ -139,6 +137,9 @@ pub struct Scenario {
 
     /// The timestamp when the test started, used to calculate timeouts.
     start_time: Arc<Mutex<time::Instant>>,
+
+    /// Currently-running child support command.
+    support_cmd: Arc<Mutex<Option<process::ChildProcess>>>,
 }
 
 impl Scenario {
@@ -244,31 +245,23 @@ impl Scenario {
             Ok(v) => v,
         };
 
+        let mut test_map = HashMap::new();
+        for (idx, test) in graph_result.tests.iter().enumerate() {
+            test_map.insert(test.lock().unwrap().id().to_string(), idx);
+        }
+
         let failures = Arc::new(Mutex::new(0));
 
-        let test_results = Arc::new(Mutex::new(HashMap::new()));
-        let thr_results = test_results.clone();
         let thr_failures = failures.clone();
 
         // Monitor broadcast states to determine when tests finish.
         controller.listen(move |msg| {
-            let mut results = thr_results.lock().unwrap();
             match msg.message {
-                BroadcastMessageContents::Skip(test, _) => {
-                    results.insert(test, TestResult::Skipped)
-                }
-                BroadcastMessageContents::Pass(test, _) => {
-                    results.insert(test, TestResult::Success)
-                }
-                BroadcastMessageContents::Running(test) => {
-                    results.insert(test, TestResult::Running)
-                }
                 BroadcastMessageContents::Fail(test, _) => {
                     let mut failures = thr_failures.lock().unwrap();
                     *failures = *failures + 1;
-                    results.insert(test, TestResult::Failure)
                 }
-                _ => None,
+                _ => (),
             };
             Ok(())
         });
@@ -276,6 +269,7 @@ impl Scenario {
         Some(Ok(Scenario {
             id: id.to_string(),
             tests: graph_result.tests,
+            tests_map: test_map,
             timeout: timeout,
             name: name,
             description: description,
@@ -288,11 +282,11 @@ impl Scenario {
             controller: controller.clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
-            results: test_results,
             graph: graph_result.graph,
             node_bucket: graph_result.node_bucket,
             working_directory: Arc::new(Mutex::new(None)),
             start_time: Arc::new(Mutex::new(time::Instant::now())),
+            support_cmd: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -488,7 +482,7 @@ impl Scenario {
                              &mut test_order);
         }
         let vec_names: Vec<String> =
-            test_order.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
+            test_order.iter().map(|x| x.lock().unwrap().id().to_string()).collect();
         controller.debug("scenario", id, format!("Vector order: {:?}", vec_names));
         Ok(GraphResult {
             tests: test_order,
@@ -508,20 +502,13 @@ impl Scenario {
 
             let parent_name = self.graph.node_weight(node).unwrap();
             let result = {
-                // Borrow the results hashmap
-                let results = self.results.lock().unwrap();
-                // If the test has no result, it hasn't been run,
-                // and so therefore did not succeed.
-                match results.get(parent_name) {
-                    None => return false,
-                    Some(s) => s.clone(),
-                }
+                self.tests[self.tests_map[parent_name]].lock().unwrap().state()
             };
 
             // If the dependent test did not succeed, then at least
             // one dependency failed.
             // The test may also be Running, in case it's a Daemon.
-            if result != TestResult::Success && result != TestResult::Running {
+            if result != TestState::Pass && result != TestState::Running {
                 return false;
             }
 
@@ -555,7 +542,8 @@ impl Scenario {
                 }
                 // Make sure all required dependencies succeeded.
                 else if !self.all_dependencies_succeeded(&test_name) {
-                    self.results.lock().unwrap().insert(test_name.clone(), TestResult::Skipped);
+                    let idx: usize = self.tests_map[&test_name];
+                    self.tests[idx].lock().unwrap().skip();
                     self.broadcast(BroadcastMessageContents::Skip(test_name.clone(),
                                                                   "dependency failed".to_string()));
                     false
@@ -586,7 +574,9 @@ impl Scenario {
             ScenarioState::Idle => {
                 // Reset the number of errors.
                 *(self.failures.lock().unwrap()) = 0;
-                self.results.lock().unwrap().clear();
+                for test in &self.tests {
+                    test.lock().unwrap().pending();
+                }
 
                 self.broadcast(BroadcastMessageContents::Start(self.id().to_string()));
                 ScenarioState::PreStart
@@ -617,7 +607,7 @@ impl Scenario {
         // If it's an acceptable new state, set that.  Otherwise, recurse
         // and try the next state.
         if self.is_state_okay(&new_state) {
-            *(self.state.lock().unwrap().deref_mut()) = new_state.clone();
+            *(self.state.lock().unwrap()) = new_state.clone();
             new_state
         } else {
             self.find_next_state(new_state)
@@ -628,14 +618,17 @@ impl Scenario {
         // unwrap is safe because we know a PreStart command exists.
         let tn = testname.to_string();
         let unit = self.to_simple_unit();
+        let thr_support_cmd = self.support_cmd.clone();
         let res = process::try_command_completion(cmd,
-                                                  self.working_directory.lock().unwrap().deref(),
+                                                  &*self.working_directory.lock().unwrap(),
                                                   *timeout,
                                                   move |res: Result<(), process::CommandError>| {
             let msg = match res {
                 Ok(_) => BroadcastMessageContents::Pass(tn, "".to_string()),
                 Err(e) => BroadcastMessageContents::Fail(tn, format!("{:?}", e)),
             };
+
+            *(thr_support_cmd.lock().unwrap()) = None;
 
             // Send a message indicating what the test did, and advance the scenario.
             Controller::broadcast_class_unit("support", &unit, &msg);
@@ -654,6 +647,55 @@ impl Scenario {
 
         process::log_output(child.stdout, self, "stdout");
         process::log_output(child.stderr, self, "stderr");
+        *(self.support_cmd.lock().unwrap()) = Some(child.child);
+    }
+
+    /// Don't run any new tests.  Stop the current test if one is running.
+    pub fn abort(&self) {
+        let mut current_state = self.state.lock().unwrap();
+
+        match *current_state {
+            // Already idle, so nothing to do.
+            ScenarioState::Idle => (),
+
+            // Running one of our support commands. Stop that.
+            ScenarioState::PreStart |
+            ScenarioState::PostFailure |
+            ScenarioState::PostSuccess => {
+                if let Some(ref cmd) = *(self.support_cmd.lock().unwrap()) {
+                    cmd.kill();
+                }
+                self.finish_scenario();
+            }
+
+            // In the middle of running a test.
+            ScenarioState::Running(i) => {
+                self.tests[i].lock().unwrap().stop(&*self.working_directory.lock().unwrap());
+                self.finish_scenario();
+            }
+        }
+
+        *current_state = ScenarioState::Idle;
+    }
+
+    // Post messages and terminate tests.
+    pub fn finish_scenario(&self) {
+        let failures = *(self.failures.lock().unwrap());
+        for test in &self.tests {
+            test.lock().unwrap().terminate();
+        }
+        if failures > 0 {
+            self.log(format!("{} tests failed", failures));
+            self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
+                                                            failures + 500,
+                                                            "At least one test failed"
+                                                                .to_string()));
+        } else {
+            self.log(format!("All tests passed successfully"));
+            self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
+                                                            200,
+                                                            "Finished tests".to_string()));
+        }
     }
 
     // Given the current state, figure out the next test to run (if any)
@@ -666,34 +708,17 @@ impl Scenario {
                 self.tests[step]
                     .lock()
                     .unwrap()
-                    .stop(self.working_directory.lock().unwrap().deref())
+                    .stop(&*self.working_directory.lock().unwrap())
             }
             _ => (),
         }
 
         let new_state = self.find_next_state(current_state);
 
-        let failures = *(self.failures.lock().unwrap());
         match new_state {
             // If we're transitioning to the idle state, it means we just finished
             // running some tests.  Broadcast the result.
-            ScenarioState::Idle => {
-                for test in &self.tests {
-                    test.lock().unwrap().terminate();
-                }
-                if failures > 0 {
-                    self.log(format!("{} tests failed", failures));
-                    self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
-                                                                    failures + 500,
-                                                                    "At least one test failed"
-                                                                        .to_string()));
-                } else {
-                    self.log(format!("All tests passed successfully"));
-                    self.broadcast(BroadcastMessageContents::Finish(self.id().to_string(),
-                                                                    200,
-                                                                    "Finished tests".to_string()));
-                }
-            }
+            ScenarioState::Idle => self.finish_scenario(),
 
             // If we want to run a preroll command and it fails, log it and start the tests.
             ScenarioState::PreStart => {
@@ -705,8 +730,7 @@ impl Scenario {
                 let ref test = self.tests[next_step].lock().unwrap();
                 let test_timeout = test.timeout();
                 let test_max_time = self.make_timeout(test_timeout);
-                test.start(self.working_directory.lock().unwrap().deref(),
-                           test_max_time);
+                test.start(&*self.working_directory.lock().unwrap(), test_max_time);
             }
             ScenarioState::PostSuccess => {
                 let ref cmd = self.exec_stop_success;
@@ -759,7 +783,9 @@ impl Scenario {
             self.log("Starting new scenario run".to_string());
 
             // Reset the results so we can start afresh.
-            self.results.lock().unwrap().clear();
+            for test in &self.tests {
+                test.lock().unwrap().pending();
+            }
 
             // Save the current instant, so we can timeout as needed.
             *(self.start_time.lock().unwrap()) = time::Instant::now();
@@ -780,7 +806,7 @@ impl Scenario {
                                                           self.description().to_string()));
 
         let test_names: Vec<String> =
-            self.tests.iter().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
+            self.tests.iter().map(|x| x.lock().unwrap().id().to_string()).collect();
 
         self.broadcast(BroadcastMessageContents::Tests(self.id().to_string(), test_names));
     }
