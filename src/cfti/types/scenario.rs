@@ -65,6 +65,9 @@ enum ScenarioState {
 
     /// The scenario has failed, and is running the ExecStopFailure step
     PostFailure,
+
+    /// The test has succeeded or failed
+    TestFinished,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -540,10 +543,13 @@ impl Scenario {
                 } else if i >= self.tests.len() {
                     false
                 }
+                // If the test isn't Pending (i.e. if it's skipped or failed), don't run it.
+                else if self.tests[i].lock().unwrap().state() != TestState::Pending {
+                    false
+                }
                 // Make sure all required dependencies succeeded.
                 else if !self.all_dependencies_succeeded(&test_name) {
-                    let idx: usize = self.tests_map[&test_name];
-                    self.tests[idx].lock().unwrap().skip();
+                    self.tests[i].lock().unwrap().skip();
                     self.broadcast(BroadcastMessageContents::Skip(test_name.clone(),
                                                                   "dependency failed".to_string()));
                     false
@@ -557,6 +563,9 @@ impl Scenario {
 
             // Run a script on scenario failure.
             ScenarioState::PostFailure => self.exec_stop_failure.is_some(),
+
+            // Presumably we can always finish a test.
+            ScenarioState::TestFinished => true,
         }
     }
 
@@ -600,8 +609,9 @@ impl Scenario {
                        test_count,
                        failure_count)
             }
-            ScenarioState::PostFailure => ScenarioState::Idle,
-            ScenarioState::PostSuccess => ScenarioState::Idle,
+            ScenarioState::PostFailure => ScenarioState::TestFinished,
+            ScenarioState::PostSuccess => ScenarioState::TestFinished,
+            ScenarioState::TestFinished => ScenarioState::TestFinished,
         };
 
         // If it's an acceptable new state, set that.  Otherwise, recurse
@@ -656,7 +666,7 @@ impl Scenario {
 
         match *current_state {
             // Already idle, so nothing to do.
-            ScenarioState::Idle => (),
+            ScenarioState::Idle | ScenarioState::TestFinished => (),
 
             // Running one of our support commands. Stop that.
             ScenarioState::PreStart |
@@ -670,12 +680,16 @@ impl Scenario {
 
             // In the middle of running a test.
             ScenarioState::Running(i) => {
+                self.tests[i].lock().unwrap().skip();
+                for test_num in i..self.tests.len() {
+                    self.tests[test_num].lock().unwrap().skip();
+                }
                 self.tests[i].lock().unwrap().stop(&*self.working_directory.lock().unwrap());
                 self.finish_scenario();
             }
         }
 
-        *current_state = ScenarioState::Idle;
+        *current_state = ScenarioState::TestFinished;
     }
 
     // Post messages and terminate tests.
@@ -716,9 +730,8 @@ impl Scenario {
         let new_state = self.find_next_state(current_state);
 
         match new_state {
-            // If we're transitioning to the idle state, it means we just finished
-            // running some tests.  Broadcast the result.
-            ScenarioState::Idle => self.finish_scenario(),
+            // We generally shouldn't transition to the Idle state.
+            ScenarioState::Idle => (),
 
             // If we want to run a preroll command and it fails, log it and start the tests.
             ScenarioState::PreStart => {
@@ -746,6 +759,10 @@ impl Scenario {
                                      &self.exec_stop_failure_timeout,
                                      "execstopfailure");
             }
+
+            // If we're transitioning to the Finshed state, it means we just finished
+            // running some tests.  Broadcast the result.
+            ScenarioState::TestFinished => self.finish_scenario(),
         }
     }
 
@@ -773,11 +790,11 @@ impl Scenario {
     /// then use that for all tests that don't specify one.
     pub fn start(&self, working_directory: &Option<String>) {
         {
-            let current_state = self.state.lock().unwrap().clone();
-            if current_state != ScenarioState::Idle {
+            let mut current_state = self.state.lock().unwrap();
+            if *current_state != ScenarioState::Idle && *current_state != ScenarioState::TestFinished {
                 self.log(format!("NOT starting new scenario run because ScenarioState is {:?}, \
                                   not Idle",
-                                 current_state));
+                                 *current_state));
                 return;
             }
             self.log("Starting new scenario run".to_string());
@@ -789,6 +806,8 @@ impl Scenario {
 
             // Save the current instant, so we can timeout as needed.
             *(self.start_time.lock().unwrap()) = time::Instant::now();
+
+            *current_state = ScenarioState::Idle;
         }
         *(self.working_directory.lock().unwrap()) = working_directory.clone();
         self.advance();

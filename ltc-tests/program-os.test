@@ -1,8 +1,6 @@
 [Test]
 ExecStart=program-os
 Name=Program OS
-Name[zh]=程序操作系统
 Description=Program the base LtC operating system.
-Description[zh]=编程基本LtC操作系统。
 Requires=log-registers
 Timeout=2000

@@ -588,7 +588,7 @@ impl Test {
     /// If this is a daemon, stop it.
     pub fn terminate(&self) {
         match self.test_type {
-            TestType::Simple => (),
+            TestType::Simple => self.stop(&self.test_working_directory.lock().unwrap().clone()),
             TestType::Daemon => {
                 // If the daemon is still running, then good!  It passed.
                 let (cmd, timeout) = if *(self.state.lock().unwrap()) == TestState::Running {

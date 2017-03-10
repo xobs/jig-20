@@ -356,13 +356,11 @@ impl Interface {
 
     pub fn start(&self, working_directory: &Option<String>) -> Result<(), InterfaceError> {
 
-        let working_directory = match *working_directory {
+        let working_directory = match self.working_directory {
             Some(ref s) => Some(s.clone()),
-            None => {
-                match self.working_directory {
-                    Some(ref s) => Some(s.clone()),
-                    None => None,
-                }
+            None => match *working_directory {
+                Some(ref s) => Some(s.clone()),
+                None => None,
             }
         };
 

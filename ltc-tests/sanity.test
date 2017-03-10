@@ -1,9 +1,7 @@
 [Test]
 ExecStart=echotest
 Name=Echo values
-Name[zh]=登录寄存器
 Description=Echo some values out to the screen
-Description[zh]=记录寄存器从芯片到例如。 记住序列号。
 Requires=start-swd
 Jigs=windows
 Timeout=2000
