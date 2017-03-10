@@ -419,6 +419,17 @@ impl TestSet {
         };
     }
 
+    pub fn abort_scenario(&self) {
+        // Unwrap, because if it is None then things are very broken.
+        match self.scenario {
+            None => panic!("self.scenario was None"),
+            Some(ref s) => {
+                let ref scenario = s.lock().unwrap();
+                scenario.abort();
+            }
+        };
+    }
+
     pub fn start_scenario(&mut self, scenario_id: Option<String>) {
 
         // Figure out what scenario to run.  Run the default scenario if unspecified.
