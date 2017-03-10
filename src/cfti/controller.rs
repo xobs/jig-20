@@ -241,7 +241,9 @@ impl Controller {
                 ControlMessageContents::StartScenario(s) => {
                     testset.lock().unwrap().start_scenario(s)
                 }
-                ControlMessageContents::AbortTests => (),
+                ControlMessageContents::AbortTests => {
+                    testset.lock().unwrap().abort_scenario()
+                }
                 ControlMessageContents::AdvanceScenario => {
                     testset.lock().unwrap().advance_scenario()
                 }
