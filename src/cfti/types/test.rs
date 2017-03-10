@@ -32,7 +32,7 @@ enum TestType {
     Daemon,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TestState {
     /// A test has yet to be run.
     Pending,
@@ -45,6 +45,9 @@ pub enum TestState {
 
     /// A test (or daemon) passed successfully.
     Pass,
+
+    /// A test (or daemon) was skipped.
+    Skip,
 
     /// A test (or daemon) failed for some reason.
     Fail(String),
@@ -437,9 +440,7 @@ impl Test {
                                              self.id(),
                                              self.kind(),
                                              &BroadcastMessageContents::Log(line.clone()));
-                        self.log(format!("Comparing {} to {}", r, line));
                         if r.is_match(line.as_str()) {
-                            self.log(format!("It's a match!"));
                             *(self.state.lock().unwrap()) = TestState::Running;
                             break;
                         }
@@ -561,7 +562,7 @@ impl Test {
         }
 
         match *(self.state.lock().unwrap()) {
-            TestState::Pending | TestState::Starting => (),
+            TestState::Pending | TestState::Starting | TestState::Skip => (),
             TestState::Running |
             TestState::Fail(_) => {
                 if let Some(ref cmd) = self.exec_stop_failure {
@@ -612,6 +613,18 @@ impl Test {
                 }
             }
         }
+    }
+
+    pub fn state(&self) -> TestState {
+        self.state.lock().unwrap().clone()
+    }
+
+    pub fn skip(&self) {
+        *(self.state.lock().unwrap()) = TestState::Skip;
+    }
+
+    pub fn pending(&self) {
+        *(self.state.lock().unwrap()) = TestState::Pending;
     }
 
     pub fn requirements(&self) -> &Vec<String> {
