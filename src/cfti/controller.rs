@@ -207,6 +207,8 @@ impl Controller {
 
                 // Set the current scenario to the specified one.
                 ControlMessageContents::Scenario(s) => {
+                    // If there is a scenario running already, stop it.
+                    testset.lock().unwrap().abort_scenario();
                     testset.lock().unwrap().set_scenario(&s);
                 }
 

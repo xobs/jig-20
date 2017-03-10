@@ -420,14 +420,10 @@ impl TestSet {
     }
 
     pub fn abort_scenario(&self) {
-        // Unwrap, because if it is None then things are very broken.
-        match self.scenario {
-            None => panic!("self.scenario was None"),
-            Some(ref s) => {
-                let ref scenario = s.lock().unwrap();
-                scenario.abort();
-            }
-        };
+        // If there is no scenario, that's fine.  There's nothing to do.
+        if let Some(ref s) = self.scenario {
+            s.lock().unwrap().abort();
+        }
     }
 
     pub fn start_scenario(&mut self, scenario_id: Option<String>) {
