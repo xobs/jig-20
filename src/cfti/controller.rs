@@ -353,7 +353,7 @@ impl Controller {
     }
 
     pub fn debug_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
-        Self::broadcast_class_unit("debug", unit, &BroadcastMessageContents::Log(msg))
+        Self::broadcast_class_unit("debug-internal", unit, &BroadcastMessageContents::Log(msg))
     }
 
     fn do_broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,

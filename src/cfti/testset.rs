@@ -402,7 +402,7 @@ impl TestSet {
 
     pub fn describe_jig(&self) {
         if let Some(ref j) = self.jig {
-            self.broadcast(&BroadcastMessageContents::Jig(j.lock().unwrap().id().to_string()));
+            self.broadcast(BroadcastMessageContents::Jig(j.lock().unwrap().id().to_string()));
             j.lock().unwrap().describe();
         }
     }
@@ -460,7 +460,7 @@ impl TestSet {
     pub fn send_scenarios(&self) {
         let scenario_list =
             self.scenarios.values().map(|x| x.lock().unwrap().deref().id().to_string()).collect();
-        self.broadcast(&BroadcastMessageContents::Scenarios(scenario_list));
+        self.broadcast(BroadcastMessageContents::Scenarios(scenario_list));
     }
 
     pub fn send_tests(&self, scenario_id: Option<String>) {
@@ -496,19 +496,29 @@ impl TestSet {
         };
         self.scenario = Some(scenario.clone());
 
-        self.broadcast(&BroadcastMessageContents::Scenario(scenario_name.clone()));
+        self.broadcast(BroadcastMessageContents::Scenario(scenario_name.clone()));
         scenario.lock().unwrap().deref_mut().describe();
     }
+}
 
-    fn broadcast(&self, msg: &BroadcastMessageContents) {
-        self.controller.broadcast(self.id(), self.kind(), msg);
-    }
-
-    pub fn kind(&self) -> &'static str {
+impl Unit for TestSet {
+    fn id(&self) -> &str {
         "testset"
     }
 
-    pub fn id(&self) -> &str {
+    fn kind(&self) -> &str {
         "testset"
+    }
+
+    fn name(&self) -> &str {
+        "testset"
+    }
+
+    fn description(&self) -> &str {
+        "Primary collection of all objects in this test"
+    }
+
+    fn controller(&self) -> &Controller {
+        &self.controller
     }
 }
