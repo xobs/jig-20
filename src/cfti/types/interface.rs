@@ -99,7 +99,7 @@ impl Interface {
                     }
                 }
                 if found_it == false {
-                    test_set.debug(format!("The interface '{}' is not compatible with this jig",
+                    test_set.warn(format!("The interface '{}' is not compatible with this jig",
                                              id));
                     return None;
                 }
@@ -355,9 +355,11 @@ impl Interface {
 
         let working_directory = match self.working_directory {
             Some(ref s) => Some(s.clone()),
-            None => match *working_directory {
-                Some(ref s) => Some(s.clone()),
-                None => None,
+            None => {
+                match *working_directory {
+                    Some(ref s) => Some(s.clone()),
+                    None => None,
+                }
             }
         };
 

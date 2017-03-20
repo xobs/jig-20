@@ -113,9 +113,9 @@ impl TestSet {
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
                 unknown => {
-                    test_set.lock().unwrap().debug(format!("Unrecognized unit type {}, path: {}",
-                                                           unknown,
-                                                           path.to_str().unwrap_or("")))
+                    test_set.lock().unwrap().warn(format!("Unrecognized unit type {}, path: {}",
+                                                          unknown,
+                                                          path.to_str().unwrap_or("")))
                 }
             }
         }
@@ -294,7 +294,7 @@ impl TestSet {
                 Some(s) => {
                     match s {
                         Err(e) => {
-                            self.debug(format!("Unable to load test {}: {:?}", item_name, e));
+                            self.warn(format!("Unable to load test {}: {:?}", item_name, e));
                             continue;
                         }
                         Ok(s) => s,
@@ -304,19 +304,19 @@ impl TestSet {
 
             // If another test already Provides this one, complain.
             if let Some(collision) = self.test_aliases.get(&new_test.id().to_string()) {
-                self.debug(format!("Error: Loaded test {}, but test {} already 'Provides'",
-                                   new_test.id(),
-                                   collision));
+                self.warn(format!("Error: Loaded test {}, but test {} already 'Provides'",
+                                  new_test.id(),
+                                  collision));
                 continue;
             }
 
             for test_provides in new_test.provides() {
                 if let Some(collision) = self.test_aliases.get(test_provides) {
-                    self.debug(format!("Error: Loaded test {}, but both it and test {} \
+                    self.warn(format!("Error: Loaded test {}, but both it and test {} \
                                         'Provides' {}",
-                                       new_test.id(),
-                                       collision,
-                                       test_provides));
+                                      new_test.id(),
+                                      collision,
+                                      test_provides));
                     continue;
                 }
             }

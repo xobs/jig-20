@@ -95,7 +95,11 @@ pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Durat
     return status_code.unwrap() == 0;
 }
 
-pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, stream_name: &str) {
+pub fn log_output<T: io::Read + Send + 'static, U: Unit>
+    (stream: T,
+     unit: &U,
+     stream_name: &str)
+     -> Result<thread::JoinHandle<()>, io::Error> {
 
     let thr_stream_name = stream_name.to_string();
 
@@ -104,7 +108,7 @@ pub fn log_output<T: io::Read + Send + 'static, U: Unit>(stream: T, unit: &U, st
                                        unit,
                                        &ControlMessageContents::Log(msg));
         Ok(())
-    });
+    })
 }
 
 pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>
