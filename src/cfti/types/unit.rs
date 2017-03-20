@@ -32,6 +32,10 @@ pub trait Unit {
         Controller::debug_unit(self, msg);
     }
 
+    fn warn(&self, msg: String) {
+        Controller::warn_unit(self, msg);
+    }
+
     fn broadcast(&self, msg: BroadcastMessageContents) {
         Controller::broadcast_unit(self, &msg);
     }

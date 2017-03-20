@@ -356,6 +356,10 @@ impl Controller {
         Self::broadcast_class_unit("debug-internal", unit, &BroadcastMessageContents::Log(msg))
     }
 
+    pub fn warn_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
+        Self::broadcast_class_unit("warning", unit, &BroadcastMessageContents::Log(msg))
+    }
+
     fn do_broadcast_class(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
                           message_class: &str,
                           unit_name: &str,
