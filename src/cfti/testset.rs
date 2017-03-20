@@ -113,11 +113,9 @@ impl TestSet {
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
                 unknown => {
-                    controller.debug("testset",
-                                     "testset",
-                                     format!("Unrecognized unit type {}, path: {}",
-                                             unknown,
-                                             path.to_str().unwrap_or("")))
+                    test_set.lock().unwrap().debug(format!("Unrecognized unit type {}, path: {}",
+                                                           unknown,
+                                                           path.to_str().unwrap_or("")))
                 }
             }
         }
@@ -135,16 +133,12 @@ impl TestSet {
         Ok(test_set)
     }
 
-    pub fn debug(&self, msg: String) {
-        self.controller.debug(self.id(), self.kind(), msg);
-    }
-
     fn load_jigs(&mut self, config: &config::Config, jig_paths: &Vec<PathBuf>) {
         for jig_path in jig_paths {
             let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = jig_path.to_str().unwrap_or("");
 
-            let new_jig = match Jig::new(item_name, path_str, config, &self.controller) {
+            let new_jig = match Jig::new(item_name, path_str, self, config) {
                 // The jig will return "None" if it is incompatible.
                 None => continue,
                 Some(s) => s,
@@ -219,22 +213,19 @@ impl TestSet {
             let item_name =
                 interface_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = interface_path.to_str().unwrap_or("");
-            let new_interface =
-                match Interface::new(item_name, path_str, &self.jigs, config, &self.controller) {
-                    // In this case, it just means the interface is incompatible.
-                    None => continue,
-                    Some(s) => {
-                        match s {
-                            Err(e) => {
-                                self.debug(format!("Unable to load interface {}: {:?}",
-                                                   item_name,
-                                                   e));
-                                continue;
-                            }
-                            Ok(s) => s,
+            let new_interface = match Interface::new(item_name, path_str, self, config) {
+                // In this case, it just means the interface is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => {
+                            self.debug(format!("Unable to load interface {}: {:?}", item_name, e));
+                            continue;
                         }
+                        Ok(s) => s,
                     }
-                };
+                }
+            };
 
             match new_interface.start(&working_directory) {
                 Err(e) => {
@@ -266,22 +257,19 @@ impl TestSet {
             let item_name =
                 trigger_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = trigger_path.to_str().unwrap_or("");
-            let new_trigger =
-                match Trigger::new(item_name, path_str, &self.jigs, config, &self.controller) {
-                    // In this case, it just means the interface is incompatible.
-                    None => continue,
-                    Some(s) => {
-                        match s {
-                            Err(e) => {
-                                self.debug(format!("Unable to load trigger {}: {:?}",
-                                                   item_name,
-                                                   e));
-                                continue;
-                            }
-                            Ok(s) => s,
+            let new_trigger = match Trigger::new(item_name, path_str, &self, config) {
+                // In this case, it just means the interface is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => {
+                            self.debug(format!("Unable to load trigger {}: {:?}", item_name, e));
+                            continue;
                         }
+                        Ok(s) => s,
                     }
-                };
+                }
+            };
 
             match new_trigger.start(&working_directory) {
                 Err(e) => {
@@ -300,20 +288,19 @@ impl TestSet {
         for test_path in test_paths {
             let item_name = test_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = test_path.to_str().unwrap_or("");
-            let new_test =
-                match Test::new(item_name, path_str, &self.jigs, config, &self.controller) {
-                    // In this case, it just means the test is incompatible.
-                    None => continue,
-                    Some(s) => {
-                        match s {
-                            Err(e) => {
-                                self.debug(format!("Unable to load test {}: {:?}", item_name, e));
-                                continue;
-                            }
-                            Ok(s) => s,
+            let new_test = match Test::new(item_name, path_str, self, config) {
+                // In this case, it just means the test is incompatible.
+                None => continue,
+                Some(s) => {
+                    match s {
+                        Err(e) => {
+                            self.debug(format!("Unable to load test {}: {:?}", item_name, e));
+                            continue;
                         }
+                        Ok(s) => s,
                     }
-                };
+                }
+            };
 
             // If another test already Provides this one, complain.
             if let Some(collision) = self.test_aliases.get(&new_test.id().to_string()) {
@@ -350,13 +337,7 @@ impl TestSet {
         for path in paths {
             let item_name = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
             let path_str = path.to_str().unwrap_or("");
-            let new_scenario = match Scenario::new(item_name,
-                                                   path_str,
-                                                   &self.jigs,
-                                                   &self.tests,
-                                                   &self.test_aliases,
-                                                   config,
-                                                   &self.controller) {
+            let new_scenario = match Scenario::new(item_name, path_str, self, config) {
                 // In this case, it just means the test is incompatible.
                 None => continue,
                 Some(s) => {
@@ -498,6 +479,14 @@ impl TestSet {
 
         self.broadcast(BroadcastMessageContents::Scenario(scenario_name.clone()));
         scenario.lock().unwrap().deref_mut().describe();
+    }
+
+    pub fn jigs(&self) -> &HashMap<String, Arc<Mutex<Jig>>> {
+        &self.jigs
+    }
+
+    pub fn tests(&self) -> &HashMap<String, Arc<Mutex<Test>>> {
+        &self.tests
     }
 }
 

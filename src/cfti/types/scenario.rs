@@ -9,10 +9,10 @@ use std::time::Duration;
 use std::time;
 
 use cfti::types::test::{Test, TestState};
-use cfti::types::Jig;
 use cfti::types::Unit;
 use cfti::process;
 use cfti::config;
+use cfti::testset;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::unitfile::UnitFile;
 
@@ -31,22 +31,6 @@ struct GraphResult {
     graph: Dag<String, TestEdge>,
     node_bucket: HashMap<String, NodeIndex>,
     tests: Vec<Arc<Mutex<Test>>>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-/// If a test has no TestResult, then it is considered Pending.
-enum TestResult {
-    /// The test has started, and is currently running
-    Running,
-
-    /// The test ended successfully
-    Success,
-
-    /// The test failed
-    Failure,
-
-    /// The test was skipped for some reason
-    Skipped,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -148,12 +132,12 @@ pub struct Scenario {
 impl Scenario {
     pub fn new(id: &str,
                path: &str,
-               loaded_jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
-               test_aliases: &HashMap<String, String>,
-               config: &config::Config,
-               controller: &Controller)
+               test_set: &testset::TestSet,
+               config: &config::Config)
                -> Option<Result<Scenario, ScenarioError>> {
+
+        let loaded_jigs = test_set.jigs();
+        let loaded_tests = test_set.tests();
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -179,9 +163,7 @@ impl Scenario {
                     }
                 }
                 if found_it == false {
-                    controller.debug("scenario",
-                                     id,
-                                     format!("The scenario '{}' is not compatible with this jig",
+                    test_set.debug(format!("The scenario '{}' is not compatible with this jig",
                                              id));
                     return None;
                 }
@@ -243,10 +225,14 @@ impl Scenario {
             }
         };
 
-        let graph_result = match Self::build_graph(controller, id, &test_names, &loaded_tests) {
+        let graph_result = match Self::build_graph(test_set, &test_names, &loaded_tests) {
             Err(e) => return Some(Err(e)),
             Ok(v) => v,
         };
+
+        let vec_names: Vec<String> =
+            graph_result.tests.iter().map(|x| x.lock().unwrap().id().to_string()).collect();
+        test_set.debug(format!("Scenario {} vector order: {:?}", id, vec_names));
 
         let mut test_map = HashMap::new();
         for (idx, test) in graph_result.tests.iter().enumerate() {
@@ -258,9 +244,9 @@ impl Scenario {
         let thr_failures = failures.clone();
 
         // Monitor broadcast states to determine when tests finish.
-        controller.listen(move |msg| {
+        test_set.controller().listen(move |msg| {
             match msg.message {
-                BroadcastMessageContents::Fail(test, _) => {
+                BroadcastMessageContents::Fail(_, _) => {
                     let mut failures = thr_failures.lock().unwrap();
                     *failures = *failures + 1;
                 }
@@ -282,7 +268,7 @@ impl Scenario {
             exec_stop_success_timeout: config.scenario_failure_timeout(),
             exec_stop_failure: exec_stop_failure,
             exec_stop_failure_timeout: config.scenario_success_timeout(),
-            controller: controller.clone(),
+            controller: test_set.controller().clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
             graph: graph_result.graph,
@@ -334,11 +320,10 @@ impl Scenario {
         }
     }
 
-    fn build_graph(controller: &Controller,
-                   id: &str,
-                   test_names: &Vec<String>,
-                   loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
-                   -> Result<GraphResult, ScenarioError> {
+    fn build_graph<T: Unit>(unit: &T,
+                            test_names: &Vec<String>,
+                            loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
+                            -> Result<GraphResult, ScenarioError> {
 
         // Resolve the test names.
         let mut test_graph = Dag::<String, TestEdge>::new();
@@ -361,31 +346,25 @@ impl Scenario {
                 let previous_edge = match node_bucket.get(&previous_test) {
                     Some(s) => s,
                     None => {
-                        controller.debug("scenario",
-                                         id,
-                                         format!("Previous test {} could not be found in the \
+                        unit.debug(format!("Previous test {} could not be found in the \
                                                   node bucket",
-                                                 previous_test));
+                                           previous_test));
                         return Err(ScenarioError::MissingDependency(this_test, previous_test));
                     }
                 };
                 let this_edge = match node_bucket.get(&this_test) {
                     Some(s) => s,
                     None => {
-                        controller.debug("scenario",
-                                         id,
-                                         format!("This test {} could not be found in the node \
+                        unit.debug(format!("This test {} could not be found in the node \
                                                   bucket",
-                                                 this_test));
+                                           this_test));
                         return Err(ScenarioError::MissingDependency(this_test, previous_test));
                     }
                 };
                 if let Err(_) = test_graph.add_edge(*previous_edge, *this_edge, TestEdge::Follows) {
-                    controller.debug("scenario",
-                                     id,
-                                     format!("Test {} has a circular requirement on {}",
-                                             test_names[i - 1],
-                                             test_names[i]));
+                    unit.debug(format!("Test {} has a circular requirement on {}",
+                                       test_names[i - 1],
+                                       test_names[i]));
                     return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(),
                                                                  test_names[i].clone()));
                 }
@@ -408,9 +387,7 @@ impl Scenario {
 
             let ref mut test = match loaded_tests.get(&test_name) {
                 None => {
-                    controller.debug("scenario",
-                                     id,
-                                     format!("Test {} not found when loading scenario", test_name));
+                    unit.debug(format!("Test {} not found when loading scenario", test_name));
                     return Err(ScenarioError::TestNotFound(test_name.clone()));
                 }
                 Some(s) => s.lock().unwrap(),
@@ -421,12 +398,10 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 let edge = match node_bucket.get(requirement) {
                     None => {
-                        controller.debug("scenario",
-                                         id,
-                                         format!("Test {} has a requirement that doesn't exist: \
+                        unit.debug(format!("Test {} has a requirement that doesn't exist: \
                                                   {}",
-                                                 test_name,
-                                                 requirement));
+                                           test_name,
+                                           requirement));
                         return Err(ScenarioError::TestDependencyNotFound(test_name,
                                                                          requirement.to_string()));
                     }
@@ -434,11 +409,9 @@ impl Scenario {
                 };
                 if let Err(_) =
                        test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Requires) {
-                    controller.debug("scenario",
-                                     id,
-                                     format!("Test {} has a circular requirement on {}",
-                                             test_name,
-                                             requirement));
+                    unit.debug(format!("Test {} has a circular requirement on {}",
+                                       test_name,
+                                       requirement));
                     return Err(ScenarioError::CircularDependency(test_name.clone(),
                                                                  requirement.clone()));
                 }
@@ -449,12 +422,10 @@ impl Scenario {
                 to_resolve.push(requirement.clone());
                 let edge = match node_bucket.get(requirement) {
                     None => {
-                        controller.debug("scenario",
-                                         id,
-                                         format!("Test {} has a dependency that doesn't exist: \
+                        unit.debug(format!("Test {} has a dependency that doesn't exist: \
                                                   {}",
-                                                 test_name,
-                                                 requirement));
+                                           test_name,
+                                           requirement));
                         return Err(ScenarioError::TestDependencyNotFound(test_name,
                                                                          requirement.to_string()));
                     }
@@ -462,11 +433,9 @@ impl Scenario {
                 };
                 if let Err(_) =
                        test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Suggests) {
-                    controller.debug("scenario",
-                                     id,
-                                     format!("Warning: test {} has a circular suggestion for {}",
-                                             test_name,
-                                             requirement));
+                    unit.debug(format!("Warning: test {} has a circular suggestion for {}",
+                                       test_name,
+                                       requirement));
                 }
             }
         }
@@ -484,9 +453,6 @@ impl Scenario {
                              &node_bucket,
                              &mut test_order);
         }
-        let vec_names: Vec<String> =
-            test_order.iter().map(|x| x.lock().unwrap().id().to_string()).collect();
-        controller.debug("scenario", id, format!("Vector order: {:?}", vec_names));
         Ok(GraphResult {
             tests: test_order,
             graph: test_graph,
@@ -666,7 +632,8 @@ impl Scenario {
 
         match *current_state {
             // Already idle, so nothing to do.
-            ScenarioState::Idle | ScenarioState::TestFinished => (),
+            ScenarioState::Idle |
+            ScenarioState::TestFinished => (),
 
             // Running one of our support commands. Stop that.
             ScenarioState::PreStart |
@@ -791,7 +758,8 @@ impl Scenario {
     pub fn start(&self, working_directory: &Option<String>) {
         {
             let mut current_state = self.state.lock().unwrap();
-            if *current_state != ScenarioState::Idle && *current_state != ScenarioState::TestFinished {
+            if *current_state != ScenarioState::Idle &&
+               *current_state != ScenarioState::TestFinished {
                 self.log(format!("NOT starting new scenario run because ScenarioState is {:?}, \
                                   not Idle",
                                  *current_state));

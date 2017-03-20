@@ -55,12 +55,10 @@ pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
     Ok(cmd)
 }
 
-pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
+pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
     let mut cmd = match make_command(cmd) {
         Err(e) => {
-            controller.debug("internal",
-                             "unknown",
-                             format!("Unable to make command: {:?}", e));
+            unit.debug(format!("Unable to make command: {:?}", e));
             return false;
         }
         Ok(val) => val,
@@ -72,9 +70,7 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
 
     let child = match cmd.spawn() {
         Err(e) => {
-            controller.debug("process",
-                             "process",
-                             format!("Unable to spawn child {:?}: {:?}", cmd, e));
+            unit.debug(format!("Unable to spawn child {:?}: {:?}", cmd, e));
             return false;
         }
         Ok(o) => o.into_clonable(),
@@ -90,9 +86,7 @@ pub fn try_command(controller: &Controller, cmd: &str, wd: &Option<String>, max:
         Ok(status) => status.code(),
         Err(e) => {
             thr.thread().unpark();
-            controller.debug("process",
-                             "process",
-                             format!("Unable to wait() for child: {:?}", e));
+            unit.debug(format!("Unable to wait() for child: {:?}", e));
             return false;
         }
     };

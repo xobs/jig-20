@@ -5,6 +5,7 @@ use cfti::config;
 use cfti::controller::{Controller, BroadcastMessageContents};
 use cfti::unitfile::UnitFile;
 use cfti::types::unit::Unit;
+use cfti::testset;
 
 #[derive(Debug)]
 pub enum JigError {
@@ -36,8 +37,8 @@ pub struct Jig {
 impl Jig {
     pub fn new(id: &str,
                path: &str,
-               config: &config::Config,
-               controller: &Controller)
+               test_set: &testset::TestSet,
+               config: &config::Config)
                -> Option<Result<Jig, JigError>> {
 
         // Load the .ini file
@@ -54,10 +55,9 @@ impl Jig {
         // Determine if this is the jig we're running on
         if let Some(s) = unitfile.get("Jig", "TestFile") {
             if !Path::new(s).exists() {
-                controller.debug("jig", id, format!("Test file {} DOES NOT EXIST", s));
+                test_set.debug(format!("{}: Test file {} DOES NOT EXIST", id, s));
                 return None;
             };
-            controller.debug("jig", id, format!("Test file {} exists", s));
         };
 
         let working_directory = match unitfile.get("Jig", "WorkingDirectory") {
@@ -66,8 +66,8 @@ impl Jig {
         };
 
         if let Some(s) = unitfile.get("Jig", "TestProgram") {
-            if !process::try_command(&controller, s, &working_directory, config.timeout()) {
-                controller.debug("jig", id, format!("Test program FAILED"));
+            if !process::try_command(test_set, s, &working_directory, config.timeout()) {
+                test_set.debug(format!("{}: Test program FAILED", id));
                 return None;
             }
         };
@@ -99,7 +99,7 @@ impl Jig {
 
             default_scenario: default_scenario,
             working_directory: working_directory,
-            controller: controller.clone(),
+            controller: test_set.controller().clone(),
         }))
     }
 

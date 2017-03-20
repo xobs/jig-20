@@ -344,6 +344,7 @@ impl Controller {
         Self::do_broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
     }
 
+/*
     pub fn debug(&self, unit_name: &str, unit_type: &str, msg: String) {
         Self::do_broadcast_class(&self.broadcast,
                                  "debug",
@@ -351,7 +352,7 @@ impl Controller {
                                  unit_type,
                                  &BroadcastMessageContents::Log(msg))
     }
-
+*/
     pub fn debug_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
         Self::broadcast_class_unit("debug-internal", unit, &BroadcastMessageContents::Log(msg))
     }

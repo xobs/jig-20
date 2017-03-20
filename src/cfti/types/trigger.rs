@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use cfti::unitfile::UnitFile;
-use cfti::types::Jig;
 use cfti::types::Unit;
 use cfti::controller::{Controller, ControlMessageContents};
 use cfti::config;
 use cfti::process;
+use cfti::testset;
 
 #[derive(Debug)]
 pub enum TriggerError {
@@ -40,9 +38,8 @@ pub struct Trigger {
 impl Trigger {
     pub fn new(id: &str,
                path: &str,
-               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               config: &config::Config,
-               controller: &Controller)
+               test_set: &testset::TestSet,
+               config: &config::Config)
                -> Option<Result<Trigger, TriggerError>> {
 
         // Load the .ini file
@@ -79,6 +76,7 @@ impl Trigger {
         match unitfile.get("Trigger", "Jigs") {
             None => (),
             Some(s) => {
+                let jigs = test_set.jigs();
                 let jig_names: Vec<String> =
                     s.split(|c| c == ',' || c == ' ').map(|s| s.to_string()).collect();
                 let mut found_it = false;
@@ -89,9 +87,7 @@ impl Trigger {
                     }
                 }
                 if found_it == false {
-                    controller.debug("trigger",
-                                     id,
-                                     format!("The trigger '{}' is not compatible with this jig",
+                    test_set.debug(format!("The trigger '{}' is not compatible with this jig",
                                              id));
                     return None;
                 }
@@ -104,7 +100,7 @@ impl Trigger {
             description: description,
             exec_start: exec_start,
             working_directory: working_directory,
-            controller: controller.clone(),
+            controller: test_set.controller().clone(),
         }))
     }
 

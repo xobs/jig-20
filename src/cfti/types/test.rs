@@ -4,16 +4,15 @@ extern crate regex;
 use self::regex::Regex;
 
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use std::time;
 use std::thread;
 use std::io::{self, BufRead};
 
-use cfti::types::Jig;
 use cfti::types::Unit;
 use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::config;
+use cfti::testset;
 use cfti::unitfile::UnitFile;
 
 #[derive(Debug)]
@@ -121,10 +120,11 @@ pub struct Test {
 impl Test {
     pub fn new(id: &str,
                path: &str,
-               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               config: &config::Config,
-               controller: &Controller)
+               test_set: &testset::TestSet,
+               config: &config::Config)
                -> Option<Result<Test, TestError>> {
+
+        let jigs = test_set.jigs();
 
         // Load the .ini file
         let unitfile = match UnitFile::new(path) {
@@ -150,9 +150,7 @@ impl Test {
                     }
                 }
                 if found_it == false {
-                    controller.debug("test",
-                                     id,
-                                     format!("The test '{}' is not compatible with this jig", id));
+                    test_set.warn(format!("The test '{}' is not compatible with this jig", id));
                     return None;
                 }
             }
@@ -164,9 +162,7 @@ impl Test {
                 match Regex::new(s) {
                     Ok(o) => Some(o),
                     Err(e) => {
-                        controller.debug("test",
-                                         id,
-                                         format!("Unable to compile DaemonReadyText: {}", e));
+                        test_set.warn(format!("{}: Unable to compile DaemonReadyText: {}", id, e));
                         return Some(Err(TestError::DaemonReadyTextError));
                     }
                 }
@@ -301,7 +297,7 @@ impl Test {
             working_directory: working_directory,
             test_working_directory: Arc::new(Mutex::new(None)),
 
-            controller: controller.clone(),
+            controller: test_set.controller().clone(),
 
             last_line: Arc::new(Mutex::new("".to_string())),
             state: Arc::new(Mutex::new(TestState::Pending)),
@@ -399,10 +395,7 @@ impl Test {
                         if let Some(cmd) = thr_end {
                             Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
                             let ref dir = thr_dir.lock().unwrap();
-                            process::try_command(unit.controller(),
-                                                 cmd.as_str(),
-                                                 dir,
-                                                 thr_end_timeout);
+                            process::try_command(&unit, cmd.as_str(), dir, thr_end_timeout);
                         }
                     }
                 });
@@ -567,7 +560,7 @@ impl Test {
             TestState::Fail(_) => {
                 if let Some(ref cmd) = self.exec_stop_failure {
                     self.log(format!("Running ExecStopFailure: {}", cmd));
-                    process::try_command(&self.controller,
+                    process::try_command(self,
                                          cmd,
                                          working_directory,
                                          self.exec_stop_failure_timeout);
@@ -576,7 +569,7 @@ impl Test {
             TestState::Pass => {
                 if let Some(ref cmd) = self.exec_stop_success {
                     self.log(format!("Running ExecStopSuccess: {}", cmd));
-                    process::try_command(&self.controller,
+                    process::try_command(self,
                                          cmd,
                                          working_directory,
                                          self.exec_stop_success_timeout);
@@ -609,7 +602,7 @@ impl Test {
                 if let Some(c) = cmd {
                     self.log(format!("Running post-test command: {}", c));
                     let ref dir = self.test_working_directory.lock().unwrap();
-                    process::try_command(&self.controller, c.as_str(), dir, timeout);
+                    process::try_command(self, c.as_str(), dir, timeout);
                 }
             }
         }

@@ -1,15 +1,13 @@
 extern crate json;
 
-use cfti::types::Jig;
 use cfti::types::unit::Unit;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
 use cfti::process;
 use cfti::unitfile;
 use cfti::config;
+use cfti::testset;
 
-use std::collections::HashMap;
 use std::process::ChildStdin;
-use std::sync::{Arc, Mutex};
 use std::io::Write;
 use std::fmt::{Formatter, Display, Error};
 
@@ -72,10 +70,11 @@ pub struct Interface {
 impl Interface {
     pub fn new(id: &str,
                path: &str,
-               jigs: &HashMap<String, Arc<Mutex<Jig>>>,
-               config: &config::Config,
-               controller: &Controller)
+               test_set: &testset::TestSet,
+               config: &config::Config)
                -> Option<Result<Interface, InterfaceError>> {
+
+        let jigs = test_set.jigs();
 
         let unit_file = match unitfile::UnitFile::new(path) {
             Err(_) => return Some(Err(InterfaceError::FileLoadError)),
@@ -100,9 +99,7 @@ impl Interface {
                     }
                 }
                 if found_it == false {
-                    controller.debug("interface",
-                                     id,
-                                     format!("The interface '{}' is not compatible with this jig",
+                    test_set.debug(format!("The interface '{}' is not compatible with this jig",
                                              id));
                     return None;
                 }
@@ -147,7 +144,7 @@ impl Interface {
             exec_start: exec_start,
             working_directory: working_directory,
             format: format,
-            controller: controller.clone(),
+            controller: test_set.controller().clone(),
             hello: "".to_string(),
         }))
     }
