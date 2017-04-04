@@ -60,13 +60,12 @@ fn main() {
     controller.listen(move |msg| {
         let mut buffer = bufwtr.buffer();
 
-        if msg.message_class == "debug" {
+        if msg.message_class == "debug" || msg.message_class == "debug-internal" {
             buffer.set_color(ColorSpec::new().set_fg(Some(Color::Red))).unwrap();
             write!(&mut buffer, "DEBUG: ").unwrap();
             buffer.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).unwrap();
             writeln!(&mut buffer, "{:?}", msg).unwrap();
-        }
-        else {
+        } else {
             buffer.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
             writeln!(&mut buffer, "{:?}", msg).unwrap();
         }
