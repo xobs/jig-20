@@ -1,7 +1,5 @@
-extern crate daggy;
 extern crate bus;
-
-use self::daggy::{Dag, Walker, NodeIndex};
+extern crate dependy;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,12 +23,7 @@ pub enum ScenarioError {
     TestDependencyNotFound(String, String),
     CircularDependency(String, String),
     MissingDependency(String, String),
-}
-
-struct GraphResult {
-    graph: Dag<String, TestEdge>,
-    node_bucket: HashMap<String, NodeIndex>,
-    tests: Vec<Arc<Mutex<Test>>>,
+    DependencyError(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,18 +45,6 @@ enum ScenarioState {
 
     /// The test has succeeded or failed
     TestFinished,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum TestEdge {
-    /// Test B Requires test A, and a failure of A prevents B from running
-    Requires,
-
-    /// Test B Suggests test A, and a failure of A doesn't prevent B from running
-    Suggests,
-
-    /// Test B follows test A in the .scenario file
-    Follows,
 }
 
 #[derive(Debug)]
@@ -114,10 +95,7 @@ pub struct Scenario {
     failures: Arc<Mutex<u32>>,
 
     /// Dependency graph for all tests to be run.
-    graph: Dag<String, TestEdge>,
-
-    /// A hashmap containing all nodes in the graph, indexed by name.
-    node_bucket: HashMap<String, NodeIndex>,
+    graph: dependy::Dependy,
 
     /// The default directory for all tests during this test run.
     working_directory: Arc<Mutex<Option<String>>>,
@@ -127,6 +105,21 @@ pub struct Scenario {
 
     /// Currently-running child support command.
     support_cmd: Arc<Mutex<Option<process::ChildProcess>>>,
+}
+
+impl dependy::Dependency for Test {
+    fn name(&self) -> &str {
+        &(self as &Unit).id()
+    }
+    fn requirements(&self) -> &Vec<String> {
+        &self.requirements()
+    }
+    fn suggestions(&self) -> &Vec<String> {
+        &self.suggestions()
+    }
+    fn provides(&self) -> &Vec<String> {
+        &self.provides()
+    }
 }
 
 impl Scenario {
@@ -210,7 +203,7 @@ impl Scenario {
             Some(s) => Some(s.to_string()),
         };
 
-        let test_names = match unitfile.get("Scenario", "Tests") {
+        let test_names: Vec<String> = match unitfile.get("Scenario", "Tests") {
             None => return Some(Err(ScenarioError::TestListNotFound)),
             // Split by "," and also whitespace, and combine back into an array.
             Some(s) => {
@@ -225,18 +218,28 @@ impl Scenario {
             }
         };
 
-        let graph_result = match Self::build_graph(test_set, &test_names, &loaded_tests) {
-            Err(e) => return Some(Err(e)),
-            Ok(v) => v,
-        };
+        // Create a new dependency graph
+        let mut graph = dependy::Dependy::new();
 
-        let vec_names: Vec<String> =
-            graph_result.tests.iter().map(|x| x.lock().unwrap().id().to_string()).collect();
-        test_set.debug(format!("Scenario {} vector order: {:?}", id, vec_names));
+        // Add each possible test into the dependency graph
+        test_set.debug(format!("Loaded tests: {:?}", loaded_tests));
+        for (_, test) in loaded_tests {
+            graph.add_dependency(&(*test.lock().unwrap()));
+        }
+
+        test_set.debug(format!("Test names: {:?}", test_names));
+        test_set.debug(format!("Graph: {:?}", graph));
+        let test_order = match graph.resolve_named_dependencies(&test_names) {
+            Ok(o) => o,
+            Err(e) => return Some(Err(ScenarioError::DependencyError(format!("{:?}", e)))),
+        };
+        test_set.debug(format!("Scenario {} vector order: {:?}", id, test_order));
 
         let mut test_map = HashMap::new();
-        for (idx, test) in graph_result.tests.iter().enumerate() {
-            test_map.insert(test.lock().unwrap().id().to_string(), idx);
+        let mut tests = vec![];
+        for (idx, test) in test_order.iter().enumerate() {
+            test_map.insert(test.clone(), idx);
+            tests.push(loaded_tests[test].clone());
         }
 
         let failures = Arc::new(Mutex::new(0));
@@ -257,7 +260,7 @@ impl Scenario {
 
         Some(Ok(Scenario {
             id: id.to_string(),
-            tests: graph_result.tests,
+            tests: tests,
             tests_map: test_map,
             timeout: timeout,
             name: name,
@@ -271,208 +274,16 @@ impl Scenario {
             controller: test_set.controller().clone(),
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
-            graph: graph_result.graph,
-            node_bucket: graph_result.node_bucket,
+            graph: graph,
             working_directory: Arc::new(Mutex::new(None)),
             start_time: Arc::new(Mutex::new(time::Instant::now())),
             support_cmd: Arc::new(Mutex::new(None)),
         }))
     }
 
-    fn visit_node(seen_nodes: &mut HashMap<NodeIndex, ()>,
-                  loaded_tests: &HashMap<String, Arc<Mutex<Test>>>,
-                  node: &NodeIndex,
-                  test_graph: &Dag<String, TestEdge>,
-                  node_bucket: &HashMap<String, NodeIndex>,
-                  test_order: &mut Vec<Arc<Mutex<Test>>>) {
-
-        // If this node has been seen already, don't re-visit it.
-        if seen_nodes.insert(node.clone(), ()).is_some() {
-            return;
-        }
-
-        // 1. Visit all parents
-        // 2. Visit ourselves
-        // 3. Visit all children
-        // Build the nodes into a vec
-        //
-
-        let parents = test_graph.parents(*node);
-        for (_, parent_index) in parents.iter(test_graph) {
-            Self::visit_node(seen_nodes,
-                             loaded_tests,
-                             &parent_index,
-                             test_graph,
-                             node_bucket,
-                             test_order);
-        }
-        let test_item = loaded_tests.get(&test_graph[*node]).unwrap();
-        test_order.push(test_item.clone());
-
-        let children = test_graph.children(*node);
-        for (_, child_index) in children.iter(test_graph) {
-            Self::visit_node(seen_nodes,
-                             loaded_tests,
-                             &child_index,
-                             test_graph,
-                             node_bucket,
-                             test_order);
-        }
-    }
-
-    fn build_graph<T: Unit>(unit: &T,
-                            test_names: &Vec<String>,
-                            loaded_tests: &HashMap<String, Arc<Mutex<Test>>>)
-                            -> Result<GraphResult, ScenarioError> {
-
-        // Resolve the test names.
-        let mut test_graph = Dag::<String, TestEdge>::new();
-        let mut node_bucket = HashMap::new();
-
-        // Create a node for each available test.  We will add
-        // edges later on as we traverse the dependency lists.
-        for (test_name, _) in loaded_tests {
-            node_bucket.insert(test_name.clone(), test_graph.add_node(test_name.clone()));
-        }
-
-        let mut to_resolve = test_names.clone();
-
-        // Add a dependency on the graph to indicate the order of tests.
-        {
-            let num_tests = test_names.len();
-            for i in 1..num_tests {
-                let previous_test = test_names[i - 1].clone();
-                let this_test = test_names[i].clone();
-                let previous_edge = match node_bucket.get(&previous_test) {
-                    Some(s) => s,
-                    None => {
-                        unit.debug(format!("Previous test {} could not be found in the \
-                                                  node bucket",
-                                           previous_test));
-                        return Err(ScenarioError::MissingDependency(this_test, previous_test));
-                    }
-                };
-                let this_edge = match node_bucket.get(&this_test) {
-                    Some(s) => s,
-                    None => {
-                        unit.debug(format!("This test {} could not be found in the node \
-                                                  bucket",
-                                           this_test));
-                        return Err(ScenarioError::MissingDependency(this_test, previous_test));
-                    }
-                };
-                if let Err(_) = test_graph.add_edge(*previous_edge, *this_edge, TestEdge::Follows) {
-                    unit.debug(format!("Test {} has a circular requirement on {}",
-                                       test_names[i - 1],
-                                       test_names[i]));
-                    return Err(ScenarioError::CircularDependency(test_names[i - 1].clone(),
-                                                                 test_names[i].clone()));
-                }
-            }
-        }
-
-        let mut resolved = HashMap::new();
-        loop {
-            // Resolve every test.
-            if to_resolve.is_empty() {
-                break;
-            }
-
-            // If this test has been resolved, skip it.
-            let test_name = to_resolve.remove(0);
-            if resolved.get(&test_name).is_some() {
-                continue;
-            }
-            resolved.insert(test_name.clone(), ());
-
-            let ref mut test = match loaded_tests.get(&test_name) {
-                None => {
-                    unit.debug(format!("Test {} not found when loading scenario", test_name));
-                    return Err(ScenarioError::TestNotFound(test_name.clone()));
-                }
-                Some(s) => s.lock().unwrap(),
-            };
-
-            // Add an edge for every test requirement.
-            for requirement in test.requirements() {
-                to_resolve.push(requirement.clone());
-                let edge = match node_bucket.get(requirement) {
-                    None => {
-                        unit.debug(format!("Test {} has a requirement that doesn't exist: \
-                                                  {}",
-                                           test_name,
-                                           requirement));
-                        return Err(ScenarioError::TestDependencyNotFound(test_name,
-                                                                         requirement.to_string()));
-                    }
-                    Some(e) => e,
-                };
-                if let Err(_) =
-                       test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Requires) {
-                    unit.debug(format!("Test {} has a circular requirement on {}",
-                                       test_name,
-                                       requirement));
-                    return Err(ScenarioError::CircularDependency(test_name.clone(),
-                                                                 requirement.clone()));
-                }
-            }
-
-            // Also add an edge for every test suggestion.
-            for requirement in test.suggestions() {
-                to_resolve.push(requirement.clone());
-                let edge = match node_bucket.get(requirement) {
-                    None => {
-                        unit.debug(format!("Test {} has a dependency that doesn't exist: \
-                                                  {}",
-                                           test_name,
-                                           requirement));
-                        return Err(ScenarioError::TestDependencyNotFound(test_name,
-                                                                         requirement.to_string()));
-                    }
-                    Some(e) => e,
-                };
-                if let Err(_) =
-                       test_graph.add_edge(*edge, node_bucket[&test_name], TestEdge::Suggests) {
-                    unit.debug(format!("Warning: test {} has a circular suggestion for {}",
-                                       test_name,
-                                       requirement));
-                }
-            }
-        }
-
-        let mut seen_nodes = HashMap::new();
-        let mut test_order = vec![];
-        {
-            // Pick a node from the bucket and visit it.  This will cause
-            // all nodes in the graph to be visited, in order.
-            let some_node = node_bucket.get(&test_names[0]).unwrap();
-            Self::visit_node(&mut seen_nodes,
-                             loaded_tests,
-                             some_node,
-                             &test_graph,
-                             &node_bucket,
-                             &mut test_order);
-        }
-        Ok(GraphResult {
-            tests: test_order,
-            graph: test_graph,
-            node_bucket: node_bucket,
-        })
-    }
-
     fn all_dependencies_succeeded(&self, test_name: &String) -> bool {
-        let parents = self.graph.parents(self.node_bucket[test_name]);
-
-        for (edge, node) in parents.iter(&self.graph) {
-            // We're only interested in parents that are required.
-            if *(self.graph.edge_weight(edge).unwrap()) != TestEdge::Requires {
-                continue;
-            }
-
-            let parent_name = self.graph.node_weight(node).unwrap();
-            let result = {
-                self.tests[self.tests_map[parent_name]].lock().unwrap().state()
-            };
+        for parent_name in self.graph.required_parents_of_named(test_name) {
+            let result = self.tests[self.tests_map[parent_name]].lock().unwrap().state();
 
             // If the dependent test did not succeed, then at least
             // one dependency failed.
