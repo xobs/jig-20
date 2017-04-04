@@ -5,7 +5,6 @@ use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
-use std::process;
 
 use cfti::testset::TestSet;
 use cfti::types::unit::Unit;
@@ -214,7 +213,6 @@ impl Controller {
 
                 ControlMessageContents::Hello(s) => {
                     testset.lock().unwrap().set_interface_hello(msg.unit_id, s);
-                    process::exit(0);
                 }
 
                 ControlMessageContents::Shutdown(s) => {
@@ -243,9 +241,7 @@ impl Controller {
                 ControlMessageContents::StartScenario(s) => {
                     testset.lock().unwrap().start_scenario(s)
                 }
-                ControlMessageContents::AbortTests => {
-                    testset.lock().unwrap().abort_scenario()
-                }
+                ControlMessageContents::AbortTests => testset.lock().unwrap().abort_scenario(),
                 ControlMessageContents::AdvanceScenario => {
                     testset.lock().unwrap().advance_scenario()
                 }
@@ -344,15 +340,14 @@ impl Controller {
         Self::do_broadcast_class(&self.broadcast, "standard", unit_name, unit_type, contents)
     }
 
-/*
-    pub fn debug(&self, unit_name: &str, unit_type: &str, msg: String) {
-        Self::do_broadcast_class(&self.broadcast,
-                                 "debug",
-                                 unit_name,
-                                 unit_type,
-                                 &BroadcastMessageContents::Log(msg))
-    }
-*/
+    // pub fn debug(&self, unit_name: &str, unit_type: &str, msg: String) {
+    // Self::do_broadcast_class(&self.broadcast,
+    // "debug",
+    // unit_name,
+    // unit_type,
+    // &BroadcastMessageContents::Log(msg))
+    // }
+    //
     pub fn debug_unit<T: Unit + ?Sized>(unit: &T, msg: String) {
         Self::broadcast_class_unit("debug-internal", unit, &BroadcastMessageContents::Log(msg))
     }
