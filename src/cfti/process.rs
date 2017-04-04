@@ -42,7 +42,7 @@ impl fmt::Debug for Process {
     }
 }
 
-pub fn make_command(cmd: &str) -> Result<Command, CommandError> {
+fn make_command(cmd: &str) -> Result<Command, CommandError> {
     let cmd = cmd.to_string().replace("\\", "\\\\");
     let cmd = cmd.as_str();
     let args = shlex::split(cmd);
