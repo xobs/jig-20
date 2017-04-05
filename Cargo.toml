@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Sean Cross <sean@xobs.io>"]
 
 [dependencies]
-dependy = "0.2.1"
+dependy = "0.3.0"
 shlex = "0.1.1"
 chan = "0.1.19"
 bus = { git = "https://github.com/xobs/bus.git" }
