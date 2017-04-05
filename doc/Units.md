@@ -56,6 +56,7 @@ The following fields are allowed in the [Jig] section:
 * ExecStopFailure: A command to be run if a test scenario fails.
 * WorkingDirectory: Directory to run the programs from.
 * Timeout: Maximum number of seconds this scenario should take.
+* Assume: A list of tests that are assumed to have passed.  Useful for making abbreviated unit tests.
 
 
 .trigger
