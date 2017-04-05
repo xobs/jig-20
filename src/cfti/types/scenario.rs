@@ -105,6 +105,9 @@ pub struct Scenario {
 
     /// Currently-running child support command.
     support_cmd: Arc<Mutex<Option<process::ChildProcess>>>,
+
+    /// A list of tests that are assumed to have succeeded.
+    assumptions: Arc<Mutex<Vec<String>>>,
 }
 
 impl dependy::Dependency for Test {
@@ -269,8 +272,8 @@ impl Scenario {
         // Add each possible test into the dependency graph
         test_set.debug(format!("Loaded tests: {:?}", loaded_tests));
         for (_, test) in loaded_tests {
-            if assumptions.contains(&test.lock().unwrap().name().to_string()) {
-                let assumption_dep = AssumptionDependency::new(test.lock().unwrap().name());
+            if assumptions.contains(&test.lock().unwrap().id().to_string()) {
+                let assumption_dep = AssumptionDependency::new(test.lock().unwrap().id());
                 graph.add_dependency(&assumption_dep);
             } else {
                 graph.add_dependency(&(*test.lock().unwrap()));
@@ -278,12 +281,22 @@ impl Scenario {
         }
 
         test_set.debug(format!("Test names: {:?}", test_names));
-        test_set.debug(format!("Graph: {:?}", graph));
         let test_order = match graph.resolve_named_dependencies(&test_names) {
             Ok(o) => o,
             Err(e) => return Some(Err(ScenarioError::DependencyError(format!("{:?}", e)))),
         };
         test_set.debug(format!("Scenario {} vector order: {:?}", id, test_order));
+
+        // Trim down the test list.  Remove anything that's just an assumption.
+        let mut trimmed_order = vec![];
+        for test in test_order {
+            if !assumptions.contains(&test) {
+                trimmed_order.push(test);
+            } else {
+                test_set.debug(format!("Removing test {} since it's an assumption.", test));
+            }
+        }
+        let test_order = trimmed_order;
 
         let mut test_map = HashMap::new();
         let mut tests = vec![];
@@ -328,11 +341,17 @@ impl Scenario {
             working_directory: Arc::new(Mutex::new(None)),
             start_time: Arc::new(Mutex::new(time::Instant::now())),
             support_cmd: Arc::new(Mutex::new(None)),
+            assumptions: Arc::new(Mutex::new(assumptions)),
         }))
     }
 
     fn all_dependencies_succeeded(&self, test_name: &String) -> bool {
         for parent_name in self.graph.required_parents_of_named(test_name) {
+            //            self.debug(format!("Checking if {} is an assumption ({})", test_name))
+            if self.assumptions.lock().unwrap().contains(parent_name) {
+                return true;
+            }
+
             let result = self.tests[self.tests_map[parent_name]].lock().unwrap().state();
 
             // If the dependent test did not succeed, then at least
