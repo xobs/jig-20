@@ -122,6 +122,37 @@ impl dependy::Dependency for Test {
     }
 }
 
+struct AssumptionDependency {
+    name: String,
+    requirements: Vec<String>,
+    suggestions: Vec<String>,
+    provides: Vec<String>,
+}
+impl AssumptionDependency {
+    pub fn new(name: &str) -> AssumptionDependency {
+        AssumptionDependency {
+            name: name.to_string(),
+            requirements: vec![],
+            suggestions: vec![],
+            provides: vec![],
+        }
+    }
+}
+impl dependy::Dependency for AssumptionDependency {
+    fn name(&self) -> &str {
+        &self.name.as_str()
+    }
+    fn requirements(&self) -> &Vec<String> {
+        &self.requirements
+    }
+    fn suggestions(&self) -> &Vec<String> {
+        &self.suggestions
+    }
+    fn provides(&self) -> &Vec<String> {
+        &self.provides
+    }
+}
+
 impl Scenario {
     pub fn new(id: &str,
                path: &str,
@@ -218,13 +249,32 @@ impl Scenario {
             }
         };
 
+        let assumptions = match unitfile.get("Scenario", "Assume") {
+            None => vec![],
+            Some(s) => {
+                s.split(",")
+                    .map(|x| {
+                        x.to_string()
+                            .split_whitespace()
+                            .map(|y| y.to_string().trim().to_string())
+                            .collect()
+                    })
+                    .collect()
+            }
+        };
+
         // Create a new dependency graph
         let mut graph = dependy::Dependy::new();
 
         // Add each possible test into the dependency graph
         test_set.debug(format!("Loaded tests: {:?}", loaded_tests));
         for (_, test) in loaded_tests {
-            graph.add_dependency(&(*test.lock().unwrap()));
+            if assumptions.contains(&test.lock().unwrap().name().to_string()) {
+                let assumption_dep = AssumptionDependency::new(test.lock().unwrap().name());
+                graph.add_dependency(&assumption_dep);
+            } else {
+                graph.add_dependency(&(*test.lock().unwrap()));
+            }
         }
 
         test_set.debug(format!("Test names: {:?}", test_names));
