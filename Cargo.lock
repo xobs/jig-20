@@ -6,7 +6,7 @@ dependencies = [
  "chan 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.22.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clonablechild 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "dependy 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dependy 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.11.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "shlex 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -98,10 +98,11 @@ dependencies = [
 
 [[package]]
 name = "dependy"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "daggy 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "petgraph 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -336,7 +337,7 @@ dependencies = [
 "checksum clap 2.22.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3cae8c5a1108961e9bafb1096b8cbb6a31c17ab1a276ce9b52334be99962f653"
 "checksum clonablechild 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4a4946a850c1e921fbdd9a1f92bf1298c41a301c0f6e9bacbabf95ea7d6d0225"
 "checksum daggy 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d6a9b61ac11d223e884f431772d311087644e4710c1555d7db270cefb5fb9c69"
-"checksum dependy 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "43239232c9b0a679d1c57c877f6106353665d53c1ee012d80bdac39c66e9c3bc"
+"checksum dependy 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9e0817e54efabc4ad1aa4888df908ad345b21f7592c28e7d656c9d58e702f1f0"
 "checksum either 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "18785c1ba806c258137c937e44ada9ee7e69a37e3c72077542cd2f069d78562a"
 "checksum fixedbitset 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "88c3c33fc4c00db33f5174eb98aea809c4c007db0b71351d810a7e094ea3b64d"
 "checksum itertools 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4833d6978da405305126af4ac88569b5d71ff758581ce5a987dbfa3755f694fc"
