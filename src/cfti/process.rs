@@ -2,6 +2,9 @@
 extern crate clonablechild;
 extern crate shlex;
 
+#[cfg(unix)]
+extern crate nix;
+
 use self::clonablechild::{ChildExt, ClonableChild};
 
 use std::io::{self, BufRead};
@@ -317,18 +320,21 @@ impl ChildProcess {
     }
 
     #[cfg(unix)]
-    pub fn kill(&self, timeout: Option<&Duration>) -> io::Result<()> {
+    pub fn kill(&self, timeout: Option<Duration>) -> io::Result<()> {
         if let Some(timeout) = timeout {
 
-            use libc::{kill, SIGTERM};
+            use self::sys::signal::*;
+            use self::nix::unistd::*;
+
             let child_pid = self.child.id();
+            let thr_child = self.child.clone();
 
             // Send the child a SIGTERM.
             // Wait for the child to terminate, and if it doesn't terminate in time,
             // send it a SIGKILL.
             let thr = thread::spawn(move || {
                 unsafe {
-                    kill(child_pid as i32, SIGTERM);
+                    kill(child_pid as i32, SIGTERM).expect("SIGTERM failed");
                 }
                 thread::park_timeout(timeout);
                 thr_child.kill().ok();
@@ -336,14 +342,14 @@ impl ChildProcess {
             self.child.wait();
             thr.thread().unpark();
         } else {
-            thr_child.kill().ok();
+            self.child.kill().ok();
         }
 
         Ok(())
     }
 
     #[cfg(windows)]
-    pub fn kill(&self, _: Option<&Duration>) -> io::Result<()> {
+    pub fn kill(&self, _: Option<Duration>) -> io::Result<()> {
         self.child.kill()
     }
 }

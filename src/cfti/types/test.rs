@@ -394,7 +394,7 @@ impl Test {
                         let msg = format!("Test daemon never came ready");
                         *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
                         Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
-                        if let Err(e) = thr_child.kill(Some(&thr_term_timeout)) {
+                        if let Err(e) = thr_child.kill(Some(thr_term_timeout)) {
                             Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
                         }
 
@@ -555,7 +555,7 @@ impl Test {
 
         // If the process is still running, make sure it's terminated.
         if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
-            if let Err(e) = pid.kill(Some(&self.termination_timeout)) {
+            if let Err(e) = pid.kill(Some(self.termination_timeout)) {
                 self.log(format!("Error while killing test: {:?}", e));
             }
         }
@@ -599,7 +599,7 @@ impl Test {
 
                 // Terminate the process, if it exists.
                 if let Some(ref p) = *(self.test_process.lock().unwrap()) {
-                    if let Err(e) = p.kill(Some(&self.termination_timeout)) {
+                    if let Err(e) = p.kill(Some(self.termination_timeout)) {
                         self.log(format!("Error while killing daemon: {:?}", e));
                     }
                 }

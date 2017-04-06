@@ -524,7 +524,7 @@ impl Scenario {
             ScenarioState::PostFailure |
             ScenarioState::PostSuccess => {
                 if let Some(ref cmd) = *(self.support_cmd.lock().unwrap()) {
-                    cmd.kill(Some(&self.termination_timeout));
+                    cmd.kill(Some(self.termination_timeout));
                 }
                 self.finish_scenario();
             }
