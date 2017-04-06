@@ -7,7 +7,7 @@ authors = ["Sean Cross <sean@xobs.io>"]
 dependy = "0.3.0"
 shlex = "0.1.1"
 chan = "0.1.19"
-bus = { git = "https://github.com/xobs/bus.git" }
+bus = { git = "https://github.com/xobs/bus.git", rev = "c8bb287df261cf038ac431a71b416ae996325d1c" }
 json = "0.11.5"
 termcolor = "0.3"
 clap = "2.20.5"
