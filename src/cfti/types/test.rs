@@ -115,6 +115,9 @@ pub struct Test {
 
     /// The working directory for the current test.
     test_working_directory: Arc<Mutex<Option<String>>>,
+
+    /// How long we can let process.kill() run for
+    termination_timeout: time::Duration,
 }
 
 impl Test {
@@ -301,6 +304,8 @@ impl Test {
 
             last_line: Arc::new(Mutex::new("".to_string())),
             state: Arc::new(Mutex::new(TestState::Pending)),
+
+            termination_timeout: config.default_termination_timeout().clone(),
         }))
     }
 
@@ -380,6 +385,7 @@ impl Test {
             let thr_end = self.exec_stop_failure.clone();
             let thr_end_timeout = self.exec_stop_failure_timeout.clone();
             let thr_dir = self.test_working_directory.clone();
+            let thr_term_timeout = self.termination_timeout.clone();
             let unit = self.to_simple_unit();
             let thr =
                 thread::spawn(move || {
@@ -388,7 +394,7 @@ impl Test {
                         let msg = format!("Test daemon never came ready");
                         *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
                         Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
-                        if let Err(e) = thr_child.kill() {
+                        if let Err(e) = thr_child.kill(Some(&thr_term_timeout)) {
                             Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
                         }
 
@@ -549,7 +555,7 @@ impl Test {
 
         // If the process is still running, make sure it's terminated.
         if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
-            if let Err(e) = pid.kill() {
+            if let Err(e) = pid.kill(Some(&self.termination_timeout)) {
                 self.log(format!("Error while killing test: {:?}", e));
             }
         }
@@ -593,7 +599,7 @@ impl Test {
 
                 // Terminate the process, if it exists.
                 if let Some(ref p) = *(self.test_process.lock().unwrap()) {
-                    if let Err(e) = p.kill() {
+                    if let Err(e) = p.kill(Some(&self.termination_timeout)) {
                         self.log(format!("Error while killing daemon: {:?}", e));
                     }
                 }

@@ -315,7 +315,35 @@ impl ChildProcess {
     pub fn wait(&self) -> io::Result<ExitStatus> {
         self.child.wait()
     }
-    pub fn kill(&self) -> io::Result<()> {
+
+    #[cfg(unix)]
+    pub fn kill(&self, timeout: Option<&Duration>) -> io::Result<()> {
+        if let Some(timeout) = timeout {
+
+            use libc::{kill, SIGTERM};
+            let child_pid = self.child.id();
+
+            // Send the child a SIGTERM.
+            // Wait for the child to terminate, and if it doesn't terminate in time,
+            // send it a SIGKILL.
+            let thr = thread::spawn(move || {
+                unsafe {
+                    kill(child_pid as i32, SIGTERM);
+                }
+                thread::park_timeout(timeout);
+                thr_child.kill().ok();
+            });
+            self.child.wait();
+            thr.thread().unpark();
+        } else {
+            thr_child.kill().ok();
+        }
+
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    pub fn kill(&self, _: Option<&Duration>) -> io::Result<()> {
         self.child.kill()
     }
 }

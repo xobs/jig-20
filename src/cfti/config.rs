@@ -3,6 +3,7 @@ use std::time::Duration;
 pub struct Config {
     locale: Option<String>,
     default_working_directory: Option<String>,
+    default_termination_timeout: Duration,
     timeout: Duration,
     scenario_timeout: Duration,
     scenario_start_timeout: Duration,
@@ -17,6 +18,7 @@ impl Config {
         Config {
             locale: None,
             default_working_directory: None,
+            default_termination_timeout: Duration::from_secs(5),
             timeout: Duration::from_secs(3600),
             scenario_timeout: Duration::from_secs(7200),
             scenario_start_timeout: Duration::from_secs(10),
@@ -47,6 +49,10 @@ impl Config {
 
     pub fn locale(&self) -> &Option<String> {
         &self.locale
+    }
+
+    pub fn default_termination_timeout(&self) -> &Duration {
+        &self.default_termination_timeout
     }
 
     pub fn default_working_directory(&self) -> &Option<String> {

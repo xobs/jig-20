@@ -108,6 +108,9 @@ pub struct Scenario {
 
     /// A list of tests that are assumed to have succeeded.
     assumptions: Arc<Mutex<Vec<String>>>,
+
+    /// How long we let a process termination go for.
+    termination_timeout: Duration,
 }
 
 impl dependy::Dependency for Test {
@@ -338,6 +341,7 @@ impl Scenario {
             state: Arc::new(Mutex::new(ScenarioState::Idle)),
             failures: failures,
             graph: graph,
+            termination_timeout: config.default_termination_timeout().clone(),
             working_directory: Arc::new(Mutex::new(None)),
             start_time: Arc::new(Mutex::new(time::Instant::now())),
             support_cmd: Arc::new(Mutex::new(None)),
@@ -520,7 +524,7 @@ impl Scenario {
             ScenarioState::PostFailure |
             ScenarioState::PostSuccess => {
                 if let Some(ref cmd) = *(self.support_cmd.lock().unwrap()) {
-                    cmd.kill();
+                    cmd.kill(Some(&self.termination_timeout));
                 }
                 self.finish_scenario();
             }
