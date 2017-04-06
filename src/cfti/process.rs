@@ -323,8 +323,8 @@ impl ChildProcess {
     pub fn kill(&self, timeout: Option<Duration>) -> io::Result<()> {
         if let Some(timeout) = timeout {
 
-            use self::sys::signal::*;
-            use self::nix::unistd::*;
+            use self::nix::sys::signal::SIGTERM;
+            use self::nix::sys::signal::kill;
 
             let child_pid = self.child.id();
             let thr_child = self.child.clone();
@@ -333,9 +333,7 @@ impl ChildProcess {
             // Wait for the child to terminate, and if it doesn't terminate in time,
             // send it a SIGKILL.
             let thr = thread::spawn(move || {
-                unsafe {
-                    kill(child_pid as i32, SIGTERM).expect("SIGTERM failed");
-                }
+                kill(child_pid as i32, SIGTERM).expect("SIGTERM failed");
                 thread::park_timeout(timeout);
                 thr_child.kill().ok();
             });
