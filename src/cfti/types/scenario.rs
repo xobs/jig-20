@@ -313,15 +313,23 @@ impl Scenario {
         let thr_failures = failures.clone();
 
         let state = Arc::new(Mutex::new(ScenarioState::Idle));
-        let thr_state = state.clone();
+        //        let thr_state = state.clone();
+        let thr_id = id.to_string();
 
         // Monitor broadcast states to determine when tests finish.
         test_set.controller().listen(move |msg| {
             match msg.message {
-                BroadcastMessageContents::Fail(_, _) => {
+                BroadcastMessageContents::Fail(msg_id, _) => {
                     // Only indicate a failure if we're running a test.
                     // Don't fail during e.g. ExecStartPre
-                    if let ScenarioState::Running(_) = *thr_state.lock().unwrap() {
+                    let start_id = format!("{}-{}", thr_id, "execstart");
+                    let stop_success_id = format!("{}-{}", thr_id, "execstopfailure");
+                    let stop_failure_id = format!("{}-{}", thr_id, "execstopsuccess");
+
+                    if (msg_id == start_id) || (msg_id == stop_success_id) ||
+                       (msg_id == stop_failure_id) {
+                        ;
+                    } else {
                         let mut failures = thr_failures.lock().unwrap();
                         *failures = *failures + 1;
                     }
@@ -595,7 +603,9 @@ impl Scenario {
             ScenarioState::PreStart => {
                 let ref cmd = self.exec_start;
                 let cmd = cmd.clone().unwrap();
-                self.run_support_cmd(cmd.as_str(), &self.exec_start_timeout, "execstart");
+                self.run_support_cmd(cmd.as_str(),
+                                     &self.exec_start_timeout,
+                                     format!("{}-{}", self.id(), "execstart").as_str());
             }
             ScenarioState::Running(next_step) => {
                 let ref test = self.tests[next_step].lock().unwrap();
@@ -608,14 +618,14 @@ impl Scenario {
                 let cmd = cmd.clone().unwrap();
                 self.run_support_cmd(cmd.as_str(),
                                      &self.exec_stop_success_timeout,
-                                     "execstopsuccess");
+                                     format!("{}-{}", self.id(), "execstopsuccess").as_str());
             }
             ScenarioState::PostFailure => {
                 let ref cmd = self.exec_stop_failure;
                 let cmd = cmd.clone().unwrap();
                 self.run_support_cmd(cmd.as_str(),
                                      &self.exec_stop_failure_timeout,
-                                     "execstopfailure");
+                                     format!("{}-{}", self.id(), "execstopfailure").as_str());
             }
 
             // If we're transitioning to the Finshed state, it means we just finished
