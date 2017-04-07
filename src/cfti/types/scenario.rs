@@ -656,6 +656,9 @@ impl Scenario {
                 test.lock().unwrap().pending();
             }
 
+            // Reset the number of errors to 0.
+            *(self.failures.lock().unwrap()) = 0;
+
             // Save the current instant, so we can timeout as needed.
             *(self.start_time.lock().unwrap()) = time::Instant::now();
 
