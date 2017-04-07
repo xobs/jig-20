@@ -7,6 +7,7 @@ extern crate nix;
 
 use self::clonablechild::{ChildExt, ClonableChild};
 
+use std::sync::{Arc, Mutex};
 use std::io::{self, BufRead};
 use std::process::Command;
 use std::time::Duration;
@@ -25,11 +26,13 @@ pub enum CommandError {
     ChildTimeoutTerminateError(String),
     ChildTerminatedBySignal,
     ReturnCodeError(i32),
+    ChildTerminationError(String),
 }
 
 #[derive(Clone)]
 pub struct ChildProcess {
     child: ClonableChild,
+    terminate_reason: Arc<Mutex<Option<String>>>,
 }
 
 pub struct Process {
@@ -53,7 +56,10 @@ fn make_command(cmd: &str) -> Result<Command, CommandError> {
         return Err(CommandError::NoCommandSpecified);
     }
     let mut args = args.unwrap();
+    //    #[cfg(windows)]
     let mut cmd = Command::new(args.remove(0));
+    //    #[cfg(unix)]
+    //    let mut cmd = Command::new("unbuffer" /* args.remove(0) */);
     cmd.args(&args);
     Ok(cmd)
 }
@@ -205,7 +211,10 @@ fn spawn<T: Unit>(mut cmd: Command,
         stdin: stdin,
         stdout: stdout,
         stderr: stderr,
-        child: ChildProcess { child: child },
+        child: ChildProcess {
+            child: child,
+            terminate_reason: Arc::new(Mutex::new(None)),
+        },
     })
 }
 
@@ -246,6 +255,7 @@ pub fn try_command_completion<F>(cmd_str: &str,
         cmd.current_dir(s);
     }
 
+    // Fork off and exec the child process.
     let mut child = match cmd.spawn() {
         Err(err) => {
             completion(Err(CommandError::SpawnError(format!("{}", err))));
@@ -260,20 +270,39 @@ pub fn try_command_completion<F>(cmd_str: &str,
     let stdin = child.stdin().unwrap();
     let stderr = child.stderr().unwrap();
 
-    let thr_child = child.clone();
+    // Return the file handles so that the calling process can monitor them.
+    let process = Process {
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        child: ChildProcess {
+            child: child,
+            terminate_reason: Arc::new(Mutex::new(None)),
+        },
+    };
+
+    // If the process times out, kill it gracefully.
+    let thr_process = process.child.clone();
     let thr = thread::spawn(move || {
         thread::park_timeout(max);
-        thr_child.kill().ok();
+        *(thr_process.terminate_reason.lock().unwrap()) = Some("Process timed out".to_string());
+        thr_process.kill(Some(Duration::from_secs(5))).ok();
     });
 
-    let thr_child = child.clone();
+    let thr_process = process.child.clone();
     thread::spawn(move || {
-        let status_code = match thr_child.wait() {
+        let status_code = match thr_process.wait() {
             Ok(status) => {
                 match status.code() {
                     None => {
                         thr.thread().unpark();
-                        completion(Err(CommandError::ChildTerminatedBySignal));
+                        if let Some(ref reason) = *thr_process.terminate_reason
+                            .lock()
+                            .unwrap() {
+                            completion(Err(CommandError::ChildTerminationError(reason.clone())));
+                        } else {
+                            completion(Err(CommandError::ChildTerminatedBySignal));
+                        }
                         return;
                     }
                     Some(s) => s,
@@ -296,13 +325,7 @@ pub fn try_command_completion<F>(cmd_str: &str,
         completion(Ok(()));
     });
 
-    // Return the file handles so that the calling process can monitor them.
-    Ok(Process {
-        stdin: stdin,
-        stdout: stdout,
-        stderr: stderr,
-        child: ChildProcess { child: child },
-    })
+    Ok(process)
 }
 
 impl fmt::Debug for ChildProcess {
@@ -323,19 +346,18 @@ impl ChildProcess {
     pub fn kill(&self, timeout: Option<Duration>) -> io::Result<()> {
         if let Some(timeout) = timeout {
 
-            use self::nix::sys::signal::SIGTERM;
+            use self::nix::sys::signal::{SIGTERM, SIGKILL};
             use self::nix::sys::signal::kill;
 
             let child_pid = self.child.id();
-            let thr_child = self.child.clone();
 
             // Send the child a SIGTERM.
             // Wait for the child to terminate, and if it doesn't terminate in time,
             // send it a SIGKILL.
             let thr = thread::spawn(move || {
-                kill(child_pid as i32, SIGTERM).expect("SIGTERM failed");
+                kill(child_pid as i32, SIGTERM).ok();
                 thread::park_timeout(timeout);
-                thr_child.kill().ok();
+                kill(child_pid as i32, SIGKILL).ok();
             });
             self.child.wait();
             thr.thread().unpark();
