@@ -508,7 +508,7 @@ impl Test {
                                                        last_line.lock().unwrap().to_string())
                     }
                     Err(e) => {
-                        let msg = format!("{:?}", e);
+                        let msg = format!("{:?}: {}", e, last_line.lock().unwrap().to_string());
                         *(result.lock().unwrap()) = TestState::Fail(msg.clone());
                         BroadcastMessageContents::Fail(unit.id().to_string(), msg)
                     }
