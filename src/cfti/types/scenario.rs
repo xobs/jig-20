@@ -312,12 +312,19 @@ impl Scenario {
 
         let thr_failures = failures.clone();
 
+        let state = Arc::new(Mutex::new(ScenarioState::Idle));
+        let thr_state = state.clone();
+
         // Monitor broadcast states to determine when tests finish.
         test_set.controller().listen(move |msg| {
             match msg.message {
                 BroadcastMessageContents::Fail(_, _) => {
-                    let mut failures = thr_failures.lock().unwrap();
-                    *failures = *failures + 1;
+                    // Only indicate a failure if we're running a test.
+                    // Don't fail during e.g. ExecStartPre
+                    if let ScenarioState::Running(_) = *thr_state.lock().unwrap() {
+                        let mut failures = thr_failures.lock().unwrap();
+                        *failures = *failures + 1;
+                    }
                 }
                 _ => (),
             };
@@ -338,7 +345,7 @@ impl Scenario {
             exec_stop_failure: exec_stop_failure,
             exec_stop_failure_timeout: config.scenario_success_timeout(),
             controller: test_set.controller().clone(),
-            state: Arc::new(Mutex::new(ScenarioState::Idle)),
+            state: state,
             failures: failures,
             graph: graph,
             termination_timeout: config.default_termination_timeout().clone(),
