@@ -1,6 +1,6 @@
 /// Generic Unit implementations
 
-use cfti::controller::{Controller, BroadcastMessageContents};
+use cfti::controller::{Controller, BroadcastMessageContents, ControlMessageContents};
 
 #[derive(Clone)]
 pub struct SimpleUnit {
@@ -38,6 +38,10 @@ pub trait Unit {
 
     fn broadcast(&self, msg: BroadcastMessageContents) {
         Controller::broadcast_unit(self, &msg);
+    }
+
+    fn control(&self, msg: ControlMessageContents) {
+        Controller::control_unit(self, &msg);
     }
 
     fn log(&self, msg: String) {

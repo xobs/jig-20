@@ -1,10 +1,13 @@
 extern crate bus;
 extern crate dependy;
+extern crate runny;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::time;
+
+use self::runny::running::Running;
 
 use cfti::types::test::{Test, TestState};
 use cfti::types::Unit;
@@ -19,10 +22,6 @@ pub enum ScenarioError {
     FileLoadError(String),
     MissingScenarioSection,
     TestListNotFound,
-    TestNotFound(String),
-    TestDependencyNotFound(String, String),
-    CircularDependency(String, String),
-    MissingDependency(String, String),
     DependencyError(String),
 }
 
@@ -104,7 +103,7 @@ pub struct Scenario {
     start_time: Arc<Mutex<time::Instant>>,
 
     /// Currently-running child support command.
-    support_cmd: Arc<Mutex<Option<process::ChildProcess>>>,
+    support_cmd: Arc<Mutex<Option<Running>>>,
 
     /// A list of tests that are assumed to have succeeded.
     assumptions: Arc<Mutex<Vec<String>>>,
@@ -515,14 +514,14 @@ impl Scenario {
         // The command will either return an error, or a tuple containing (stdout,stdin).
         // If it's an error, then the completion above will be called and the test state
         // will be advanced there.  Avoid advancing it here.
-        let child = match res {
+        let mut running = match res {
             Err(_) => return,
             Ok(s) => s,
         };
 
-        process::log_output(child.stdout, self, "stdout");
-        process::log_output(child.stderr, self, "stderr");
-        *(self.support_cmd.lock().unwrap()) = Some(child.child);
+        process::log_output(running.take_output(), self, "stdout").unwrap();
+        process::log_output(running.take_error(), self, "stderr").unwrap();
+        *(self.support_cmd.lock().unwrap()) = Some(running);
     }
 
     /// Don't run any new tests.  Stop the current test if one is running.
@@ -538,8 +537,8 @@ impl Scenario {
             ScenarioState::PreStart |
             ScenarioState::PostFailure |
             ScenarioState::PostSuccess => {
-                if let Some(ref cmd) = *(self.support_cmd.lock().unwrap()) {
-                    cmd.kill(Some(self.termination_timeout));
+                if let Some(ref mut cmd) = *(self.support_cmd.lock().unwrap()) {
+                    cmd.terminate(Some(self.termination_timeout)).unwrap();
                 }
                 self.finish_scenario();
             }

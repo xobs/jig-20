@@ -1,14 +1,25 @@
+extern crate chan_signal;
 extern crate termcolor;
 extern crate clap;
 
 mod cfti;
-use std::{thread, time};
+use std::thread;
 use std::io::Write;
 
 use self::termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use clap::{Arg, App};
+use chan_signal::Signal;
 
 fn main() {
+    // The signal handler must come first, so that the same mask gets
+    // applied to all threads.
+    let signal = chan_signal::notify(&[Signal::INT,
+                                       Signal::TERM,
+                                       Signal::HUP,
+                                       Signal::QUIT,
+                                       Signal::ABRT,
+                                       Signal::PIPE]);
+
     let mut config = cfti::config::Config::new();
     let matches = App::new("Jig-20 Test Controller")
         .version("1.0")
@@ -44,7 +55,7 @@ fn main() {
             .help("The default number of seconds to allow scenarios to run, if unspecified"))
         .get_matches();
 
-    config.set_locale(matches.value_of("LOCALE"));
+    // config.set_locale(matches.value_of("LOCALE"));
     config.set_timeout(matches.value_of("TIMEOUT").unwrap().parse().unwrap());
 
     let default_cwd = match matches.value_of("DEFAULT_WORKING_DIRECTORY") {
@@ -74,16 +85,19 @@ fn main() {
         Ok(())
     });
 
-    let test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(),
-                                      &config,
-                                      &mut controller)
+    let mut test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(),
+                                          &config,
+                                          &mut controller)
         .unwrap();
 
-    // println!("Test set: {:?}", test_set);
-    loop {
-        if controller.should_exit() {
-            break;
-        }
-        thread::sleep(time::Duration::from_millis(100));
-    }
+    println!("Test set: {:?}", test_set);
+    let test_set_pump_thread = thread::spawn(move || test_set.run());
+
+    println!("Waiting for signal...");
+    signal.recv().unwrap();
+    println!("Received signal");
+    controller.shutdown("Signal received");
+    println!("Sent shutdown message");
+    test_set_pump_thread.join().unwrap();
+    println!("Ended testset thread");
 }

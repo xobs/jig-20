@@ -87,8 +87,7 @@ impl Trigger {
                     }
                 }
                 if found_it == false {
-                    test_set.debug(format!("The trigger '{}' is not compatible with this jig",
-                                             id));
+                    test_set.debug(format!("The trigger '{}' is not compatible with this jig", id));
                     return None;
                 }
             }
@@ -150,15 +149,17 @@ impl Trigger {
             }
         };
 
-        let cmd = match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
-            Err(e) => return Err(TriggerError::TriggerSpawnError(e)),
-            Ok(o) => o,
-        };
+        let mut cmd =
+            match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
+                Err(e) => return Err(TriggerError::TriggerSpawnError(e)),
+                Ok(o) => o,
+            };
 
-        process::log_output(cmd.stderr, self, "stderr");
-        process::watch_output(cmd.stdout,
+        // process::log_output(cmd.stderr, self, "stderr");
+        process::watch_output(cmd.take_output(),
                               self,
-                              move |line, unit| Self::read_line(line, unit));
+                              move |line, unit| Self::read_line(line, unit))
+            .unwrap();
         Ok(())
     }
 }

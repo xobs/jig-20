@@ -1,4 +1,8 @@
 extern crate json;
+extern crate runny;
+
+use self::runny::Runny;
+use self::runny::running::Running;
 
 use cfti::types::unit::Unit;
 use cfti::controller::{self, Controller, BroadcastMessageContents, ControlMessageContents};
@@ -7,9 +11,9 @@ use cfti::unitfile;
 use cfti::config;
 use cfti::testset;
 
-use std::process::ChildStdin;
 use std::io::Write;
 use std::fmt::{Formatter, Display, Error};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 enum InterfaceFormat {
@@ -65,6 +69,9 @@ pub struct Interface {
 
     /// The value set by the "HELLO" command
     hello: String,
+
+    /// The currently running process
+    process: Arc<Mutex<Option<Running>>>,
 }
 
 impl Interface {
@@ -146,6 +153,7 @@ impl Interface {
             format: format,
             controller: test_set.controller().clone(),
             hello: "".to_string(),
+            process: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -153,7 +161,9 @@ impl Interface {
         self.hello = hello;
     }
 
-    fn text_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
+    fn text_write<T>(stdin: &mut T, msg: controller::BroadcastMessage) -> Result<(), String>
+        where T: Write
+    {
         let result = match msg.message {
             BroadcastMessageContents::Log(l) => {
                 writeln!(stdin,
@@ -181,7 +191,7 @@ impl Interface {
             //                                                "HELLO {}", name),
             //            BroadcastMessageContents::Ping(val) => writeln!(stdin,
             //                                                "PING {}", val),
-            BroadcastMessageContents::Shutdown(reason) => writeln!(stdin, "SHUTDOWN {}", reason),
+            BroadcastMessageContents::Shutdown(reason) => writeln!(stdin, "EXIT {}", reason),
             BroadcastMessageContents::Tests(scenario, tests) => {
                 writeln!(stdin, "TESTS {} {}", scenario, tests.join(" "))
             }
@@ -202,11 +212,13 @@ impl Interface {
         };
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(()),
+            Err(e) => Err(format!("{:?}", e)),
         }
     }
 
-    fn json_write(stdin: &mut ChildStdin, msg: controller::BroadcastMessage) -> Result<(), ()> {
+    fn json_write<T>(stdin: &mut T, msg: controller::BroadcastMessage) -> Result<(), String>
+        where T: Write
+    {
         let mut object = json::JsonValue::new_object();
         object["message_class"] = msg.message_class.into();
         object["unit_id"] = msg.unit_id.into();
@@ -294,7 +306,7 @@ impl Interface {
         };
         match writeln!(stdin, "{}", json::stringify(object)) {
             Ok(_) => Ok(()),
-            Err(_) => Err(()),
+            Err(e) => Err(format!("{:?}", e)),
         }
     }
 
@@ -303,7 +315,7 @@ impl Interface {
     }
 
     fn text_read<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
-        Controller::debug_unit(unit, format!("CFTI interface input: {}", line));
+        unit.debug(format!("CFTI interface input: {}", line));
         let mut words: Vec<String> =
             line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
@@ -363,33 +375,40 @@ impl Interface {
             }
         };
 
-        let child = match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
-            Err(e) => {
-                self.log(format!("Unable to spawn: {:?}", e));
-                return Err(InterfaceError::ExecCommandFailed);
-            }
-            Ok(s) => s,
-        };
+        let mut running =
+            match Runny::new(self.exec_start.as_str()).directory(&working_directory).start() {
+                Ok(p) => p,
+                Err(e) => {
+                    self.debug(format!("Unable to run interface command {}: {:?}",
+                                       self.exec_start,
+                                       e));
+                    return Err(InterfaceError::ExecCommandFailed);
+                }
+            };
 
-        self.log(format!("Launched an interface: {}", self.id()));
-        let mut stdin = child.stdin;
-        let stdout = child.stdout;
-        let stderr = child.stderr;
+        self.debug(format!("Launched interface"));
+        let mut stdin = running.take_input();
+        let stdout = running.take_output();
+        let stderr = running.take_error();
 
         match self.format {
             InterfaceFormat::Text => {
 
                 // Send some initial information to the client.
                 writeln!(stdin, "HELLO Jig/20 1.0").unwrap();
+
                 // Send all broadcasts to the stdin of the child process.
                 self.controller.listen(move |msg| Interface::text_write(&mut stdin, msg));
-                process::log_output(stderr, self, "stderr");
-                process::watch_output(stdout, self, move |line, u| Interface::text_read(line, u));
+                process::log_output(stderr, self, "stderr").unwrap();
+                process::watch_output(stdout, self, move |line, u| Interface::text_read(line, u))
+                    .unwrap();
             }
             InterfaceFormat::JSON => {
                 self.controller.listen(move |msg| Interface::json_write(&mut stdin, msg));
             }
         };
+
+        *(self.process.lock().unwrap()) = Some(running);
         Ok(())
     }
 }

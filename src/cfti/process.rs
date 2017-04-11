@@ -1,107 +1,21 @@
-// From http://stackoverflow.com/a/36870954
-extern crate clonablechild;
-extern crate shlex;
+extern crate runny;
 
-#[cfg(unix)]
-extern crate nix;
-
-use self::clonablechild::{ChildExt, ClonableChild};
-
-use std::sync::{Arc, Mutex};
 use std::io::{self, BufRead};
-use std::process::Command;
 use std::time::Duration;
 use std::thread;
-use std::fmt;
-use std::process::{Stdio, ChildStdin, ChildStdout, ChildStderr, ExitStatus};
+
+use self::runny::{Runny, RunnyError};
+use self::runny::running::Running;
 
 use cfti::controller::{Controller, ControlMessageContents};
 use cfti::types::unit::Unit;
 
 #[derive(Debug)]
 pub enum CommandError {
-    NoCommandSpecified,
-    MakeCommandError(String),
-    SpawnError(String),
-    ChildTimeoutTerminateError(String),
-    ChildTerminatedBySignal,
+    SpawnError(String, String),
     ReturnCodeError(i32),
     ChildTerminationError(String),
-}
-
-#[derive(Clone)]
-pub struct ChildProcess {
-    child: ClonableChild,
-    terminate_reason: Arc<Mutex<Option<String>>>,
-}
-
-pub struct Process {
-    pub stdin: ChildStdin,
-    pub stdout: ChildStdout,
-    pub stderr: ChildStderr,
-    pub child: ChildProcess,
-}
-
-impl fmt::Debug for Process {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Process {}", self.child.id())
-    }
-}
-
-fn make_command(cmd: &str) -> Result<Command, CommandError> {
-    let cmd = cmd.to_string().replace("\\", "\\\\");
-    let cmd = cmd.as_str();
-    let args = shlex::split(cmd);
-    if args.is_none() {
-        return Err(CommandError::NoCommandSpecified);
-    }
-    let mut args = args.unwrap();
-    //    #[cfg(windows)]
-    let mut cmd = Command::new(args.remove(0));
-    //    #[cfg(unix)]
-    //    let mut cmd = Command::new("unbuffer" /* args.remove(0) */);
-    cmd.args(&args);
-    Ok(cmd)
-}
-
-pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
-    let mut cmd = match make_command(cmd) {
-        Err(e) => {
-            unit.debug(format!("Unable to make command: {:?}", e));
-            return false;
-        }
-        Ok(val) => val,
-    };
-
-    if let Some(ref s) = *wd {
-        cmd.current_dir(s);
-    }
-
-    let child = match cmd.spawn() {
-        Err(e) => {
-            unit.debug(format!("Unable to spawn child {:?}: {:?}", cmd, e));
-            return false;
-        }
-        Ok(o) => o.into_clonable(),
-    };
-
-    let thr_child = child.clone();
-    let thr = thread::spawn(move || {
-        thread::park_timeout(max);
-        thr_child.kill().ok();
-    });
-
-    let status_code = match child.wait() {
-        Ok(status) => status.code(),
-        Err(e) => {
-            thr.thread().unpark();
-            unit.debug(format!("Unable to wait() for child: {:?}", e));
-            return false;
-        }
-    };
-
-    thr.thread().unpark();
-    return status_code.unwrap() == 0;
+    RunnyError(String, RunnyError),
 }
 
 pub fn log_output<T: io::Read + Send + 'static, U: Unit>
@@ -135,19 +49,29 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>
         for line in io::BufReader::new(stream).lines() {
             match line {
                 Err(e) => {
-                    Controller::debug_unit(&thr_unit, format!("Error in interface: {}", e));
+                    thr_unit.debug(format!("Error in interface: {}", e));
                     return;
                 }
                 Ok(l) => {
                     if let Err(e) = msg_func(l, &thr_unit) {
-                        Controller::debug_unit(&thr_unit,
-                                               format!("Message func returned error: {:?}", e));
+                        thr_unit.debug(format!("Message func returned error: {:?}", e));
                         return;
                     }
                 }
             }
         }
     })
+}
+
+pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
+    let mut running = match Runny::new(cmd).directory(wd).timeout(&max).start() {
+        Ok(r) => r,
+        Err(e) => {
+            unit.debug(format!("Unable to start command {}: {:?}", cmd, e));
+            return false;
+        }
+    };
+    running.result() == 0
 }
 
 /// Formats `cmd_str` as a Command, runs it, and returns the Process.
@@ -158,64 +82,16 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>
 pub fn spawn_cmd<T: Unit>(cmd_str: &str,
                           unit: &T,
                           working_directory: &Option<String>)
-                          -> Result<Process, CommandError> {
-
-    let cmd = match make_command(cmd_str) {
-        Ok(c) => c,
-        Err(e) => return Err(e),
+                          -> Result<Running, CommandError> {
+    let process = match Runny::new(cmd_str).directory(working_directory).start() {
+        Ok(p) => p,
+        Err(e) => {
+            unit.debug(format!("Unable to spawn command {}: {:?}", cmd_str, e));
+            return Err(CommandError::RunnyError(cmd_str.to_string(), e));
+        }
     };
 
-    match spawn(cmd, unit, working_directory) {
-        Ok(o) => Ok(o),
-        Err(e) => Err(CommandError::SpawnError(format!("{}", e))),
-    }
-}
-
-fn spawn<T: Unit>(mut cmd: Command,
-                  unit: &T,
-                  working_directory: &Option<String>)
-                  -> Result<Process, io::Error> {
-    cmd.stdout(Stdio::piped());
-    cmd.stdin(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-
-    if let &Some(ref d) = working_directory {
-        cmd.current_dir(d);
-    }
-
-    let mut child = match cmd.spawn() {
-        Err(e) => return Err(e),
-        Ok(child) => child.into_clonable(),
-    };
-
-    let stdin = child.stdin().unwrap();
-    let stdout = child.stdout().unwrap();
-    let stderr = child.stderr().unwrap();
-    let child_thr = child.clone();
-    let unit_thr = unit.to_simple_unit();
-
-    thread::spawn(move || {
-        match child_thr.wait() {
-            Ok(status) => {
-                Controller::debug_unit(&unit_thr,
-                                       format!("Child exited successfully with result: {:?}",
-                                               status))
-            }
-            Err(e) => {
-                Controller::debug_unit(&unit_thr, format!("Child errored with exit: {:?}", e))
-            }
-        };
-    });
-
-    Ok(Process {
-        stdin: stdin,
-        stdout: stdout,
-        stderr: stderr,
-        child: ChildProcess {
-            child: child,
-            terminate_reason: Arc::new(Mutex::new(None)),
-        },
-    })
+    Ok(process)
 }
 
 /// Tries to run `cmd`.
@@ -235,141 +111,36 @@ pub fn try_command_completion<F>(cmd_str: &str,
                                  wd: &Option<String>,
                                  max: Duration,
                                  completion: F)
-                                 -> Result<Process, CommandError>
+                                 -> Result<Running, CommandError>
     where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
-
-    let mut cmd = match make_command(cmd_str) {
-        Err(e) => {
-            completion(Err(CommandError::MakeCommandError(format!("{:?}", e))));
-            return Err(CommandError::MakeCommandError(format!("{:?}", e)));
-        }
-        Ok(val) => val,
-    };
-
-    cmd.stdout(Stdio::piped());
-    cmd.stdin(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-
-    if let Some(ref s) = *wd {
-        cmd.current_dir(s);
-    }
+    let mut cmd = Runny::new(cmd_str);
+    cmd.directory(wd).timeout(&max);
 
     // Fork off and exec the child process.
-    let mut child = match cmd.spawn() {
+    let child = match cmd.start() {
         Err(err) => {
-            completion(Err(CommandError::SpawnError(format!("{}", err))));
-            return Err(CommandError::SpawnError(format!("{}", err)));
+            completion(Err(CommandError::RunnyError(cmd_str.to_string(), err)));
+            return Err(CommandError::SpawnError(cmd_str.to_string(),
+                                                format!("Dunno what went wrong")));
         }
-        Ok(s) => s.into_clonable(),
+        Ok(s) => s,
     };
 
-    // Take the child's stdio handles and replace them with None.  This allows
-    // us to have the thread take ownership of `child` and return the handles.
-    let stdout = child.stdout().unwrap();
-    let stdin = child.stdin().unwrap();
-    let stderr = child.stderr().unwrap();
+    let waiter = child.waiter();
 
-    // Return the file handles so that the calling process can monitor them.
-    let process = Process {
-        stdin: stdin,
-        stdout: stdout,
-        stderr: stderr,
-        child: ChildProcess {
-            child: child,
-            terminate_reason: Arc::new(Mutex::new(None)),
-        },
-    };
-
-    // If the process times out, kill it gracefully.
-    let thr_process = process.child.clone();
-    let thr = thread::spawn(move || {
-        thread::park_timeout(max);
-        *(thr_process.terminate_reason.lock().unwrap()) = Some("Process timed out".to_string());
-        thr_process.kill(Some(Duration::from_secs(5))).ok();
-    });
-
-    let thr_process = process.child.clone();
     thread::spawn(move || {
-        let status_code = match thr_process.wait() {
-            Ok(status) => {
-                match status.code() {
-                    None => {
-                        thr.thread().unpark();
-                        if let Some(ref reason) = *thr_process.terminate_reason
-                            .lock()
-                            .unwrap() {
-                            completion(Err(CommandError::ChildTerminationError(reason.clone())));
-                        } else {
-                            completion(Err(CommandError::ChildTerminatedBySignal));
-                        }
-                        return;
-                    }
-                    Some(s) => s,
-                }
-            }
-            Err(e) => {
-                thr.thread().unpark();
-                completion(Err(CommandError::ChildTimeoutTerminateError(format!("{}", e))));
-                return;
+        // Wait for the thread to exit.
+        match waiter.result() {
+            x if x == 0 => completion(Ok(())),
+            x if x > 0 => completion(Err(CommandError::ReturnCodeError(x))),
+            x => {
+                completion(Err(CommandError::ChildTerminationError(format!("Termination \
+                                                                            returned error: {}",
+                                                                           x))))
             }
         };
-
-        // If it's a nonzero exit code, that counts as an error.
-        if status_code != 0 {
-            thr.thread().unpark();
-            completion(Err(CommandError::ReturnCodeError(status_code)));
-            return;
-        }
-        thr.thread().unpark();
-        completion(Ok(()));
     });
 
-    Ok(process)
-}
-
-impl fmt::Debug for ChildProcess {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Process {}", self.child.id())
-    }
-}
-
-impl ChildProcess {
-    pub fn id(&self) -> u32 {
-        self.child.id()
-    }
-    pub fn wait(&self) -> io::Result<ExitStatus> {
-        self.child.wait()
-    }
-
-    #[cfg(unix)]
-    pub fn kill(&self, timeout: Option<Duration>) -> io::Result<()> {
-        if let Some(timeout) = timeout {
-
-            use self::nix::sys::signal::{SIGTERM, SIGKILL};
-            use self::nix::sys::signal::kill;
-
-            let child_pid = self.child.id();
-
-            // Send the child a SIGTERM.
-            // Wait for the child to terminate, and if it doesn't terminate in time,
-            // send it a SIGKILL.
-            let thr = thread::spawn(move || {
-                kill(child_pid as i32, SIGTERM).ok();
-                thread::park_timeout(timeout);
-                kill(child_pid as i32, SIGKILL).ok();
-            });
-            self.child.wait();
-            thr.thread().unpark();
-        } else {
-            self.child.kill().ok();
-        }
-
-        Ok(())
-    }
-
-    #[cfg(windows)]
-    pub fn kill(&self, _: Option<Duration>) -> io::Result<()> {
-        self.child.kill()
-    }
+    Ok(child)
 }

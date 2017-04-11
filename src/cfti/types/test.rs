@@ -1,7 +1,9 @@
 extern crate bus;
 extern crate regex;
+extern crate runny;
 
 use self::regex::Regex;
+use self::runny::running::Running;
 
 use std::sync::{Arc, Mutex};
 use std::time;
@@ -111,7 +113,7 @@ pub struct Test {
     state: Arc<Mutex<TestState>>,
 
     /// The currently-running test process.  Particularly important for daemons.
-    test_process: Arc<Mutex<Option<process::ChildProcess>>>,
+    test_process: Arc<Mutex<Option<Running>>>,
 
     /// The working directory for the current test.
     test_working_directory: Arc<Mutex<Option<String>>>,
@@ -363,29 +365,32 @@ impl Test {
         *(self.state.lock().unwrap()) = TestState::Starting;
 
         // Try to launch the daemon.  If it fails, report the error immediately and return.
-        let child = match process::spawn_cmd(self.exec_start.as_str(), self, working_directory) {
-            Err(e) => {
-                let msg = format!("{:?}", e);
-                *(result.lock().unwrap()) = TestState::Fail(msg.clone());
-                BroadcastMessageContents::Fail(id, msg);
-                return;
-            }
-            Ok(o) => o,
-        };
+        let mut running =
+            match process::spawn_cmd(self.exec_start.as_str(), self, working_directory) {
+                Err(e) => {
+                    let msg = format!("{:?}", e);
+                    *(result.lock().unwrap()) = TestState::Fail(msg.clone());
+                    BroadcastMessageContents::Fail(id, msg);
+                    return;
+                }
+                Ok(o) => o,
+            };
 
         // Hook up stderr right away, because we'll be looking for the output on stdout.
-        process::log_output(child.stderr, self, "stderr");
+        // XXX stderr doesn't exist anymore.  This API needs to be brought back, though.
+        // process::log_output(running, self, "stderr");
 
         // Wait until the "match" string appears.
-        let mut buf_reader = io::BufReader::new(child.stdout);
+        let thr_waiter = running.waiter();
+        let term_waiter = running.waiter();
+
+        let mut buf_reader = io::BufReader::new(running.take_output());
         if let Some(ref r) = self.test_daemon_ready {
             // Fire off a thread to kill the process if it takes too long to start.
             let thr_state = self.state.clone();
-            let thr_child = child.child.clone();
             let thr_end = self.exec_stop_failure.clone();
             let thr_end_timeout = self.exec_stop_failure_timeout.clone();
             let thr_dir = self.test_working_directory.clone();
-            let thr_term_timeout = self.termination_timeout.clone();
             let unit = self.to_simple_unit();
             let thr =
                 thread::spawn(move || {
@@ -394,14 +399,12 @@ impl Test {
                         let msg = format!("Test daemon never came ready");
                         *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
                         Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
-                        if let Err(e) = thr_child.kill(Some(thr_term_timeout)) {
-                            Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Unable to kill daemon: {:?}", e)));
-                        }
+                        thr_waiter.terminate(&None);
 
                         if let Some(cmd) = thr_end {
                             Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
-                            let ref dir = thr_dir.lock().unwrap();
-                            process::try_command(&unit, cmd.as_str(), dir, thr_end_timeout);
+                            let dir = thr_dir.lock().unwrap();
+                            process::try_command(&unit, cmd.as_str(), &*dir, thr_end_timeout);
                         }
                     }
                 });
@@ -453,17 +456,16 @@ impl Test {
             *(self.state.lock().unwrap()) = TestState::Running;
         }
 
-        process::log_output(buf_reader, self, "stdout");
-        *(self.test_process.lock().unwrap()) = Some(child.child.clone());
+        process::log_output(buf_reader, self, "stdout").unwrap();
+        *(self.test_process.lock().unwrap()) = Some(running);
 
         // Move the child into its own thread and wait for it to terminate.
         // If we're still in the "Running" state when it quits, then the daemon
         // has failed.
-        let thr_child = child.child.clone();
         let thr_state = self.state.clone();
         let unit = self.to_simple_unit();
         thread::spawn(move || {
-            let result = thr_child.wait();
+            let result = term_waiter.result();
 
             // If we're still in the "Running" state, it's a failure.
             if *(thr_state.lock().unwrap()) == TestState::Running {
@@ -494,8 +496,9 @@ impl Test {
         // Mark the test as "Running"
         *(self.state.lock().unwrap()) = TestState::Running;
 
+        // Clone the Option<Running> so we can clean it up when it exits.
         let thr_process = self.test_process.clone();
-        let child =
+        let mut running =
             match process::try_command_completion(cmd.as_str(),
                                                   working_directory,
                                                   max_duration,
@@ -529,21 +532,27 @@ impl Test {
             };
 
         let thr_last_line = self.last_line.clone();
-        process::watch_output(child.stdout, self, move |msg, unit| {
-            *(thr_last_line.lock().unwrap()) = msg.clone();
-            Controller::broadcast_class_unit("stdout", unit, &BroadcastMessageContents::Log(msg));
-            Ok(())
-        });
+        process::watch_output(running.take_output(), self, move |msg, unit| {
+                *(thr_last_line.lock().unwrap()) = msg.clone();
+                Controller::broadcast_class_unit("stdout",
+                                                 unit,
+                                                 &BroadcastMessageContents::Log(msg));
+                Ok(())
+            })
+            .unwrap();
 
         let thr_last_line = self.last_line.clone();
-        process::watch_output(child.stderr, self, move |msg, unit| {
-            *(thr_last_line.lock().unwrap()) = msg.clone();
-            Controller::broadcast_class_unit("stderr", unit, &BroadcastMessageContents::Log(msg));
-            Ok(())
-        });
+        process::watch_output(running.take_error(), self, move |msg, unit| {
+                *(thr_last_line.lock().unwrap()) = msg.clone();
+                Controller::broadcast_class_unit("stderr",
+                                                 unit,
+                                                 &BroadcastMessageContents::Log(msg));
+                Ok(())
+            })
+            .unwrap();
 
         // Save the child process so that we can terminate it early if necessary.
-        *(self.test_process.lock().unwrap()) = Some(child.child.clone());
+        *(self.test_process.lock().unwrap()) = Some(running);
     }
 
     pub fn stop(&self, working_directory: &Option<String>) {
@@ -554,10 +563,8 @@ impl Test {
         }
 
         // If the process is still running, make sure it's terminated.
-        if let Some(ref pid) = *(self.test_process.lock().unwrap()) {
-            if let Err(e) = pid.kill(Some(self.termination_timeout)) {
-                self.log(format!("Error while killing test: {:?}", e));
-            }
+        if let Some(ref mut pid) = *(self.test_process.lock().unwrap()) {
+            pid.terminate(Some(self.termination_timeout)).unwrap();
         }
 
         match *(self.state.lock().unwrap()) {
@@ -598,10 +605,9 @@ impl Test {
                 };
 
                 // Terminate the process, if it exists.
-                if let Some(ref p) = *(self.test_process.lock().unwrap()) {
-                    if let Err(e) = p.kill(Some(self.termination_timeout)) {
-                        self.log(format!("Error while killing daemon: {:?}", e));
-                    }
+                if let Some(ref mut p) = *(self.test_process.lock().unwrap()) {
+                    p.terminate(Some(self.termination_timeout)).unwrap();
+
                 }
                 *(self.test_process.lock().unwrap()) = None;
 

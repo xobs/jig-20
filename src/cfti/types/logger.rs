@@ -165,7 +165,7 @@ impl Logger {
         };
 
         self.debug(format!("Starting logger..."));
-        let process =
+        let mut process =
             match process::spawn_cmd(self.exec_start.as_str(), self, &working_directory) {
                 Err(e) => {
                     self.debug(format!("Unable to spawn {}: {:?}", self.exec_start, e));
@@ -174,7 +174,7 @@ impl Logger {
                 Ok(s) => s,
             };
 
-        let mut stdin = process.stdin;
+        let mut stdin = process.take_input();
         let unit = self.to_simple_unit();
 
         match self.format {
@@ -195,7 +195,7 @@ impl Logger {
                                 Controller::debug_unit(&unit,
                                                        format!("Unable to write to logfile: {:?}",
                                                                e));
-                                return Err(());
+                                return Err(format!("{:?}", e));
                             }
                         }
                         _ => (),
@@ -218,7 +218,7 @@ impl Logger {
                                 Controller::debug_unit(&unit,
                                                        format!("Unable to write to logfile: {:?}",
                                                                e));
-                                return Err(());
+                                return Err(format!("{:?}", e));
                             };
                         }
                         _ => (),

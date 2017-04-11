@@ -1,6 +1,7 @@
 extern crate termcolor;
 
-use cfti::{config, controller};
+use cfti::config;
+use cfti::controller::{self, ControlMessageContents};
 use cfti::types::{Test, Scenario, Logger, Trigger, Jig, Interface};
 use cfti::types::unit::Unit;
 // use cfti::types::Coupon;
@@ -14,6 +15,7 @@ use std::io::Error;
 use std::path::PathBuf;
 use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver};
 use std::ops::{DerefMut, Deref};
 
 use super::controller::{BroadcastMessageContents, Controller};
@@ -44,6 +46,23 @@ pub struct TestSet {
     //
     /// The controller object, where messages come and go.
     controller: Controller,
+
+    /// A control channel from the Controller, to manipulate the testset
+    receiver: Receiver<TestSetCommand>,
+}
+
+#[derive(Debug)]
+pub enum TestSetCommand {
+    DescribeJig,
+    AbortScenario,
+    SetScenario(String),
+    SetInterfaceHello(String, String),
+    StartScenario(Option<String>),
+    AdvanceScenario,
+    AbortTests,
+    SendScenarios,
+    SendTests(Option<String>),
+    Shutdown,
 }
 
 impl TestSet {
@@ -51,9 +70,11 @@ impl TestSet {
     pub fn new(dir: &str,
                config: &config::Config,
                controller: &mut controller::Controller)
-               -> Result<Arc<Mutex<TestSet>>, Error> {
+               -> Result<TestSet, Error> {
 
-        let test_set = Arc::new(Mutex::new(TestSet {
+        let (sender, receiver) = channel();
+
+        let mut test_set = TestSet {
             tests: HashMap::new(),
             test_aliases: HashMap::new(),
             scenarios: HashMap::new(),
@@ -64,9 +85,10 @@ impl TestSet {
             scenario: None,
             interfaces: HashMap::new(),
             controller: controller.clone(),
-        }));
+            receiver: receiver,
+        };
 
-        controller.set_testset(test_set.clone());
+        test_set.control(ControlMessageContents::SetTestsetChannel(sender));
 
         // TestSet ordering:
         // When a TestSet is loaded off the disk, the order of unit files is
@@ -113,21 +135,21 @@ impl TestSet {
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
                 unknown => {
-                    test_set.lock().unwrap().warn(format!("Unrecognized unit type {}, path: {}",
-                                                          unknown,
-                                                          path.to_str().unwrap_or("")))
+                    test_set.warn(format!("Unrecognized unit type {}, path: {}",
+                                          unknown,
+                                          path.to_str().unwrap_or("")))
                 }
             }
         }
 
-        test_set.lock().unwrap().load_jigs(&config, &jig_paths);
-        test_set.lock().unwrap().load_loggers(&config, &logger_paths);
-        test_set.lock().unwrap().load_interfaces(&config, &interface_paths);
+        test_set.load_jigs(&config, &jig_paths);
+        test_set.load_loggers(&config, &logger_paths);
+        test_set.load_interfaces(&config, &interface_paths);
         // test_set.load_services(&service_paths);
         // test_set.load_updaters(&updater_paths);
-        test_set.lock().unwrap().load_tests(&config, &test_paths);
-        test_set.lock().unwrap().load_scenarios(&config, &scenario_paths);
-        test_set.lock().unwrap().load_triggers(&config, &trigger_paths);
+        test_set.load_tests(&config, &test_paths);
+        test_set.load_scenarios(&config, &scenario_paths);
+        test_set.load_triggers(&config, &trigger_paths);
         // test_set.load_coupons(&coupon_paths);
 
         Ok(test_set)
@@ -388,7 +410,6 @@ impl TestSet {
         }
     }
 
-
     pub fn advance_scenario(&self) {
         // Unwrap, because if it is None then things are very broken.
         match self.scenario {
@@ -479,6 +500,31 @@ impl TestSet {
 
         self.broadcast(BroadcastMessageContents::Scenario(scenario_name.clone()));
         scenario.lock().unwrap().deref_mut().describe();
+    }
+
+    pub fn run(&mut self) {
+        loop {
+            let msg = match self.receiver.recv() {
+                Ok(o) => o,
+                Err(e) => {
+                    println!("Received error: {:?}", e);
+                    return;
+                }
+            };
+
+            match msg {
+                TestSetCommand::DescribeJig => self.describe_jig(),
+                TestSetCommand::AbortScenario => self.abort_scenario(),
+                TestSetCommand::SetScenario(new_scenario) => self.set_scenario(&new_scenario),
+                TestSetCommand::SetInterfaceHello(id, msg) => self.set_interface_hello(id, msg),
+                TestSetCommand::StartScenario(optional_name) => self.start_scenario(optional_name),
+                TestSetCommand::AdvanceScenario => self.advance_scenario(),
+                TestSetCommand::AbortTests => self.abort_scenario(),
+                TestSetCommand::SendScenarios => self.send_scenarios(),
+                TestSetCommand::SendTests(optional_name) => self.send_tests(optional_name),
+                TestSetCommand::Shutdown => return,
+            }
+        }
     }
 
     pub fn jigs(&self) -> &HashMap<String, Arc<Mutex<Jig>>> {

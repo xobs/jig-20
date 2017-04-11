@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 pub struct Config {
-    locale: Option<String>,
     default_working_directory: Option<String>,
     default_termination_timeout: Duration,
     timeout: Duration,
@@ -16,7 +15,6 @@ pub struct Config {
 impl Config {
     pub fn new() -> Config {
         Config {
-            locale: None,
             default_working_directory: None,
             default_termination_timeout: Duration::from_secs(5),
             timeout: Duration::from_secs(3600),
@@ -29,13 +27,6 @@ impl Config {
         }
     }
 
-    pub fn set_locale(&mut self, locale: Option<&str>) {
-        self.locale = match locale {
-            None => None,
-            Some(s) => Some(s.to_string()),
-        };
-    }
-
     pub fn set_timeout(&mut self, timeout: u64) {
         self.timeout = Duration::new(timeout, 0);
     }
@@ -45,10 +36,6 @@ impl Config {
             None => None,
             Some(s) => Some(s.to_string()),
         };
-    }
-
-    pub fn locale(&self) -> &Option<String> {
-        &self.locale
     }
 
     pub fn default_termination_timeout(&self) -> &Duration {

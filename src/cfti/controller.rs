@@ -5,8 +5,9 @@ use std::time;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::ops::DerefMut;
+use std::sync::mpsc::Sender;
 
-use cfti::testset::TestSet;
+use cfti::testset::TestSetCommand;
 use cfti::types::unit::Unit;
 
 #[derive(Clone, Debug)]
@@ -69,6 +70,9 @@ pub enum ControlMessageContents {
 
     /// Causes the currently-executing Scenario to move to the next step.
     AdvanceScenario,
+
+    /// Sets the communications channel to control the TestSet
+    SetTestsetChannel(Sender<TestSetCommand>),
 }
 
 #[derive(Clone, Debug)]
@@ -122,8 +126,6 @@ pub enum ControllerError {
 pub struct Controller {
     broadcast: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
     control: mpsc::Sender<ControlMessage>,
-    testset: Arc<Mutex<Option<Arc<Mutex<TestSet>>>>>,
-    should_exit: Arc<Mutex<bool>>,
 }
 
 impl fmt::Debug for Controller {
@@ -136,36 +138,22 @@ impl Controller {
     pub fn new() -> Result<Controller, ControllerError> {
         let (tx, rx) = mpsc::channel();
         let bus = Arc::new(Mutex::new(bus::Bus::new(4096)));
-        let should_exit = Arc::new(Mutex::new(false));
-        let testset_opt = Arc::new(Mutex::new(Option::None));
         let controller = Controller {
             broadcast: bus.clone(),
             control: tx,
-            testset: testset_opt.clone(),
-            should_exit: should_exit.clone(),
         };
 
         // The controller runs in its own thread.
         let builder = thread::Builder::new().name("C-Rx".into());
-        builder.spawn(move || Controller::controller_thread(rx, bus, should_exit, testset_opt))
+        builder.spawn(move || Controller::controller_thread(rx, bus))
             .unwrap();
 
         Ok(controller)
     }
 
-    pub fn set_testset(&mut self, testset: Arc<Mutex<TestSet>>) {
-        let mut t = self.testset.lock().unwrap();
-        *t = Some(testset.clone());
-    }
-
-    pub fn should_exit(&self) -> bool {
-        *self.should_exit.lock().unwrap()
-    }
-
     pub fn controller_thread(rx: mpsc::Receiver<ControlMessage>,
-                             bus: Arc<Mutex<bus::Bus<BroadcastMessage>>>,
-                             should_exit: Arc<Mutex<bool>>,
-                             testset_opt: Arc<Mutex<Option<Arc<Mutex<TestSet>>>>>) {
+                             bus: Arc<Mutex<bus::Bus<BroadcastMessage>>>) {
+        let mut testset_opt: Option<Sender<TestSetCommand>> = None;
         loop {
             let msg = match rx.recv() {
                 Err(e) => {
@@ -175,14 +163,18 @@ impl Controller {
                 Ok(o) => o,
             };
 
-            let testset = match *(testset_opt.lock().unwrap()) {
+            // Set the testset output control channel, if that's the message we just got.
+            if let ControlMessageContents::SetTestsetChannel(chan) = msg.message {
+                testset_opt = Some(chan);
+                continue;
+            }
+
+            let testset = match testset_opt {
+                Some(ref s) => s,
                 None => {
-                    Self::broadcast_internal(&bus,
-                                             BroadcastMessageContents::Log("TestSet is None"
-                                                 .to_string()));
+                    println!("Warning: TestSet is still None");
                     continue;
                 }
-                Some(ref mut s) => s.clone(),
             };
 
             match msg.message {
@@ -201,18 +193,18 @@ impl Controller {
 
                 // Get the current jig information and broadcast it on the bus.
                 ControlMessageContents::GetJig => {
-                    testset.lock().unwrap().describe_jig();
+                    testset.send(TestSetCommand::DescribeJig).unwrap();
                 }
 
                 // Set the current scenario to the specified one.
                 ControlMessageContents::Scenario(s) => {
                     // If there is a scenario running already, stop it.
-                    testset.lock().unwrap().abort_scenario();
-                    testset.lock().unwrap().set_scenario(&s);
+                    testset.send(TestSetCommand::AbortScenario).unwrap();
+                    testset.send(TestSetCommand::SetScenario(s)).unwrap();
                 }
 
                 ControlMessageContents::Hello(s) => {
-                    testset.lock().unwrap().set_interface_hello(msg.unit_id, s);
+                    testset.send(TestSetCommand::SetInterfaceHello(msg.unit_id, s)).unwrap();
                 }
 
                 ControlMessageContents::Shutdown(s) => {
@@ -229,9 +221,7 @@ impl Controller {
                         message: BroadcastMessageContents::Shutdown(reason),
                     };
                     bus.lock().unwrap().deref_mut().broadcast(bc_msg);
-
-                    let mut should_exit = should_exit.lock().unwrap();
-                    *(should_exit.deref_mut()) = true;
+                    testset.send(TestSetCommand::Shutdown).unwrap();
                 }
 
                 // Respond to a PING command.  Unimplemented.
@@ -239,23 +229,31 @@ impl Controller {
 
                 // Start running tests.
                 ControlMessageContents::StartScenario(s) => {
-                    testset.lock().unwrap().start_scenario(s)
+                    testset.send(TestSetCommand::StartScenario(s)).unwrap();
                 }
-                ControlMessageContents::AbortTests => testset.lock().unwrap().abort_scenario(),
+                ControlMessageContents::AbortTests => {
+                    testset.send(TestSetCommand::AbortTests).unwrap()
+                }
                 ControlMessageContents::AdvanceScenario => {
-                    testset.lock().unwrap().advance_scenario()
+                    testset.send(TestSetCommand::AdvanceScenario).unwrap();
                 }
 
-                ControlMessageContents::GetScenarios => testset.lock().unwrap().send_scenarios(),
-                ControlMessageContents::GetTests(s) => testset.lock().unwrap().send_tests(s),
+                ControlMessageContents::GetScenarios => {
+                    testset.send(TestSetCommand::SendScenarios).unwrap()
+                }
+                ControlMessageContents::GetTests(s) => {
+                    testset.send(TestSetCommand::SendTests(s)).unwrap()
+                }
 
-                // _ => println!("Unhandled message: {:?}", msg),
+                ControlMessageContents::SetTestsetChannel(_) => {
+                    // This condition was handled previously.
+                }
             }
         }
     }
 
     pub fn listen_logs<F>(&self, mut logger_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()>
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), String>
     {
 
         self.listen(move |msg| match msg {
@@ -265,7 +263,7 @@ impl Controller {
     }
 
     pub fn listen<F>(&self, mut broadcast_func: F)
-        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), ()>
+        where F: Send + 'static + FnMut(BroadcastMessage) -> Result<(), String>
     {
 
         let mut console_rx_channel = self.broadcast.lock().unwrap().deref_mut().add_rx();
@@ -309,6 +307,14 @@ impl Controller {
 
     pub fn control_unit<T: Unit + ?Sized>(unit: &T, contents: &ControlMessageContents) {
         unit.controller().control(unit.id(), unit.kind(), contents);
+    }
+
+    pub fn shutdown(&self, msg: &str) {
+        Self::do_control_class(&self.control,
+                               "system",
+                               "none",
+                               "none",
+                               &ControlMessageContents::Shutdown(Some(msg.to_string())));
     }
 
     pub fn broadcast_class(&self,
@@ -374,24 +380,6 @@ impl Controller {
             unix_time: elapsed.as_secs(),
             unix_time_nsecs: elapsed.subsec_nanos(),
             message: contents.clone(),
-        });
-    }
-
-    fn broadcast_internal(bus: &Arc<Mutex<bus::Bus<BroadcastMessage>>>,
-                          msg: BroadcastMessageContents) {
-        let now = time::SystemTime::now();
-        let elapsed = match now.duration_since(time::UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => time::Duration::new(0, 0),
-        };
-
-        bus.lock().unwrap().deref_mut().broadcast(BroadcastMessage {
-            message_class: "standard".to_string(),
-            unit_id: "internal".to_string(),
-            unit_type: "core".to_string(),
-            unix_time: elapsed.as_secs(),
-            unix_time_nsecs: elapsed.subsec_nanos(),
-            message: msg,
         });
     }
 
