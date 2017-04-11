@@ -40,8 +40,16 @@ pub trait Unit {
         Controller::broadcast_unit(self, &msg);
     }
 
+    fn broadcast_class(&self, class: &str, msg: BroadcastMessageContents) {
+        Controller::broadcast_class_unit(class, self, &msg);
+    }
+
     fn control(&self, msg: ControlMessageContents) {
         Controller::control_unit(self, &msg);
+    }
+
+    fn control_class(&self, class: &str, msg: ControlMessageContents) {
+        Controller::control_class_unit(class, self, &msg);
     }
 
     fn log(&self, msg: String) {
