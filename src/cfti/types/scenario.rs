@@ -505,10 +505,8 @@ impl Scenario {
             *(thr_support_cmd.lock().unwrap()) = None;
 
             // Send a message indicating what the test did, and advance the scenario.
-            Controller::broadcast_class_unit("support", &unit, &msg);
-            Controller::control_class_unit("support",
-                                           &unit,
-                                           &ControlMessageContents::AdvanceScenario);
+            unit.broadcast_class("support", msg);
+            unit.control_class("support", ControlMessageContents::AdvanceScenario);
         });
 
         // The command will either return an error, or a tuple containing (stdout,stdin).
