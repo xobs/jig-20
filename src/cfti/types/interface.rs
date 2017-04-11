@@ -359,7 +359,7 @@ impl Interface {
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
 
-        Controller::control_unit(unit, &response);
+        unit.control(response);
         Ok(())
     }
 
