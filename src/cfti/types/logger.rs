@@ -192,9 +192,7 @@ impl Logger {
                                                      log.replace("\\", "\\\\")
                                                          .replace("\n", "\\n")
                                                          .replace("\t", "\\t")) {
-                                Controller::debug_unit(&unit,
-                                                       format!("Unable to write to logfile: {:?}",
-                                                               e));
+                                unit.debug(format!("Unable to write to logfile: {:?}", e));
                                 return Err(format!("{:?}", e));
                             }
                         }
@@ -215,9 +213,7 @@ impl Logger {
                             object["unix_time_nsecs"] = msg.unix_time_nsecs.into();
                             object["message"] = log.into();
                             if let Err(e) = writeln!(&mut stdin, "{}", json::stringify(object)) {
-                                Controller::debug_unit(&unit,
-                                                       format!("Unable to write to logfile: {:?}",
-                                                               e));
+                                unit.debug(format!("Unable to write to logfile: {:?}", e));
                                 return Err(format!("{:?}", e));
                             };
                         }
