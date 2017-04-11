@@ -90,14 +90,12 @@ fn main() {
                                           &mut controller)
         .unwrap();
 
-    println!("Test set: {:?}", test_set);
+    // println!("Test set: {:?}", test_set);
+    // Start a thread to process test_set messages.  It will exit when a
+    // SHUTDOWN message is sent on the Control plane.
     let test_set_pump_thread = thread::spawn(move || test_set.run());
 
-    println!("Waiting for signal...");
     signal.recv().unwrap();
-    println!("Received signal");
     controller.shutdown("Signal received");
-    println!("Sent shutdown message");
     test_set_pump_thread.join().unwrap();
-    println!("Ended testset thread");
 }
