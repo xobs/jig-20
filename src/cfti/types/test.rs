@@ -312,17 +312,15 @@ impl Test {
     }
 
     pub fn describe(&self) {
-        Controller::broadcast_unit(self,
-                                   &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                       "name".to_string(),
-                                                                       self.id().to_string(),
-                                                                       self.name().to_string()));
-        Controller::broadcast_unit(self,
-                                   &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                       "description".to_string(),
-                                                                       self.id().to_string(),
-                                                                       self.description()
-                                                                           .to_string()));
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                          "name".to_string(),
+                                                          self.id().to_string(),
+                                                          self.name().to_string()));
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                          "description".to_string(),
+                                                          self.id().to_string(),
+                                                          self.description()
+                                                              .to_string()));
     }
 
     pub fn timeout(&self) -> time::Duration {
@@ -398,11 +396,11 @@ impl Test {
                     if *(thr_state.lock().unwrap()) == TestState::Starting {
                         let msg = format!("Test daemon never came ready");
                         *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                        Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(msg));
+                        unit.broadcast(BroadcastMessageContents::Log(msg));
                         thr_waiter.terminate(&None);
 
                         if let Some(cmd) = thr_end {
-                            Controller::broadcast_unit(&unit, &BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
+                            unit.broadcast(BroadcastMessageContents::Log(format!("Running post-test command: {}", cmd)));
                             let dir = thr_dir.lock().unwrap();
                             process::try_command(&unit, cmd.as_str(), &*dir, thr_end_timeout);
                         }
@@ -420,9 +418,7 @@ impl Test {
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        Controller::control_class_unit("result",
-                                                       self,
-                                                       &ControlMessageContents::AdvanceScenario);
+                        self.control_class("result", ControlMessageContents::AdvanceScenario);
                         return;
                     }
                     Ok(0) => {
@@ -431,17 +427,11 @@ impl Test {
                         *(self.state.lock().unwrap()) = TestState::Fail(msg.clone());
                         self.broadcast(BroadcastMessageContents::Fail(self.id().to_string(), msg));
                         thr.thread().unpark();
-                        Controller::control_class_unit("result",
-                                                       self,
-                                                       &ControlMessageContents::AdvanceScenario);
+                        self.control_class("result", ControlMessageContents::AdvanceScenario);
                         return;
                     }
                     Ok(_) => {
-                        self.controller
-                            .broadcast_class("stdout",
-                                             self.id(),
-                                             self.kind(),
-                                             &BroadcastMessageContents::Log(line.clone()));
+                        self.broadcast_class("stdout", BroadcastMessageContents::Log(line.clone()));
                         if r.is_match(line.as_str()) {
                             *(self.state.lock().unwrap()) = TestState::Running;
                             break;
@@ -471,18 +461,15 @@ impl Test {
             if *(thr_state.lock().unwrap()) == TestState::Running {
                 let msg = format!("Daemon exited: {:?}", result);
                 *(thr_state.lock().unwrap()) = TestState::Fail(msg.clone());
-                Controller::broadcast_unit(&unit,
-                                           &BroadcastMessageContents::Fail(unit.id().to_string(),
-                                                                           msg));
+                unit.broadcast(BroadcastMessageContents::Fail(unit.id().to_string(), msg));
             } else {
-                Controller::broadcast_unit(&unit,
-                                           &BroadcastMessageContents::Pass(unit.id().to_string(),
-                                                                           "Okay".to_string()));
+                unit.broadcast(BroadcastMessageContents::Pass(unit.id().to_string(),
+                                                              "Okay".to_string()));
             }
         });
 
         // Now that the test is running as a daemon, advance to the next scenario.
-        Controller::control_class_unit("result", self, &ControlMessageContents::AdvanceScenario);
+        self.control_class("result", ControlMessageContents::AdvanceScenario);
     }
 
     fn start_simple(&self, working_directory: &Option<String>, max_duration: time::Duration) {
@@ -522,10 +509,8 @@ impl Test {
                 *(thr_process.lock().unwrap()) = None;
 
                 // Send a message indicating what the test did, and advance the scenario.
-                Controller::broadcast_class_unit("result", &unit, &msg);
-                Controller::control_class_unit("result",
-                                               &unit,
-                                               &ControlMessageContents::AdvanceScenario);
+                unit.broadcast_class("result", msg);
+                unit.control_class("result", ControlMessageContents::AdvanceScenario);
             }) {
                 Err(_) => return,
                 Ok(o) => o,
@@ -534,9 +519,7 @@ impl Test {
         let thr_last_line = self.last_line.clone();
         process::watch_output(running.take_output(), self, move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                Controller::broadcast_class_unit("stdout",
-                                                 unit,
-                                                 &BroadcastMessageContents::Log(msg));
+                unit.broadcast_class("stdout", BroadcastMessageContents::Log(msg));
                 Ok(())
             })
             .unwrap();
@@ -544,9 +527,7 @@ impl Test {
         let thr_last_line = self.last_line.clone();
         process::watch_output(running.take_error(), self, move |msg, unit| {
                 *(thr_last_line.lock().unwrap()) = msg.clone();
-                Controller::broadcast_class_unit("stderr",
-                                                 unit,
-                                                 &BroadcastMessageContents::Log(msg));
+                unit.broadcast_class("stderr", BroadcastMessageContents::Log(msg));
                 Ok(())
             })
             .unwrap();
