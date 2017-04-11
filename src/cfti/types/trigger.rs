@@ -108,7 +108,7 @@ impl Trigger {
     }
 
     fn read_line<T: Unit + ?Sized>(line: String, unit: &T) -> Result<(), ()> {
-        Controller::debug_unit(unit, format!("CFTI trigger input: {}", line));
+        unit.debug(format!("CFTI trigger input: {}", line));
         let mut words: Vec<String> =
             line.split_whitespace().map(|x| Self::cfti_unescape(x.to_string())).collect();
 
@@ -133,7 +133,7 @@ impl Trigger {
             "log" => ControlMessageContents::Log(words.join(" ")),
             _ => ControlMessageContents::Log(format!("Unimplemented verb: {}", verb)),
         };
-        Controller::control_unit(unit, &response);
+        unit.control(response);
         Ok(())
     }
 
