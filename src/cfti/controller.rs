@@ -156,10 +156,8 @@ impl Controller {
         let mut testset_opt: Option<Sender<TestSetCommand>> = None;
         loop {
             let msg = match rx.recv() {
-                Err(e) => {
-                    println!("Error receiving: {:?}", e);
-                    continue;
-                }
+                // Receiving an error means the sender has closed.
+                Err(_) => return,
                 Ok(o) => o,
             };
 
