@@ -475,7 +475,7 @@ impl Test {
     fn start_simple(&self, working_directory: &Option<String>, max_duration: time::Duration) {
         // Try to create a command.  If this fails, then the command completion will be called,
         // so we can just ignore the error.
-        let cmd = self.exec_start.clone();
+        let ref cmd = self.exec_start;
         let last_line = self.last_line.clone();
         let result = self.state.clone();
         let unit = self.to_simple_unit();
@@ -506,7 +506,7 @@ impl Test {
 
                 // Nullify the current process, since it ought to have exited.
                 // If it was an unclean exit this will have already happened.
-                *(thr_process.lock().unwrap()) = None;
+                thr_process.lock().unwrap().take();
 
                 // Send a message indicating what the test did, and advance the scenario.
                 unit.broadcast_class("result", msg);
