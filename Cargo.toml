@@ -14,7 +14,7 @@ clap = "2.20.5"
 regex = "0.2"
 systemd-parser = "0.1.3"
 nix = "0.8.0"
-runny = { path = "../runny" }
+runny = { git = "https://github.com/xobs/runny.git", rev = "57e60dabc261464629cba2f6729afcf087bdae14" }
 
 [target.'cfg(unix)'.dependencies]
 chan-signal = "0.2.0"
