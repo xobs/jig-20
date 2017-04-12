@@ -1,3 +1,4 @@
+extern crate runny;
 
 use cfti::unitfile::UnitFile;
 use cfti::types::Unit;
@@ -5,6 +6,10 @@ use cfti::controller::{Controller, ControlMessageContents};
 use cfti::config;
 use cfti::process;
 use cfti::testset;
+
+use self::runny::running::Running;
+
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub enum TriggerError {
@@ -33,6 +38,9 @@ pub struct Trigger {
 
     /// The controller where messages come and go.
     controller: Controller,
+
+    /// The actual, running process
+    process: Arc<Mutex<Option<Running>>>,
 }
 
 impl Trigger {
@@ -100,6 +108,7 @@ impl Trigger {
             exec_start: exec_start,
             working_directory: working_directory,
             controller: test_set.controller().clone(),
+            process: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -160,6 +169,7 @@ impl Trigger {
                               self,
                               move |line, unit| Self::read_line(line, unit))
             .unwrap();
+        *(self.process.lock().unwrap()) = Some(cmd);
         Ok(())
     }
 }
