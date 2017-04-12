@@ -498,7 +498,8 @@ impl Test {
                                                        last_line.lock().unwrap().to_string())
                     }
                     Err(e) => {
-                        let msg = format!("{:?}: {}", e, last_line.lock().unwrap().to_string());
+                        let msg = last_line.lock().unwrap().to_string();
+                        unit.log(format!("Process exited: {:?}", e));
                         *(result.lock().unwrap()) = TestState::Fail(msg.clone());
                         BroadcastMessageContents::Fail(unit.id().to_string(), msg)
                     }
