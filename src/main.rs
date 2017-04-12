@@ -1,4 +1,4 @@
-extern crate chan_signal;
+extern crate ctrlc;
 extern crate termcolor;
 extern crate clap;
 
@@ -6,19 +6,21 @@ mod cfti;
 use std::thread;
 use std::io::Write;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use self::termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 use clap::{Arg, App};
-use chan_signal::Signal;
 
 fn main() {
     // The signal handler must come first, so that the same mask gets
     // applied to all threads.
-    let signal = chan_signal::notify(&[Signal::INT,
-                                       Signal::TERM,
-                                       Signal::HUP,
-                                       Signal::QUIT,
-                                       Signal::ABRT,
-                                       Signal::PIPE]);
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+            r.store(false, Ordering::SeqCst);
+        })
+        .expect("Error setting Ctrl-C handler");
 
     let mut config = cfti::config::Config::new();
     let matches = App::new("Jig-20 Test Controller")
@@ -95,7 +97,7 @@ fn main() {
     // SHUTDOWN message is sent on the Control plane.
     let test_set_pump_thread = thread::spawn(move || test_set.run());
 
-    signal.recv().unwrap();
+    while running.load(Ordering::SeqCst) {}
     controller.shutdown("Signal received");
     test_set_pump_thread.join().unwrap();
 }
