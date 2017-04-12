@@ -3,6 +3,7 @@ extern crate runny;
 use std::io::{self, BufRead};
 use std::time::Duration;
 use std::thread;
+use std::env;
 
 use self::runny::{Runny, RunnyError};
 use self::runny::running::Running;
@@ -64,7 +65,14 @@ pub fn watch_output<T: io::Read + Send + 'static, F, U: Unit>
 }
 
 pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Duration) -> bool {
-    let mut running = match Runny::new(cmd).directory(wd).timeout(&max).start() {
+    let paths = match env::var_os("PATH") {
+        Some(path) => {
+            env::split_paths(&path).map(|x| x.to_str().unwrap().to_string()).collect::<Vec<_>>()
+        }
+        None => vec![],
+    };
+
+    let mut running = match Runny::new(cmd).directory(wd).timeout(&max).path(paths).start() {
         Ok(r) => r,
         Err(e) => {
             unit.debug(format!("Unable to start command {}: {:?}", cmd, e));
@@ -83,7 +91,14 @@ pub fn spawn_cmd<T: Unit>(cmd_str: &str,
                           unit: &T,
                           working_directory: &Option<String>)
                           -> Result<Running, CommandError> {
-    let process = match Runny::new(cmd_str).directory(working_directory).start() {
+    let paths = match env::var_os("PATH") {
+        Some(path) => {
+            env::split_paths(&path).map(|x| x.to_str().unwrap().to_string()).collect::<Vec<_>>()
+        }
+        None => vec![],
+    };
+
+    let process = match Runny::new(cmd_str).directory(working_directory).path(paths).start() {
         Ok(p) => p,
         Err(e) => {
             unit.debug(format!("Unable to spawn command {}: {:?}", cmd_str, e));
@@ -115,7 +130,15 @@ pub fn try_command_completion<F>(cmd_str: &str,
     where F: Send + 'static + FnOnce(Result<(), CommandError>)
 {
     let mut cmd = Runny::new(cmd_str);
-    cmd.directory(wd).timeout(&max);
+
+    let paths = match env::var_os("PATH") {
+        Some(path) => {
+            env::split_paths(&path).map(|x| x.to_str().unwrap().to_string()).collect::<Vec<_>>()
+        }
+        None => vec![],
+    };
+
+    cmd.directory(wd).timeout(&max).path(paths);
 
     // Fork off and exec the child process.
     let child = match cmd.start() {
