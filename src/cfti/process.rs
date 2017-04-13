@@ -72,7 +72,7 @@ pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Durat
         None => vec![],
     };
 
-    let mut running = match Runny::new(cmd).directory(wd).timeout(&max).path(paths).start() {
+    let mut running = match Runny::new(cmd).directory(wd).timeout(max).path(paths).start() {
         Ok(r) => r,
         Err(e) => {
             unit.debug(format!("Unable to start command {}: {:?}", cmd, e));
@@ -138,7 +138,7 @@ pub fn try_command_completion<F>(cmd_str: &str,
         None => vec![],
     };
 
-    cmd.directory(wd).timeout(&max).path(paths);
+    cmd.directory(wd).timeout(max).path(paths);
 
     // Fork off and exec the child process.
     let child = match cmd.start() {
