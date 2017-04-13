@@ -1,4 +1,5 @@
 extern crate json;
+extern crate runny;
 
 use cfti::types::Jig;
 use cfti::types::unit::Unit;
@@ -7,6 +8,8 @@ use cfti::controller::{Controller, ControlMessageContents, BroadcastMessage,
 use cfti::process;
 use cfti::config;
 use cfti::unitfile::UnitFile;
+
+use self::runny::running::Running;
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -62,6 +65,9 @@ pub struct Logger {
 
     /// The master controller, where bus messages come and go.
     controller: Controller,
+
+    /// The actual, running process
+    process: Arc<Mutex<Option<Running>>>,
 }
 
 impl Logger {
@@ -149,6 +155,7 @@ impl Logger {
             working_directory: working_directory,
             format: format,
             controller: controller.clone(),
+            process: Arc::new(Mutex::new(None)),
         }))
     }
 
@@ -224,7 +231,7 @@ impl Logger {
             }
         };
 
-        self.debug(format!("Logger is running"));
+        *self.process.lock().unwrap() = Some(process);
         Ok(())
     }
 }
