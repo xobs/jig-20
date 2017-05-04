@@ -134,10 +134,11 @@ impl TestSet {
                 "scenario" => scenario_paths.push(path.clone()),
                 "trigger" => trigger_paths.push(path.clone()),
                 "coupon" => coupon_paths.push(path.clone()),
-                unknown => {
-                    test_set.warn(format!("Unrecognized unit type {}, path: {}",
-                                          unknown,
-                                          path.to_str().unwrap_or("")))
+                unit_type => {
+                    let unit_id = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+                    test_set.config_error(unit_id,
+                                          unit_type,
+                                          format!("Unrecognized unit type: {}", unit_type));
                 }
             }
         }
@@ -391,6 +392,13 @@ impl TestSet {
         }
         // If a default test has been selected, send the tests.
         self.send_tests(None);
+    }
+
+    fn config_error(&self, unit_id: &str, unit_type: &str, msg: String) {
+        self.controller().broadcast_class("config-error",
+                                          unit_id,
+                                          unit_type,
+                                          &BroadcastMessageContents::Log(msg));
     }
 
     pub fn get_jig_default_scenario(&self) -> Option<String> {
