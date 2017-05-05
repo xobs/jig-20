@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+#[derive(Debug)]
 pub struct Config {
     default_working_directory: Option<String>,
     default_termination_timeout: Duration,
