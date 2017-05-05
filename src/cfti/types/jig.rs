@@ -9,7 +9,6 @@ use cfti::testset;
 
 #[derive(Debug)]
 pub enum JigError {
-    FileLoadError(String),
     MissingJigSection,
 }
 
@@ -36,16 +35,9 @@ pub struct Jig {
 
 impl Jig {
     pub fn new(id: &str,
-               path: &str,
-               test_set: &testset::TestSet,
-               config: &config::Config)
+               unitfile: UnitFile,
+               test_set: &testset::TestSet)
                -> Option<Result<Jig, JigError>> {
-
-        // Load the .ini file
-        let unitfile = match UnitFile::new(path) {
-            Err(e) => return Some(Err(JigError::FileLoadError(format!("{:?}", e)))),
-            Ok(s) => s,
-        };
 
         // Make sure there is a "Jig" section.
         if !unitfile.has_section("Jig") {
@@ -60,34 +52,29 @@ impl Jig {
             };
         };
 
-        let working_directory = match unitfile.get("Jig", "WorkingDirectory") {
+        let working_directory = match unitfile.get("Unit", "WorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
 
         if let Some(s) = unitfile.get("Jig", "TestProgram") {
-            if !process::try_command(test_set, s, &working_directory, config.timeout()) {
+            if !process::try_command(test_set, s, &working_directory, test_set.config().timeout()) {
                 test_set.debug(format!("{}: Test program FAILED", id));
                 return None;
             }
         };
 
-        let description = match unitfile.get("Jig", "Description") {
+        let description = match unitfile.get("Unit", "Description") {
             None => "".to_string(),
             Some(s) => s.to_string(),
         };
 
-        let name = match unitfile.get("Jig", "Name") {
+        let name = match unitfile.get("Unit", "Name") {
             None => id.to_string(),
             Some(s) => s.to_string(),
         };
 
         let default_scenario = match unitfile.get("Jig", "DefaultScenario") {
-            None => None,
-            Some(s) => Some(s.to_string()),
-        };
-
-        let working_directory = match unitfile.get("Jig", "DefaultWorkingDirectory") {
             None => None,
             Some(s) => Some(s.to_string()),
         };
@@ -101,22 +88,6 @@ impl Jig {
             working_directory: working_directory,
             controller: test_set.controller().clone(),
         }))
-    }
-
-    pub fn describe(&self) {
-        self.controller.broadcast(self.id(),
-                                  self.kind(),
-                                  &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                      "name".to_string(),
-                                                                      self.id().to_string(),
-                                                                      self.name().to_string()));
-        self.controller.broadcast(self.id(),
-                                  self.kind(),
-                                  &BroadcastMessageContents::Describe(self.kind().to_string(),
-                                                                      "description".to_string(),
-                                                                      self.id().to_string(),
-                                                                      self.description()
-                                                                          .to_string()));
     }
 
     pub fn default_scenario(&self) -> &Option<String> {
