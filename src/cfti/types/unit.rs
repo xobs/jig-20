@@ -55,6 +55,18 @@ pub trait Unit {
     fn log(&self, msg: String) {
         self.broadcast(BroadcastMessageContents::Log(msg));
     }
+
+    fn describe(&self) {
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                          "name".to_string(),
+                                                          self.id().to_string(),
+                                                          self.name().to_string()));
+        self.broadcast(BroadcastMessageContents::Describe(self.kind().to_string(),
+                                                          "description".to_string(),
+                                                          self.id().to_string(),
+                                                          self.description()
+                                                              .to_string()));
+    }
 }
 
 impl Unit for SimpleUnit {
