@@ -8,6 +8,7 @@ use cfti::types::unit::Unit;
 // use cfti::types::Updater;
 // use cfti::types::Service;
 //
+use cfti::unitfile::UnitFile;
 
 use std::collections::HashMap;
 use std::fs;
@@ -49,6 +50,20 @@ pub struct TestSet {
 
     /// A control channel from the Controller, to manipulate the testset
     receiver: Receiver<TestSetCommand>,
+
+    /// The current system configuration
+    config: config::Config,
+}
+
+#[derive(Debug)]
+pub enum TestSetError {
+    TestSetIoError(Error),
+}
+
+impl From<Error> for TestSetError {
+    fn from(kind: Error) -> Self {
+        TestSetError::TestSetIoError(kind)
+    }
 }
 
 #[derive(Debug)]
@@ -67,14 +82,11 @@ pub enum TestSetCommand {
 
 impl TestSet {
     /// Create a new `TestSet` from the given `dir`
-    pub fn new(dir: &str,
-               config: &config::Config,
-               controller: &mut controller::Controller)
-               -> Result<TestSet, Error> {
+    pub fn new(controller: &mut controller::Controller, config: config::Config) -> TestSet {
 
         let (sender, receiver) = channel();
 
-        let mut test_set = TestSet {
+        let test_set = TestSet {
             tests: HashMap::new(),
             test_aliases: HashMap::new(),
             scenarios: HashMap::new(),
@@ -86,36 +98,15 @@ impl TestSet {
             interfaces: HashMap::new(),
             controller: controller.clone(),
             receiver: receiver,
+            config: config,
         };
 
         test_set.control(ControlMessageContents::SetTestsetChannel(sender));
+        test_set
+    }
 
-        // TestSet ordering:
-        // When a TestSet is loaded off the disk, the order of unit files is
-        // prioritized so that dependencies can be checked.
-        //
-        // The order of files to be loaded:
-        //  1) Jig
-        //  2) Logger
-        //  3) Interface
-        //  4) Service
-        //  5) Updater
-        //  6) Test
-        //  7) Scenario
-        //  8) Trigger
-        //  9) Coupon
-        //
-        let mut jig_paths = vec![];
-        let mut logger_paths = vec![];
-        let mut interface_paths = vec![];
-        let mut service_paths = vec![];
-        let mut updater_paths = vec![];
-        let mut test_paths = vec![];
-        let mut scenario_paths = vec![];
-        let mut trigger_paths = vec![];
-        let mut coupon_paths = vec![];
+    pub fn add_dir(&mut self, dir: &str) -> Result<(), TestSetError> {
 
-        // Step 1: Read each unit file from the disk
         let entries_rd: fs::ReadDir = try!(fs::read_dir(dir));
         for entry_opt in entries_rd {
             let entry = try!(entry_opt);
@@ -124,65 +115,61 @@ impl TestSet {
                 continue;
             }
 
-            match path.extension().unwrap_or(OsStr::new("")).to_str().unwrap_or("") {
-                "jig" => jig_paths.push(path.clone()),
-                "logger" => logger_paths.push(path.clone()),
-                "interface" => interface_paths.push(path.clone()),
-                "service" => service_paths.push(path.clone()),
-                "updater" => updater_paths.push(path.clone()),
-                "test" => test_paths.push(path.clone()),
-                "scenario" => scenario_paths.push(path.clone()),
-                "trigger" => trigger_paths.push(path.clone()),
-                "coupon" => coupon_paths.push(path.clone()),
-                unit_type => {
-                    let unit_id = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
-                    test_set.config_error(unit_id,
-                                          unit_type,
-                                          format!("Unrecognized unit type: {}", unit_type));
-                }
-            }
-        }
-
-        test_set.load_jigs(&config, &jig_paths);
-        test_set.load_loggers(&config, &logger_paths);
-        test_set.load_interfaces(&config, &interface_paths);
-        // test_set.load_services(&service_paths);
-        // test_set.load_updaters(&updater_paths);
-        test_set.load_tests(&config, &test_paths);
-        test_set.load_scenarios(&config, &scenario_paths);
-        test_set.load_triggers(&config, &trigger_paths);
-        // test_set.load_coupons(&coupon_paths);
-
-        Ok(test_set)
-    }
-
-    fn load_jigs(&mut self, config: &config::Config, jig_paths: &Vec<PathBuf>) {
-        for jig_path in jig_paths {
-            let item_name = jig_path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
-            let path_str = jig_path.to_str().unwrap_or("");
-
-            let new_jig = match Jig::new(item_name, path_str, self, config) {
-                // The jig will return "None" if it is incompatible.
-                None => continue,
-                Some(s) => s,
-            };
-
-            let new_jig = match new_jig {
+            let unit_id = path.file_stem().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let unit_type = path.extension().unwrap_or(OsStr::new("")).to_str().unwrap_or("");
+            let unitfile = match UnitFile::new(path.to_str().unwrap_or("")) {
                 Err(e) => {
-                    self.debug(format!("Unable to load jig file {}: {:?}", item_name, e));
+                    self.config_error(unit_id,
+                                      unit_type,
+                                      format!("Unable to load unit file: {:?}", e));
                     continue;
                 }
-                Ok(s) => Arc::new(Mutex::new(s)),
+                Ok(s) => s,
             };
 
-            let new_jig_id = new_jig.lock().unwrap().id().to_string();
+            self.load_unit(unit_id, unit_type, unitfile);
 
-            if self.jig.is_none() {
-                self.jig = Some(new_jig.clone());
-            }
-
-            self.jigs.insert(new_jig_id, new_jig);
         }
+        Ok(())
+    }
+
+    fn load_unit(&mut self, unit_id: &str, unit_type: &str, unitfile: UnitFile) {
+
+        match unit_type {
+            "jig" => self.load_jig(unitfile, unit_id),
+            //            "logger" => self.load_logger(path, config),
+            //            "interface" => self.load_interface(path, config),
+            //            "service" => self.load_service(path, config),
+            //            "updater" => self.load_updater(path, config),
+            //            "test" => self.load_test(path, config),
+            //            "scenario" => self.load_scenario(path, config),
+            //            "trigger" => self.load_trigger(path, config),
+            //            "coupon" => self.load_coupon(path, config),
+            unit_type => {
+                self.config_error(unit_id,
+                                  unit_type,
+                                  format!("Unrecognized unit type: {}", unit_type));
+            }
+        }
+    }
+
+    fn load_jig(&mut self, unit_file: UnitFile, unit_id: &str) {
+
+        let new_jig = match Jig::new(unit_id, unit_file, self) {
+            // The jig will return "None" if it is incompatible.
+            None => return,
+            Some(Ok(s)) => Arc::new(Mutex::new(s)),
+            Some(Err(e)) => {
+                self.config_error(unit_id, "jig", format!("Unable to load jig: {:?}", e));
+                return;
+            }
+        };
+
+        // if self.jig.is_none() {
+        //    self.jig = Some(new_jig.clone());
+        // }
+
+        self.jigs.insert(unit_id.to_string(), new_jig);
     }
 
     fn load_loggers(&mut self, config: &config::Config, logger_paths: &Vec<PathBuf>) {
@@ -392,6 +379,10 @@ impl TestSet {
         }
         // If a default test has been selected, send the tests.
         self.send_tests(None);
+    }
+
+    pub fn config(&self) -> &config::Config {
+        &self.config
     }
 
     fn config_error(&self, unit_id: &str, unit_type: &str, msg: String) {
