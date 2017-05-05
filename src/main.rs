@@ -87,10 +87,9 @@ fn main() {
         Ok(())
     });
 
-    let mut test_set = cfti::TestSet::new(matches.value_of("CONFIG_DIR").unwrap(),
-                                          &config,
-                                          &mut controller)
-        .unwrap();
+    let mut test_set = cfti::TestSet::new(&mut controller, config);
+    test_set.add_dir(matches.value_of("CONFIG_DIR").unwrap())
+        .expect("Unable to load configuration directory");
 
     // println!("Test set: {:?}", test_set);
     // Start a thread to process test_set messages.  It will exit when a
