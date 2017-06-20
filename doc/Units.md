@@ -4,7 +4,16 @@ Unit File Formats
 
 Unit files all live in the configuration directory.  They have distinct suffixes.
 
-Unit files refer to other unit files by filename.  You may omit the suffix if it is unambiguous.
+Unit files refer to other unit files by filename.  You may omit the suffix.
+
+Common Fields
+-------------
+
+Some fields are common to every unit file, though they may not make sense for certain types of units.
+
+* Jigs: A list of compatible jigs.
+* Name: Defines the short display name for this unit.
+* Description: Defines a detailed description of this unit.  May be up to one paragraph.
 
 .test
 -----
@@ -16,8 +25,6 @@ Test objects have hard and soft dependencies.  For example, it could be that you
 Fields:
 
 Test specifications are defined under a "[Test]" section.
-* Name: Defines the short display name for this test.
-* Description: Defines a detailed description of this test.  May be up to one paragraph.
 * Requires: A comma- or space-separated list of names of tests that must successfully complete in order to run this test
 * Suggests: A comma- or space-separated list of names of tests that should be run first, but is not catastrophic if they fail
 * Provides: A comma- or space-separated list of tests that this test can act as.  For example, you may have a test on a Raspberry Pi called 'openocd-rpi' that can Provide "swd".  On a desktop system, you might use 'openocd-olimex' to Provide "swd".
@@ -37,8 +44,6 @@ Test specifications are defined under a "[Test]" section.
 Jigs are physical devices that perform tests.  You will have a jig in the factory, and you should have a jig in your workshop.  Your work machine can also act as a "Jig", though it might not provide all of the same features.
 
 The following fields are allowed in the [Jig] section:
-* Name: The name of the jig and the device or product that it tests.
-* Description: A longer description of the jig and the product or device being tested, up to one paragraph long.
 * TestProgram: Optional path to a program to determine if this is the jig we're running on.
 * WorkingDirectory: Directory to run the test program from.
 * DefaultWorkingDirectory: A default directory to run tests from.
@@ -48,12 +53,13 @@ The following fields are allowed in the [Jig] section:
 
 .scenario
 ---------
-* Name: A short string describing what this scenario does, for example "test wifi" or "final factory test"
-* Description: Longer paragraph describing this scenario
+
+Scenarios are distinct items that need to be tested.  There will probably be a "final factory test" scenario, but there may be additional unit tests.  For example, to test wifi, there may be a scenario called "test wifi".
+
 * Tests: A space- or comma-separated list of tests to be run.  Note that you only need to specify the final test to run, as the dependency graph will fill in the rest.  If you specify multiple tests, then they will be run in the order you specify, possibly with dependency tests added in between.
 * ExecStart: A command to be run when the scenario is first started.
 * ExecStopSuccess: A command to run if a test scenario completes successfully.
-* ExecStopFailure: A command to be run if a test scenario fails.
+* ExecStopFail: A command to be run if a test scenario fails.
 * WorkingDirectory: Directory to run the programs from.
 * Timeout: Maximum number of seconds this scenario should take.
 * Assume: A list of tests that are assumed to have passed.  Useful for making abbreviated unit tests.
@@ -65,11 +71,8 @@ The following fields are allowed in the [Jig] section:
 A trigger is used to start a test.  Triggers are non-repeating and events are consumed.  That is, you can send as many "start" commands as you like, but if the test is already running then they will be ignored.
 
 The following fields are valid in the [Trigger] section:
-* Name: A short string describing this trigger
-* Description: A longer decsription of this trigger, up to one paragraph long.
 * ExecStart: Name of the program to run to get trigger information from.
 * WorkingDirectory: Directory to run the ExecStart program from.
-* Jigs: A comma-separated list of jigs that this trigger is compatible with.
 
 
 .logger
@@ -78,9 +81,6 @@ The following fields are valid in the [Trigger] section:
 Loggers keep track of test events.  They may write test events to a file, save them on the network, print coupons at the end of a test run, or simply display "Pass" or "Fail" lights.
 
 The following fields are valid in the [Logger] section:
-* Name: A name describing this logger.
-* Description: A longer paragraph describing this logger.
-* Jigs: An optional list of acceptable jigs.
 * Format: Describes the format of data that the logger expects.  Can be "tsv" or "json".  Defaults to "tsv" if unspecified.
 * ExecStart: Name of a program to run in order to perform logging.
 
@@ -88,11 +88,9 @@ The following fields are valid in the [Logger] section:
 .interface
 ----------
 
-Interfaces are similar to Loggers and Triggers, and can perform similar roles.
+Interfaces are similar to Loggers and Triggers, and can perform similar roles.  Interfaces are capable of displaying the current state of the tester, and can have input into various sections of code.
 
 The following fields can go in the [Interface] section:
-* Name: A name describing this interface.
-* Description: A longer paragraph describing this interface.
 * ExecStart: The program to invoke to act as the interface.
 * WorkingDirectory: Directory to run the ExecStart program from.
 * Format: Describes the interface format.  May be "text" or "json".  Defaults to "text" if unspecified.
@@ -100,6 +98,19 @@ The following fields can go in the [Interface] section:
 
 .coupon
 -------
+
+Coupons represent guarantees that a devices has undergone testing.  They are unique, and may include a serial number, QR code, or other identifying information.  They may also include other serialized information such as MAC addresses.
+
+Coupon files can have a series of "preflight" commands that prepare environment variables to other programs.  They can also perform special calls when a scenario fails, succeeds, or regardless.
+
+Upon success, the ExecStopSuccess command is run.  If the test fails, ExecStopFail is run.
+
+If ExecStopSuccess fails, then the scenario as a whole is failed, although the ExecStopFail command will not be run.
+
+* Scenarios: A list of scenarios to run this coupon for.
+* ExecPreflight: An optional command to run before any tests are started.  If this command fails, the test will not run.  This can be used to "check out" serial numbers from a pool.
+* ExecStopSuccess: A program to run when a scenario passes.  This can be used to "confirm" the use of a serial number.  If this program returns nonzero, then the entire scenario is failed.  In this case, ExecStopFailure will not be run.
+* ExecStopFail: A program to run when a scenario fails.  This can be used to "return" unused codes to a pool.
 
 
 .updater
