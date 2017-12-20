@@ -72,7 +72,7 @@ pub fn try_command<T: Unit>(unit: &T, cmd: &str, wd: &Option<String>, max: Durat
         None => vec![],
     };
 
-    let mut running = match Runny::new(cmd).directory(wd).timeout(max).path(paths).start() {
+    let running = match Runny::new(cmd).directory(wd).timeout(max).path(paths).start() {
         Ok(r) => r,
         Err(e) => {
             unit.debug(format!("Unable to start command {}: {:?}", cmd, e));
