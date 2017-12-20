@@ -176,7 +176,7 @@ impl Controller {
             };
 
             match msg.message {
-                /// Log messages: simply rebroadcast them onto the broadcast bus.
+                // Log messages: simply rebroadcast them onto the broadcast bus.
                 ControlMessageContents::Log(l) => {
                     let bc_msg = BroadcastMessage {
                         message_class: msg.message_class,
